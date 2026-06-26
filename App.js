@@ -352,19 +352,26 @@ export default function App() {
         <TouchableOpacity style={styles.monthButton} onPress={() => updateMonth(1)}><Text style={styles.monthButtonText}>›</Text></TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabs} contentContainerStyle={styles.tabsContent}>
-        {[
-          ['dashboard', 'Synthèse'],
-          ['expenses', 'Dépenses'],
-          ['contributions', 'Versements'],
-          ['categories', 'Caisses'],
-          ['settings', 'Réglages'],
-        ].map(([key, label]) => (
-          <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
-            <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={styles.tabsOuter}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabsScroll}
+          contentContainerStyle={styles.tabsContent}
+        >
+          {[
+            ['dashboard', 'Synthèse'],
+            ['expenses', 'Dépenses'],
+            ['contributions', 'Versements'],
+            ['categories', 'Caisses'],
+            ['settings', 'Réglages'],
+          ].map(([key, label]) => (
+            <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
+              <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {tab === 'dashboard' && (
@@ -632,15 +639,49 @@ const styles = StyleSheet.create({
   subtitle: { color: '#D1D5DB', marginTop: 4 },
   resetButton: { backgroundColor: '#374151', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12 },
   resetButtonText: { color: 'white', fontWeight: '700' },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, backgroundColor: 'white' },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' },
   monthButton: { backgroundColor: '#111827', borderRadius: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   monthButtonText: { color: 'white', fontSize: 28, lineHeight: 30 },
   monthInput: { flex: 1, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, textAlign: 'center', fontWeight: '700' },
-  tabs: { backgroundColor: 'white', maxHeight: 58 },
-  tabsContent: { paddingHorizontal: 8, paddingBottom: 10, gap: 6 },
-  tab: { paddingVertical: 9, paddingHorizontal: 15, borderRadius: 999, backgroundColor: '#F3F4F6', alignItems: 'center' },
-  activeTab: { backgroundColor: '#111827' },
-  tabText: { color: '#4B5563', fontSize: 12, fontWeight: '700' },
+  tabsOuter: {
+    backgroundColor: 'white',
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  tabsScroll: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  tabsContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  tab: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    backgroundColor: '#EEF2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 104,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  activeTab: { backgroundColor: '#111827', borderColor: '#111827' },
+  tabText: { color: '#475467', fontSize: 13, fontWeight: '800' },
   activeTabText: { color: 'white' },
   content: { padding: 16, paddingBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: '800', marginTop: 18, marginBottom: 10, color: '#111827' },
