@@ -1,46 +1,34 @@
-# S&S Budget — application de gestion de budget de couple
+# S&S Budget — V1.1
 
-V1 minimaliste en Expo / React Native.
+Application mobile minimale de gestion de budget de couple, développée avec Expo / React Native.
 
-## Fonctionnalités
+## Nouveautés V1.1
 
-- Gérer les catégories : créer, modifier, supprimer.
-- Définir un budget mensuel par personne.
-- Voir le budget couple automatiquement.
-- Ajouter des dépenses par catégorie.
-- Suivre les dépenses du mois, le restant et les dépassements.
-- Ajouter les versements de Steve et Sorelle.
-- Suivre les soldes par caisse.
-- Stockage local sur le téléphone via AsyncStorage.
+- Mois de départ modifiable depuis l'application.
+- Membres modifiables : ajouter, renommer, supprimer si aucun historique.
+- Versement automatique par membre ou pour tous les membres.
+- Versements manuels conservés pour prendre de l'avance ou ignorer temporairement une caisse.
+- Pas de blocage des versements supérieurs au budget prévu.
+- Bouton Nouveau mois.
+- Page Caisses améliorée avec option de verrouillage par catégorie.
+- Historique clair des dépenses et versements du mois.
 
-## Lancer l'application
+## Installation
 
 ```bash
 npm install
-npx expo start
+npx expo start --tunnel -c
 ```
 
-Ensuite, scanne le QR code avec Expo Go sur iPhone ou Android.
+## Versions importantes
 
-## Installation rapide depuis zéro
+Cette version est alignée sur Expo SDK 54 pour fonctionner avec Expo Go sur iPhone.
 
-```bash
-npm install -g npm
-npm install
-npx expo start
+```json
+"expo": "~54.0.0",
+"react": "19.1.0",
+"react-native": "0.81.5",
+"babel-preset-expo": "~54.0.10"
 ```
 
-## Limites de cette V1
-
-- Les données sont locales au téléphone.
-- Pas encore de synchronisation entre Steve et Sorelle.
-- Pas encore d'authentification.
-- Pas encore de connexion bancaire automatique.
-
-## Prochaine V2 possible
-
-- Synchronisation cloud avec Supabase ou Firebase.
-- Comptes utilisateurs Steve / Sorelle.
-- Export Excel/PDF.
-- Notifications de versement mensuel.
-- Verrouillage strict d'une catégorie quand le budget est dépassé.
+Ne lance pas `npm audit fix --force` pendant les tests, car cela peut casser l'alignement Expo.
