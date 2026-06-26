@@ -30,6 +30,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
+const monthDefaultDate = (month) => (/^\d{4}-\d{2}$/.test(month) ? `${month}-01` : today());
+const safePositiveInt = (value, fallback = 1) => {
+  const number = parseInt(String(value || '').replace(',', '.'), 10);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+};
 
 const firstMember = (members) => (members && members.length ? members[0] : 'Membre 1');
 const firstCategoryId = (categories) => (categories && categories.length ? categories[0].id : 'weekends');
@@ -50,7 +55,8 @@ export default function App() {
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', paidBy: 'Steve', categoryId: 'weekends', date: today() });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', person: 'Steve', categoryId: 'weekends', date: today() });
   const [autoPerson, setAutoPerson] = useState('Steve');
-  const [autoDate, setAutoDate] = useState(today());
+  const [autoDate, setAutoDate] = useState(monthDefaultDate(defaultStartMonth));
+  const [autoMonths, setAutoMonths] = useState('1');
 
   useEffect(() => {
     loadData();
@@ -112,6 +118,20 @@ export default function App() {
       console.log(error);
     }
   };
+
+
+  useEffect(() => {
+    const defaultDate = monthDefaultDate(selectedMonth);
+    setExpenseDraft((draft) => ({
+      ...draft,
+      date: String(draft.date || '').startsWith(selectedMonth) ? draft.date : defaultDate,
+    }));
+    setContributionDraft((draft) => ({
+      ...draft,
+      date: String(draft.date || '').startsWith(selectedMonth) ? draft.date : defaultDate,
+    }));
+    setAutoDate((date) => (String(date || '').startsWith(selectedMonth) ? date : defaultDate));
+  }, [selectedMonth]);
 
   const monthExpenses = useMemo(
     () => expenses.filter((expense) => String(expense.date || '').startsWith(selectedMonth)),
@@ -231,6 +251,7 @@ export default function App() {
     const amount = parseAmount(expenseDraft.amount);
     if (!expenseDraft.label.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
     if (Number.isNaN(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!String(expenseDraft.date || '').startsWith(selectedMonth)) return Alert.alert('Date hors mois actif', `La date doit commencer par ${selectedMonth} pour apparaître dans ce mois.`);
 
     const category = summary.find((item) => item.id === expenseDraft.categoryId);
     if (category && category.locked) {
@@ -260,28 +281,43 @@ export default function App() {
 
   const commitExpense = (amount) => {
     setExpenses((current) => [{ ...expenseDraft, id: uid(), amount }, ...current]);
-    setExpenseDraft({ label: '', amount: '', paidBy: firstMember(members), categoryId: firstCategoryId(categories), date: today() });
+    setExpenseDraft({ label: '', amount: '', paidBy: firstMember(members), categoryId: firstCategoryId(categories), date: monthDefaultDate(selectedMonth) });
   };
 
   const addContribution = () => {
     const amount = parseAmount(contributionDraft.amount);
     if (Number.isNaN(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!String(contributionDraft.date || '').startsWith(selectedMonth)) return Alert.alert('Date hors mois actif', `La date doit commencer par ${selectedMonth} pour apparaître dans ce mois.`);
     setContributions((current) => [{ ...contributionDraft, id: uid(), amount }, ...current]);
-    setContributionDraft({ amount: '', person: firstMember(members), categoryId: firstCategoryId(categories), date: today() });
+    setContributionDraft({ amount: '', person: firstMember(members), categoryId: firstCategoryId(categories), date: monthDefaultDate(selectedMonth) });
   };
 
   const addAutoContributions = (mode) => {
     const targetMembers = mode === 'all' ? members : [autoPerson];
     const activeCategories = categories.filter((category) => Number(category.monthlyPerPerson || 0) > 0);
+    const monthsCount = safePositiveInt(autoMonths, 1);
+    const date = autoDate || monthDefaultDate(selectedMonth);
+    if (!String(date).startsWith(selectedMonth)) {
+      return Alert.alert('Date hors mois actif', `La date du versement doit commencer par ${selectedMonth} pour être comptée dans ce mois.`);
+    }
     if (!targetMembers.length || !activeCategories.length) return Alert.alert('Rien à verser', 'Ajoute au moins un membre et une catégorie avec budget.');
     const items = [];
     targetMembers.forEach((person) => {
       activeCategories.forEach((category) => {
-        items.push({ id: uid(), person, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0), date: autoDate || `${selectedMonth}-01`, automatic: true });
+        items.push({
+          id: uid(),
+          person,
+          categoryId: category.id,
+          amount: Number(category.monthlyPerPerson || 0) * monthsCount,
+          date,
+          automatic: true,
+          monthsCount,
+        });
       });
     });
+    const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
     setContributions((current) => [...items, ...current]);
-    Alert.alert('Versement automatique ajouté', `${items.length} lignes ont été ajoutées pour ${mode === 'all' ? 'tous les membres' : autoPerson}.`);
+    Alert.alert('Versement automatique ajouté', `${items.length} lignes ajoutées. Total : ${formatEuro(total)} (${monthsCount} mois).`);
   };
 
   const addMember = () => {
@@ -326,8 +362,10 @@ export default function App() {
           setContributions([]);
           setStartMonth(defaultStartMonth);
           setSelectedMonth(defaultStartMonth);
-          setExpenseDraft({ label: '', amount: '', paidBy: 'Steve', categoryId: 'weekends', date: today() });
-          setContributionDraft({ amount: '', person: 'Steve', categoryId: 'weekends', date: today() });
+          setExpenseDraft({ label: '', amount: '', paidBy: 'Steve', categoryId: 'weekends', date: monthDefaultDate(defaultStartMonth) });
+          setContributionDraft({ amount: '', person: 'Steve', categoryId: 'weekends', date: monthDefaultDate(defaultStartMonth) });
+          setAutoDate(monthDefaultDate(defaultStartMonth));
+          setAutoMonths('1');
         },
       },
     ]);
@@ -441,11 +479,12 @@ export default function App() {
           <>
             <Text style={styles.sectionTitle}>Versement automatique</Text>
             <FormCard>
-              <Text style={styles.helpText}>Ajoute automatiquement le budget prévu de chaque caisse pour un membre, ou pour tous les membres. La répartition manuelle reste possible.</Text>
+              <Text style={styles.helpText}>L’app lit le budget mensuel défini dans chaque caisse et répartit automatiquement le bon montant par membre. Exemple : Weekends 40 €, Vacances 50 €, etc. Mets 2 ou 3 mois pour prendre de l’avance.</Text>
               <PickerRow label="Membre" items={members.map((p) => [p, p])} value={autoPerson} onChange={setAutoPerson} />
+              <TextInput style={styles.input} placeholder="Nombre de mois à verser — ex: 1" keyboardType="number-pad" value={autoMonths} onChangeText={setAutoMonths} />
               <TextInput style={styles.input} placeholder="Date YYYY-MM-DD" value={autoDate} onChangeText={setAutoDate} />
-              <PrimaryButton label={`Auto pour ${autoPerson}`} onPress={() => addAutoContributions('one')} />
-              <SecondaryButton label="Auto pour tous les membres" onPress={() => addAutoContributions('all')} />
+              <PrimaryButton label={`Valider auto pour ${autoPerson}`} onPress={() => addAutoContributions('one')} />
+              <SecondaryButton label="Valider auto pour tous les membres" onPress={() => addAutoContributions('all')} />
             </FormCard>
 
             <Text style={styles.sectionTitle}>Ajouter un versement manuel</Text>
@@ -538,15 +577,16 @@ export default function App() {
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setCategoryModal(false)} style={styles.modalHeaderButton}><Text style={styles.closeText}>Fermer</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>{editingCategory && editingCategory.id ? 'Modifier la caisse' : 'Nouvelle caisse'}</Text>
-            <TouchableOpacity onPress={() => setCategoryModal(false)}><Text style={styles.closeText}>Fermer</Text></TouchableOpacity>
+            <TouchableOpacity onPress={saveCategory} style={styles.modalValidateButton}><Text style={styles.modalValidateText}>Valider</Text></TouchableOpacity>
           </View>
           <View style={styles.content}>
             <TextInput style={styles.input} placeholder="Nom" value={(editingCategory && editingCategory.name) || ''} onChangeText={(name) => setEditingCategory({ ...editingCategory, name })} />
             <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String((editingCategory && editingCategory.monthlyPerPerson) || '')} onChangeText={(monthlyPerPerson) => setEditingCategory({ ...editingCategory, monthlyPerPerson })} />
             <TextInput style={[styles.input, styles.textArea]} placeholder="Description" multiline value={(editingCategory && editingCategory.description) || ''} onChangeText={(description) => setEditingCategory({ ...editingCategory, description })} />
             <PickerRow label="Verrouillage optionnel" items={[[true, 'Verrouillée'], [false, 'Libre']]} value={editingCategory && editingCategory.locked} onChange={(locked) => setEditingCategory({ ...editingCategory, locked })} />
-            <PrimaryButton label="Enregistrer" onPress={saveCategory} />
+            <Text style={styles.helpText}>Appuie sur Valider en haut à droite pour enregistrer cette caisse.</Text>
           </View>
         </SafeAreaView>
       </Modal>
@@ -724,7 +764,10 @@ const styles = StyleSheet.create({
   chipText: { color: '#374151', fontWeight: '700' },
   activeChipText: { color: 'white' },
   modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
-  modalHeader: { backgroundColor: 'white', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#E5E7EB' },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#111827' },
+  modalHeader: { backgroundColor: 'white', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#E5E7EB', gap: 8 },
+  modalHeaderButton: { minWidth: 72, alignItems: 'flex-start' },
+  modalTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#111827' },
   closeText: { color: '#2563EB', fontWeight: '800' },
+  modalValidateButton: { minWidth: 76, backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center' },
+  modalValidateText: { color: 'white', fontWeight: '800' },
 });
