@@ -422,6 +422,39 @@ export default function App() {
     setMemberDraft('');
   };
 
+
+  const createServerBackup = async () => {
+    if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
+    try {
+      const data = await request('/api/backups/create', { method: 'POST', body: JSON.stringify({ reason: 'mobile' }) });
+      Alert.alert('Sauvegarde créée', `Fichier : ${data.backup?.file || 'sauvegarde SQLite'}\nDossier serveur : server/backups/`);
+    } catch (error) { Alert.alert('Sauvegarde impossible', error.message); }
+  };
+
+  const exportServerJson = async () => {
+    if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
+    try {
+      const data = await request('/api/export/json', { method: 'POST', body: JSON.stringify({}) });
+      Alert.alert('Export JSON créé', `Fichier : ${data.export?.file || 'export JSON'}\nDossier serveur : server/backups/`);
+    } catch (error) { Alert.alert('Export impossible', error.message); }
+  };
+
+  const exportServerCsv = async () => {
+    if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
+    try {
+      const data = await request('/api/export/csv', { method: 'POST', body: JSON.stringify({}) });
+      const files = (data.exports || []).map((item) => item.file).join('\n');
+      Alert.alert('Exports CSV créés', `${files || 'exports CSV'}\nDossier serveur : server/backups/`);
+    } catch (error) { Alert.alert('Export impossible', error.message); }
+  };
+
+  const showRestoreInfo = () => {
+    Alert.alert(
+      'Restauration',
+      'La restauration existe côté serveur via POST /api/backups/restore. Elle est volontairement non exposée en bouton direct pour éviter une restauration accidentelle. Utilise cette route seulement après avoir choisi une sauvegarde dans server/backups/.'
+    );
+  };
+
   const showRoleInfo = () => {
     Alert.alert(
       'Rôles et sécurité',
@@ -648,6 +681,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'Le téléphone utilisera seulement son cache local et ne partagera plus les données avec l’autre téléphone.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => setApiUrl('') }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
+            {isAdmin && <View style={styles.card}>
+              <Text style={styles.cardTitle}>Sauvegarde et exports</Text>
+              <Text style={styles.muted}>Actions réservées à l’administrateur. Les fichiers sont créés sur le serveur dans server/backups/.</Text>
+              <TouchableOpacity style={styles.primaryButton} onPress={createServerBackup}><Text style={styles.primaryButtonText}>Créer une sauvegarde SQLite</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={exportServerJson}><Text style={styles.secondaryButtonText}>Exporter les données JSON</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={exportServerCsv}><Text style={styles.secondaryButtonText}>Exporter dépenses / versements CSV</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryButton} onPress={showRestoreInfo}><Text style={styles.secondaryButtonText}>Aide restauration</Text></TouchableOpacity>
+            </View>}
             <Text style={styles.help}>Sur vos téléphones, configurez la même URL Tailscale du vieux PC. Exemple : http://100.64.12.34:3001</Text>
           </ScrollView>
         </SafeAreaView>

@@ -2,12 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path');
 const { openDb, absoluteDbPath } = require('./db');
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const appSecret = process.env.APP_SECRET || '';
 const DELETE_WINDOW_DAYS = Number(process.env.DELETE_WINDOW_DAYS || 5);
+const serverRoot = path.join(__dirname, '..');
+const backupsDir = path.join(serverRoot, 'backups');
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '2mb' }));
@@ -58,6 +62,64 @@ async function requireAdmin(req, res, next) {
     req.currentUser = user;
     next();
   } catch (error) { next(error); }
+}
+
+
+function ensureBackupsDir() {
+  fs.mkdirSync(backupsDir, { recursive: true });
+}
+
+function backupTimestamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+function fileInfo(filePath) {
+  const stats = fs.statSync(filePath);
+  return {
+    file: path.basename(filePath),
+    sizeBytes: stats.size,
+    createdAt: stats.birthtime.toISOString(),
+    updatedAt: stats.mtime.toISOString(),
+  };
+}
+
+function listBackupFiles() {
+  ensureBackupsDir();
+  return fs.readdirSync(backupsDir)
+    .filter((name) => name.startsWith('ss-budget-'))
+    .map((name) => fileInfo(path.join(backupsDir, name)))
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+function backupDatabase(reason = 'manual') {
+  ensureBackupsDir();
+  const safeReason = String(reason || 'manual').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+  const target = path.join(backupsDir, `ss-budget-backup-${backupTimestamp()}-${safeReason}.sqlite`);
+  fs.copyFileSync(absoluteDbPath, target);
+  return fileInfo(target);
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return '';
+  const text = String(value).replace(/"/g, '""');
+  return /[",\n;]/.test(text) ? `"${text}"` : text;
+}
+
+function rowsToCsv(rows, columns) {
+  const header = columns.map((c) => csvEscape(c.label)).join(';');
+  const body = rows.map((row) => columns.map((c) => csvEscape(row[c.key])).join(';')).join('\n');
+  return `${header}\n${body}\n`;
+}
+
+async function buildExportPayload() {
+  const state = await getState();
+  return {
+    app: 'S&S Budget',
+    version: '2.3',
+    exportedAt: new Date().toISOString(),
+    database: { filename: path.basename(absoluteDbPath) },
+    data: state,
+  };
 }
 
 function requireSecret(req, res, next) {
@@ -261,6 +323,104 @@ app.post('/api/auto-contributions', async (req, res, next) => {
     res.status(201).json(await getState());
   } catch (error) {
     try { await db.run('ROLLBACK'); } catch (_) {}
+    next(error);
+  }
+});
+
+
+app.post('/api/backups/create', requireAdmin, async (req, res, next) => {
+  try {
+    const backup = backupDatabase(req.body.reason || 'manual');
+    res.status(201).json({ ok: true, backup, backups: listBackupFiles() });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/backups', requireAdmin, async (req, res, next) => {
+  try {
+    res.json({ ok: true, backups: listBackupFiles() });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/export/json', requireAdmin, async (req, res, next) => {
+  try {
+    ensureBackupsDir();
+    const payload = await buildExportPayload();
+    const target = path.join(backupsDir, `ss-budget-export-${backupTimestamp()}.json`);
+    fs.writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8');
+    res.status(201).json({ ok: true, export: fileInfo(target), backups: listBackupFiles() });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/export/json', requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await buildExportPayload());
+  } catch (error) { next(error); }
+});
+
+app.post('/api/export/csv', requireAdmin, async (req, res, next) => {
+  try {
+    ensureBackupsDir();
+    const [expenseRows, contributionRows] = await Promise.all([
+      db.all(`SELECT e.id, e.date, e.status, e.label, e.amount, c.name AS category, m.name AS paid_by, e.note, e.created_at
+              FROM expenses e
+              LEFT JOIN categories c ON c.id = e.category_id
+              LEFT JOIN members m ON m.id = e.paid_by_member_id
+              ORDER BY e.date DESC, e.created_at DESC`),
+      db.all(`SELECT co.id, co.date, co.status, co.amount, c.name AS category, m.name AS member, co.note, co.created_at
+              FROM contributions co
+              LEFT JOIN categories c ON c.id = co.category_id
+              LEFT JOIN members m ON m.id = co.member_id
+              ORDER BY co.date DESC, co.created_at DESC`),
+    ]);
+
+    const expensesCsv = rowsToCsv(expenseRows, [
+      { key: 'id', label: 'ID' },
+      { key: 'date', label: 'Date' },
+      { key: 'status', label: 'Statut' },
+      { key: 'label', label: 'Libellé' },
+      { key: 'amount', label: 'Montant' },
+      { key: 'category', label: 'Caisse' },
+      { key: 'paid_by', label: 'Payé par' },
+      { key: 'note', label: 'Note' },
+      { key: 'created_at', label: 'Créé le' },
+    ]);
+    const contributionsCsv = rowsToCsv(contributionRows, [
+      { key: 'id', label: 'ID' },
+      { key: 'date', label: 'Date' },
+      { key: 'status', label: 'Statut' },
+      { key: 'amount', label: 'Montant' },
+      { key: 'category', label: 'Caisse' },
+      { key: 'member', label: 'Membre' },
+      { key: 'note', label: 'Note' },
+      { key: 'created_at', label: 'Créé le' },
+    ]);
+
+    const stamp = backupTimestamp();
+    const expensesPath = path.join(backupsDir, `ss-budget-expenses-${stamp}.csv`);
+    const contributionsPath = path.join(backupsDir, `ss-budget-contributions-${stamp}.csv`);
+    fs.writeFileSync(expensesPath, expensesCsv, 'utf8');
+    fs.writeFileSync(contributionsPath, contributionsCsv, 'utf8');
+
+    res.status(201).json({ ok: true, exports: [fileInfo(expensesPath), fileInfo(contributionsPath)], backups: listBackupFiles() });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/backups/restore', requireAdmin, async (req, res, next) => {
+  try {
+    const requestedFile = path.basename(String(req.body.file || ''));
+    if (!requestedFile || !requestedFile.startsWith('ss-budget-backup-') || !requestedFile.endsWith('.sqlite')) {
+      return res.status(400).json({ error: 'Fichier de sauvegarde invalide.' });
+    }
+    const source = path.join(backupsDir, requestedFile);
+    if (!fs.existsSync(source)) return res.status(404).json({ error: 'Sauvegarde introuvable.' });
+
+    const safetyBackup = backupDatabase('before-restore');
+    await db.close();
+    fs.copyFileSync(source, absoluteDbPath);
+    db = await openDb();
+    res.json({ ok: true, restoredFrom: requestedFile, safetyBackup, state: await getState() });
+  } catch (error) {
+    try { if (!db) db = await openDb(); } catch (_) {}
     next(error);
   }
 });

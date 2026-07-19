@@ -33,3 +33,7 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+server/backups/*.sqlite
+server/backups/*.json
+server/backups/*.csv
