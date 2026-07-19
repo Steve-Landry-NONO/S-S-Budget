@@ -86,6 +86,37 @@ const statusLabel = (action) => isPlannedAction(action) ? 'Prévu' : 'Réalisé'
 const statusStyleName = (action) => isPlannedAction(action) ? 'badgePlanned' : 'badgeOk';
 
 
+const activityActionLabels = {
+  expense_created: 'Dépense ajoutée',
+  expense_planned: 'Dépense prévue',
+  expense_deleted: 'Dépense supprimée',
+  contribution_created: 'Versement ajouté',
+  contribution_planned: 'Versement prévu',
+  contribution_deleted: 'Versement supprimé',
+  auto_contributions_created: 'Versements automatiques',
+  auto_contributions_planned: 'Versements automatiques prévus',
+  category_created: 'Caisse ajoutée',
+  category_updated: 'Caisse modifiée',
+  category_archived: 'Caisse archivée',
+  category_deleted: 'Caisse supprimée',
+  member_created: 'Membre ajouté',
+  member_updated: 'Membre modifié',
+  member_deleted: 'Membre supprimé',
+  backup_created: 'Sauvegarde créée',
+  export_json_created: 'Export JSON créé',
+  export_csv_created: 'Export CSV créé',
+  backup_restored: 'Sauvegarde restaurée',
+  server_reset: 'Réinitialisation serveur',
+};
+const activityLabel = (action) => activityActionLabels[action] || 'Action';
+const formatActivityDate = (value) => {
+  if (!value) return '';
+  const date = new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+
 const currentMemberRole = (member) => member?.role || (member?.id === 'steve' ? 'admin' : 'member');
 const isAdminMember = (member) => currentMemberRole(member) === 'admin';
 const daysSinceCreated = (createdAt) => {
@@ -128,6 +159,7 @@ export default function App() {
   const [categories, setCategories] = useState(initialState.categories);
   const [expenses, setExpenses] = useState([]);
   const [contributions, setContributions] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [monthDraft, setMonthDraft] = useState(currentMonthKey());
   const [tab, setTab] = useState('dashboard');
@@ -147,7 +179,7 @@ export default function App() {
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, selectedMonth, apiUrl, apiSecret, currentUserId]);
+  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -186,6 +218,7 @@ export default function App() {
     setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
     setExpenses(data.expenses || []);
     setContributions(data.contributions || []);
+    setActivityLogs(data.activityLogs || []);
     setConnected(true);
     setSyncMessage(`Synchronisé ${new Date().toLocaleTimeString('fr-FR').slice(0, 5)}`);
   };
@@ -231,6 +264,7 @@ export default function App() {
         setCategories(data.categories || initialState.categories);
         setExpenses(data.expenses || []);
         setContributions(data.contributions || []);
+        setActivityLogs(data.activityLogs || []);
         // Au lancement, l'app revient automatiquement sur le mois courant.
         // L'historique reste accessible avec les flèches ou la saisie AAAA-MM.
         setSelectedMonth(currentMonthKey());
@@ -241,7 +275,7 @@ export default function App() {
   };
 
   const saveLocal = async () => {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, selectedMonth }));
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, activityLogs, selectedMonth }));
     await AsyncStorage.setItem(API_KEY, apiUrl || '');
     await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
     await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
@@ -311,6 +345,7 @@ export default function App() {
   const currentMember = useMemo(() => members.find((m) => m.id === currentUserId) || members[0] || initialState.members[0], [members, currentUserId]);
   const currentRole = currentMemberRole(currentMember);
   const isAdmin = currentRole === 'admin';
+  const activityRows = useMemo(() => (activityLogs || []).slice(0, 80), [activityLogs]);
 
   const updateMonth = (direction) => {
     setSelectedMonth((current) => addMonths(current, direction));
@@ -428,6 +463,7 @@ export default function App() {
     try {
       const data = await request('/api/backups/create', { method: 'POST', body: JSON.stringify({ reason: 'mobile' }) });
       Alert.alert('Sauvegarde créée', `Fichier : ${data.backup?.file || 'sauvegarde SQLite'}\nDossier serveur : server/backups/`);
+      syncFromServer(false);
     } catch (error) { Alert.alert('Sauvegarde impossible', error.message); }
   };
 
@@ -436,6 +472,7 @@ export default function App() {
     try {
       const data = await request('/api/export/json', { method: 'POST', body: JSON.stringify({}) });
       Alert.alert('Export JSON créé', `Fichier : ${data.export?.file || 'export JSON'}\nDossier serveur : server/backups/`);
+      syncFromServer(false);
     } catch (error) { Alert.alert('Export impossible', error.message); }
   };
 
@@ -445,6 +482,7 @@ export default function App() {
       const data = await request('/api/export/csv', { method: 'POST', body: JSON.stringify({}) });
       const files = (data.exports || []).map((item) => item.file).join('\n');
       Alert.alert('Exports CSV créés', `${files || 'exports CSV'}\nDossier serveur : server/backups/`);
+      syncFromServer(false);
     } catch (error) { Alert.alert('Export impossible', error.message); }
   };
 
@@ -510,7 +548,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       <View style={styles.tabsOuter}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
           {[
-            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
+            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'], ['activity', 'Journal'],
           ].map(([key, label]) => (
             <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
               <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
@@ -644,8 +682,28 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>}
             <Text style={styles.label}>Utilisateur de ce téléphone</Text>
             {renderChoice(members, currentUserId, setCurrentUserId)}
-            <Text style={styles.help}>Ce choix permet à l’app et au serveur de savoir qui réalise les actions. Steve est administrateur, Sorelle est membre.</Text>
+            <Text style={styles.help}>Ce choix permet à l’app et au serveur de savoir qui réalise les actions. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
             {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
+          </>
+        )}
+
+        {tab === 'activity' && (
+          <>
+            <Text style={styles.sectionTitle}>Journal d’activité</Text>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Dernières actions</Text>
+              <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
+            </View>
+            {activityRows.length === 0 && <View style={styles.card}><Text style={styles.muted}>Aucune activité enregistrée pour le moment.</Text></View>}
+            {activityRows.map((log) => (
+              <View key={log.id} style={styles.card}>
+                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{activityLabel(log.action)}</Text><Text style={styles.badge}>{log.actorName || 'Système'}</Text></View>
+                {!!log.label && <Text style={styles.muted}>{log.label}</Text>}
+                {!!log.amount && <Text style={styles.muted}>Montant : {formatEuro(log.amount)}</Text>}
+                {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
+                <Text style={styles.lockedText}>{formatActivityDate(log.createdAt)}</Text>
+              </View>
+            ))}
           </>
         )}
       </ScrollView>

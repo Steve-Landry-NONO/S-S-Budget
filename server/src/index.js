@@ -65,6 +65,35 @@ async function requireAdmin(req, res, next) {
 }
 
 
+function safeJson(value) {
+  try { return JSON.stringify(value || {}); } catch (_) { return '{}'; }
+}
+
+async function logActivity(req, payload = {}) {
+  try {
+    const user = req.currentUser || await getCurrentUser(req);
+    await db.run(
+      `INSERT INTO activity_logs (id, actor_member_id, actor_name, action, entity_type, entity_id, label, amount, date, details)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uid('log'),
+        user?.id || '',
+        user?.name || '',
+        String(payload.action || 'activity'),
+        String(payload.entityType || ''),
+        String(payload.entityId || ''),
+        String(payload.label || ''),
+        payload.amount === undefined || payload.amount === null ? null : Number(payload.amount),
+        payload.date || null,
+        safeJson(payload.details || {}),
+      ]
+    );
+  } catch (error) {
+    console.error('Journal activité non écrit', error.message || error);
+  }
+}
+
+
 function ensureBackupsDir() {
   fs.mkdirSync(backupsDir, { recursive: true });
 }
@@ -134,7 +163,7 @@ app.use('/api', requireSecret);
 let db;
 
 async function getState() {
-  const [members, categories, expenses, contributions] = await Promise.all([
+  const [members, categories, expenses, contributions, activityLogs] = await Promise.all([
     db.all('SELECT id, name, role, created_at, updated_at FROM members ORDER BY created_at ASC'),
     db.all(`SELECT id, name, monthly_per_person AS monthlyPerPerson, description, locked, active, created_at, updated_at
             FROM categories WHERE active = 1 ORDER BY created_at ASC`),
@@ -142,12 +171,15 @@ async function getState() {
             FROM expenses ORDER BY date DESC, created_at DESC`),
     db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, created_by_member_id AS createdByMemberId, date, note, status, created_at, updated_at
             FROM contributions ORDER BY date DESC, created_at DESC`),
+    db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, created_at AS createdAt
+            FROM activity_logs ORDER BY created_at DESC LIMIT 100`),
   ]);
   return {
     members,
     categories: categories.map((c) => ({ ...c, locked: Boolean(c.locked), active: Boolean(c.active) })),
     expenses,
     contributions,
+    activityLogs: activityLogs.map((log) => ({ ...log, details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })() })),
     serverTime: new Date().toISOString(),
   };
 }
@@ -166,6 +198,7 @@ app.post('/api/members', requireAdmin, async (req, res, next) => {
     if (!name) return res.status(400).json({ error: 'Le nom du membre est obligatoire.' });
     const id = req.body.id || uid('member');
     await db.run('INSERT INTO members (id, name, role) VALUES (?, ?, ?)', [id, name, req.body.role === 'admin' ? 'admin' : 'member']);
+    await logActivity(req, { action: 'member_created', entityType: 'member', entityId: id, label: name, details: { role: req.body.role === 'admin' ? 'admin' : 'member' } });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -175,6 +208,7 @@ app.put('/api/members/:id', requireAdmin, async (req, res, next) => {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Le nom du membre est obligatoire.' });
     await db.run('UPDATE members SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [name, req.params.id]);
+    await logActivity(req, { action: 'member_updated', entityType: 'member', entityId: req.params.id, label: name });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -187,6 +221,7 @@ app.delete('/api/members/:id', requireAdmin, async (req, res, next) => {
       return res.status(409).json({ error: 'Impossible de supprimer un membre avec historique.' });
     }
     await db.run('DELETE FROM members WHERE id = ?', [req.params.id]);
+    await logActivity(req, { action: 'member_deleted', entityType: 'member', entityId: req.params.id, label: req.params.id });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -203,6 +238,7 @@ app.post('/api/categories', requireAdmin, async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, 1)`,
       [id, name, monthlyPerPerson, String(req.body.description || ''), req.body.locked ? 1 : 0]
     );
+    await logActivity(req, { action: 'category_created', entityType: 'category', entityId: id, label: name, amount: monthlyPerPerson, details: { locked: Boolean(req.body.locked) } });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -219,6 +255,7 @@ app.put('/api/categories/:id', requireAdmin, async (req, res, next) => {
        WHERE id = ?`,
       [name, monthlyPerPerson, String(req.body.description || ''), req.body.locked ? 1 : 0, req.params.id]
     );
+    await logActivity(req, { action: 'category_updated', entityType: 'category', entityId: req.params.id, label: name, amount: monthlyPerPerson, details: { locked: Boolean(req.body.locked) } });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -229,8 +266,10 @@ app.delete('/api/categories/:id', requireAdmin, async (req, res, next) => {
     const usedInContributions = await db.get('SELECT COUNT(*) AS count FROM contributions WHERE category_id = ?', [req.params.id]);
     if (usedInExpenses.count || usedInContributions.count) {
       await db.run('UPDATE categories SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
+      await logActivity(req, { action: 'category_archived', entityType: 'category', entityId: req.params.id, label: req.params.id });
     } else {
       await db.run('DELETE FROM categories WHERE id = ?', [req.params.id]);
+      await logActivity(req, { action: 'category_deleted', entityType: 'category', entityId: req.params.id, label: req.params.id });
     }
     res.json(await getState());
   } catch (error) { next(error); }
@@ -250,6 +289,7 @@ app.post('/api/expenses', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, label, amount, req.body.categoryId, req.body.paidByMemberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
+    await logActivity(req, { action: status === 'planned' ? 'expense_planned' : 'expense_created', entityType: 'expense', entityId: id, label, amount, date: req.body.date, details: { categoryId: req.body.categoryId, paidByMemberId: req.body.paidByMemberId, status } });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -264,6 +304,7 @@ app.delete('/api/expenses/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres dépenses récentes.' });
     }
     await db.run('DELETE FROM expenses WHERE id = ?', [req.params.id]);
+    await logActivity(req, { action: 'expense_deleted', entityType: 'expense', entityId: req.params.id, label: row.label, amount: row.amount, date: row.date, details: { categoryId: row.category_id, paidByMemberId: row.paid_by_member_id, status: row.status } });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -280,6 +321,7 @@ app.post('/api/contributions', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, amount, req.body.categoryId, req.body.memberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
+    await logActivity(req, { action: status === 'planned' ? 'contribution_planned' : 'contribution_created', entityType: 'contribution', entityId: id, label: 'Versement', amount, date: req.body.date, details: { categoryId: req.body.categoryId, memberId: req.body.memberId, status } });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -294,6 +336,7 @@ app.delete('/api/contributions/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres versements récents.' });
     }
     await db.run('DELETE FROM contributions WHERE id = ?', [req.params.id]);
+    await logActivity(req, { action: 'contribution_deleted', entityType: 'contribution', entityId: req.params.id, label: 'Versement', amount: row.amount, date: row.date, details: { categoryId: row.category_id, memberId: row.member_id, status: row.status } });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -320,6 +363,7 @@ app.post('/api/auto-contributions', async (req, res, next) => {
       }
     }
     await db.run('COMMIT');
+    await logActivity(req, { action: status === 'planned' ? 'auto_contributions_planned' : 'auto_contributions_created', entityType: 'contribution', label: 'Versements automatiques', amount: categories.reduce((sum, category) => sum + Number(category.monthly_per_person || 0), 0) * monthsCount * memberIds.length, date, details: { memberIds, monthsCount, status } });
     res.status(201).json(await getState());
   } catch (error) {
     try { await db.run('ROLLBACK'); } catch (_) {}
@@ -328,9 +372,19 @@ app.post('/api/auto-contributions', async (req, res, next) => {
 });
 
 
+
+app.get('/api/activity-logs', async (req, res, next) => {
+  try {
+    const rows = await db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, created_at AS createdAt
+                               FROM activity_logs ORDER BY created_at DESC LIMIT 200`);
+    res.json({ ok: true, activityLogs: rows.map((log) => ({ ...log, details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })() })) });
+  } catch (error) { next(error); }
+});
+
 app.post('/api/backups/create', requireAdmin, async (req, res, next) => {
   try {
     const backup = backupDatabase(req.body.reason || 'manual');
+    await logActivity(req, { action: 'backup_created', entityType: 'backup', entityId: backup.file, label: backup.file, details: { sizeBytes: backup.sizeBytes } });
     res.status(201).json({ ok: true, backup, backups: listBackupFiles() });
   } catch (error) { next(error); }
 });
@@ -347,7 +401,9 @@ app.post('/api/export/json', requireAdmin, async (req, res, next) => {
     const payload = await buildExportPayload();
     const target = path.join(backupsDir, `ss-budget-export-${backupTimestamp()}.json`);
     fs.writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8');
-    res.status(201).json({ ok: true, export: fileInfo(target), backups: listBackupFiles() });
+    const exportInfo = fileInfo(target);
+    await logActivity(req, { action: 'export_json_created', entityType: 'export', entityId: exportInfo.file, label: exportInfo.file, details: { sizeBytes: exportInfo.sizeBytes } });
+    res.status(201).json({ ok: true, export: exportInfo, backups: listBackupFiles() });
   } catch (error) { next(error); }
 });
 
@@ -401,7 +457,9 @@ app.post('/api/export/csv', requireAdmin, async (req, res, next) => {
     fs.writeFileSync(expensesPath, expensesCsv, 'utf8');
     fs.writeFileSync(contributionsPath, contributionsCsv, 'utf8');
 
-    res.status(201).json({ ok: true, exports: [fileInfo(expensesPath), fileInfo(contributionsPath)], backups: listBackupFiles() });
+    const exports = [fileInfo(expensesPath), fileInfo(contributionsPath)];
+    await logActivity(req, { action: 'export_csv_created', entityType: 'export', label: 'Exports CSV', details: { files: exports.map((item) => item.file) } });
+    res.status(201).json({ ok: true, exports, backups: listBackupFiles() });
   } catch (error) { next(error); }
 });
 
@@ -418,6 +476,7 @@ app.post('/api/backups/restore', requireAdmin, async (req, res, next) => {
     await db.close();
     fs.copyFileSync(source, absoluteDbPath);
     db = await openDb();
+    await logActivity(req, { action: 'backup_restored', entityType: 'backup', entityId: requestedFile, label: requestedFile, details: { safetyBackup: safetyBackup.file } });
     res.json({ ok: true, restoredFrom: requestedFile, safetyBackup, state: await getState() });
   } catch (error) {
     try { if (!db) db = await openDb(); } catch (_) {}
@@ -437,6 +496,7 @@ app.post('/api/reset', requireAdmin, async (req, res, next) => {
     const path = require('path');
     const schema = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
     await db.exec(schema);
+    await logActivity(req, { action: 'server_reset', entityType: 'system', label: 'Réinitialisation serveur' });
     res.json(await getState());
   } catch (error) { next(error); }
 });

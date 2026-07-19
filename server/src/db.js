@@ -15,7 +15,30 @@ async function addColumnIfMissing(db, table, column, definition) {
   }
 }
 
+
+async function ensureActivityLogsTable(db) {
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id TEXT PRIMARY KEY,
+      actor_member_id TEXT NOT NULL DEFAULT '',
+      actor_name TEXT NOT NULL DEFAULT '',
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL DEFAULT '',
+      entity_id TEXT NOT NULL DEFAULT '',
+      label TEXT NOT NULL DEFAULT '',
+      amount REAL,
+      date TEXT,
+      details TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_activity_logs_actor ON activity_logs(actor_member_id);
+    CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action);
+  `);
+}
+
 async function migrateDb(db) {
+  await ensureActivityLogsTable(db);
   await addColumnIfMissing(db, 'members', 'role', "TEXT NOT NULL DEFAULT 'member'");
   await addColumnIfMissing(db, 'expenses', 'created_by_member_id', "TEXT NOT NULL DEFAULT ''");
   await addColumnIfMissing(db, 'contributions', 'created_by_member_id', "TEXT NOT NULL DEFAULT ''");
