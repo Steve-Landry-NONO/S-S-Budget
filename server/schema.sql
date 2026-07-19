@@ -55,12 +55,11 @@ CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
 CREATE INDEX IF NOT EXISTS idx_contributions_date ON contributions(date);
 CREATE INDEX IF NOT EXISTS idx_contributions_category ON contributions(category_id);
 
-INSERT OR IGNORE INTO members (id, name, role) VALUES
-  ('steve', 'Steve', 'admin'),
-  ('sorelle', 'Sorelle', 'member');
-
-UPDATE members SET role = 'admin' WHERE id = 'steve';
-UPDATE members SET role = 'member' WHERE id = 'sorelle' AND (role IS NULL OR role = '');
+-- Seed compatible avec les anciennes bases : ne référence pas la colonne role ici.
+-- Les rôles sont appliqués ensuite dans server/src/db.js par la migration automatique.
+INSERT OR IGNORE INTO members (id, name) VALUES
+  ('steve', 'Steve'),
+  ('sorelle', 'Sorelle');
 
 INSERT OR IGNORE INTO categories (id, name, monthly_per_person, description, locked, active) VALUES
   ('weekends', 'Weekends', 40, 'Courses, transports, sorties, etc.', 0, 1),
