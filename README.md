@@ -1,158 +1,207 @@
-# S&S Budget — Application mobile de gestion de budget de couple
+# S&S Budget — V2 self-hosted
 
-**S&S Budget** est une application mobile minimaliste et modulable pensée pour aider un couple à gérer ses dépenses communes par caisses budgétaires : week-ends, semaines d'école, vacances, cadeaux, épargne bloquée ou toute autre catégorie personnalisée.
+**S&S Budget** est une application de gestion de budget de couple. La V2 ajoute une synchronisation gratuite et privée via un serveur maison : un vieux PC Linux peut héberger une API Node.js et une base SQLite, puis les téléphones se connectent à ce serveur via Tailscale ou le réseau local.
 
-Le projet est né d'un besoin concret : mutualiser certaines dépenses sans mélanger les budgets, garder une vision claire de ce que chaque personne a versé, suivre les dépenses par catégorie et éviter que l'argent prévu pour une caisse soit confondu avec une autre.
+## Objectif de la V2
 
----
+La V1 fonctionnait en local sur un seul téléphone. La V2 permet maintenant à deux téléphones de lire et écrire les mêmes données :
 
-## Objectif du projet
+- membres du couple ;
+- caisses / catégories ;
+- dépenses ;
+- versements ;
+- versements automatiques ;
+- soldes mensuels ;
+- historique synchronisé.
 
-L'application vise à répondre à une question simple :
+## Architecture
 
-> Où en est notre budget commun, catégorie par catégorie, personne par personne, mois par mois ?
+```text
+Téléphone Steve ─┐
+                 ├── App Expo / PWA ── API Node.js ── SQLite
+Téléphone Sorelle┘                  vieux PC Linux
+```
 
-Elle permet de suivre :
+Pour un usage gratuit et privé, le plus simple est d'installer **Tailscale** sur le vieux PC et sur les deux téléphones. L'API n'a alors pas besoin d'être exposée publiquement sur Internet.
 
-- les budgets prévus par caisse ;
-- les versements de chaque membre ;
-- les dépenses communes ;
-- le solde global du compte ;
-- le solde détaillé par catégorie ;
-- l'état de contribution de chaque membre ;
-- l'historique mensuel.
+## Contenu du projet
 
----
+```text
+.
+├── App.js                  # Application mobile Expo / React Native
+├── app.json
+├── package.json            # Dépendances frontend Expo
+├── babel.config.js
+├── assets/
+└── server/
+    ├── package.json        # Dépendances backend
+    ├── schema.sql          # Structure SQLite + données par défaut
+    ├── .env.example
+    └── src/
+        ├── db.js
+        ├── initDb.js
+        └── index.js
+```
 
-## Fonctionnalités principales
+## Installation du serveur sur le vieux PC Linux
 
-### Tableau de bord mensuel
+```bash
+sudo apt update
+sudo apt install -y git nodejs npm sqlite3
+```
 
-- Vue générale du mois actif.
-- Budget prévu total.
-- Total dépensé.
-- Total versé.
-- Solde du compte.
-- État par membre : prévu, déjà versé, reste à verser, dépenses payées personnellement.
+Puis dans le projet :
 
-### Gestion des dépenses
+```bash
+cd server
+cp .env.example .env
+npm install
+npm run init-db
+npm run dev
+```
 
-- Ajout d'une dépense avec libellé, montant, caisse, membre payeur et date.
-- Historique des dépenses du mois.
-- Suppression d'une dépense.
-- Contrôle de cohérence entre la date saisie et le mois actif.
+Le serveur démarre par défaut sur :
 
-### Gestion des versements
+```text
+http://0.0.0.0:3001
+```
 
-- Ajout manuel d'un versement par membre et par caisse.
-- Versement automatique basé sur les budgets configurés dans les caisses.
-- Possibilité de verser plusieurs mois d'avance.
-- Possibilité de ne pas alimenter une caisse temporairement.
-- Absence de blocage sur les versements supérieurs au budget prévu afin de garder une logique flexible.
+Depuis le PC lui-même :
 
-### Gestion des caisses
+```bash
+curl http://localhost:3001/api/health
+```
 
-- Création, modification et suppression de caisses.
-- Budget mensuel par membre.
-- Description de chaque caisse.
-- Verrouillage optionnel d'une caisse, utile pour une caisse d'épargne bloquée ou une réserve d'urgence.
-- Vision détaillée du budget, des dépenses, du restant et du solde de caisse.
+## Configuration Tailscale recommandée
 
-### Gestion des membres
+Sur le vieux PC :
 
-- Membres modifiables.
-- Possibilité d'adapter l'application à d'autres couples ou à d'autres usages de budget partagé.
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale ip -4
+```
 
-### Historique et mois
+Tu obtiens une IP privée du style :
 
-- Navigation entre les mois.
-- Bouton Nouveau mois.
-- Mois de départ configurable.
-- Données stockées localement sur le téléphone.
+```text
+100.xx.yy.zz
+```
 
----
+Dans l'application S&S Budget, ouvrir **Config** puis mettre :
 
-## Stack technique
+```text
+http://100.xx.yy.zz:3001
+```
 
-- **Expo SDK 54**
-- **React Native**
-- **JavaScript**
-- **AsyncStorage** pour le stockage local
-- **Expo Go** pour les tests rapides sur téléphone
+Sorelle met la même URL dans son téléphone.
 
----
-
-## Installation locale
+## Lancer l'application en développement
 
 ```bash
 npm install
 npx expo start --tunnel -c
 ```
 
-Ensuite, ouvrir l'application avec **Expo Go** en scannant le QR code affiché dans le terminal.
-
-En réseau local stable, il est aussi possible d'utiliser :
+Ou, pour le web/PWA :
 
 ```bash
-npx expo start --lan -c
+npm install
+npx expo start --web
 ```
 
----
+## Export web / PWA
 
-## Versions du projet
+```bash
+npx expo export --platform web
+```
 
-### v1.0 — Première version fonctionnelle
+Le dossier `dist/` peut ensuite être servi par Nginx sur le vieux PC.
 
-- Application Expo / React Native initiale.
-- Tableau de bord.
-- Caisses par défaut.
-- Dépenses.
-- Versements.
-- Calculs de soldes.
-- Suivi par personne.
+## API disponible
 
-### v1.1 — Application générique et modulable
+### Santé serveur
 
-- Mois de départ configurable.
-- Gestion des membres.
-- Bouton Nouveau mois.
-- Versement automatique.
-- Versement manuel conservé.
-- Gestion plus complète des caisses.
-- Option de verrouillage d'une caisse.
+```http
+GET /api/health
+```
 
-### v1.1.1 — Amélioration visuelle de la navigation
+### Synchronisation complète
 
-- Barre d'onglets plus lisible.
-- Conteneur blanc, bordure et ombre.
-- Onglets inactifs plus contrastés.
-- Espacement amélioré.
+```http
+GET /api/state
+```
 
-### v1.1.2 — Correction des dates, versements et validation des caisses
+### Membres
 
-- Dates alignées automatiquement avec le mois actif.
-- Alerte si une dépense ou un versement est saisi hors du mois actif.
-- Versement automatique basé sur les budgets des caisses.
-- Champ Nombre de mois à verser.
-- Bouton Valider dans la création/modification de caisse.
-- Suppression du bouton sombre mal placé en bas des modales.
+```http
+POST /api/members
+PUT /api/members/:id
+DELETE /api/members/:id
+```
 
----
+### Caisses
 
-## Roadmap
+```http
+POST /api/categories
+PUT /api/categories/:id
+DELETE /api/categories/:id
+```
 
-- Synchronisation cloud entre les deux téléphones.
-- Comptes utilisateurs Steve / Sorelle ou membres personnalisés.
-- Export Excel.
-- Export PDF.
-- Notifications de seuil.
+### Dépenses
+
+```http
+POST /api/expenses
+DELETE /api/expenses/:id
+```
+
+### Versements
+
+```http
+POST /api/contributions
+DELETE /api/contributions/:id
+POST /api/auto-contributions
+```
+
+### Reset
+
+```http
+POST /api/reset
+```
+
+## Sécurité
+
+Le fichier `server/.env` permet de définir :
+
+```text
+APP_SECRET=une-phrase-longue-et-privee
+```
+
+Si `APP_SECRET` est renseigné, l'application doit envoyer ce secret dans l'en-tête `x-ss-budget-secret`. Dans l'app, ce secret se configure dans **Config**.
+
+Pour un usage à deux, la sécurité recommandée est :
+
+1. ne pas ouvrir le port 3001 sur Internet ;
+2. utiliser Tailscale ;
+3. garder un `APP_SECRET` privé ;
+4. sauvegarder régulièrement `server/data/ss-budget.sqlite`.
+
+## Sauvegarde de la base
+
+```bash
+cp server/data/ss-budget.sqlite ~/backup-ss-budget-$(date +%F).sqlite
+```
+
+## Roadmap V2+
+
+- Authentification plus complète.
+- Mode hors-ligne avancé avec file d'attente de synchronisation.
+- Export Excel/PDF.
+- Graphiques mensuels.
+- Notifications.
 - Historique annuel.
-- Sauvegarde cloud.
-- Authentification.
-- Mode multi-couples ou groupes.
-
----
+- Déploiement Nginx complet avec PWA installable.
 
 ## Licence
 
-Ce projet est distribué sous licence **MIT**.
+MIT

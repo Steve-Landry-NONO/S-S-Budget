@@ -1,37 +1,35 @@
-# Dépendances Node / Expo
+# Dépendances
 node_modules/
+server/node_modules/
+
+# Expo / React Native
+.expo/
+dist/
+web-build/
+android/
+ios/
+
+# Environnement
+.env
+.env.*
+server/.env
+!server/.env.example
+
+# Base locale et données personnelles
+server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-.expo/
-.expo-shared/
-dist/
-build/
-web-build/
+*.log
 
-# Environnements et secrets
-.env
-.env.*
-!.env.example
-
-# Systèmes / éditeurs
+# Système / éditeurs
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# Mobile natif généré localement
-android/
-ios/
-
-# Logs et rapports
-*.log
-coverage/
-
-# Archives locales
-*.zip
-*.tar.gz
-*.tgz

@@ -13,396 +13,320 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 
-const STORAGE_KEY = 'SS_BUDGET_APP_V11';
-
-const initialMembers = ['Steve', 'Sorelle'];
+const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
+const API_KEY = 'SS_BUDGET_V2_API_URL';
+const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
 const defaultStartMonth = '2026-07';
 
-const initialCategories = [
-  { id: 'weekends', name: 'Weekends', monthlyPerPerson: 40, description: 'Courses, transports, sorties, etc.', locked: false },
-  { id: 'ecole', name: 'Semaines écoles', monthlyPerPerson: 20, description: 'Repas, transports, sorties pendant les semaines école.', locked: false },
-  { id: 'vacances', name: 'Vacances', monthlyPerPerson: 50, description: 'Vacances 1 à 3 fois par an.', locked: false },
-  { id: 'cadeaux', name: 'Cadeaux proches', monthlyPerPerson: 20, description: 'Cadeaux faits aux proches au nom du couple.', locked: false },
-  { id: 'epargne', name: 'Épargne bloquée', monthlyPerPerson: 50, description: 'Réserve mutuelle pour imprévus majeurs.', locked: true },
-];
-
-const today = () => new Date().toISOString().slice(0, 10);
+const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
 const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
-const monthDefaultDate = (month) => (/^\d{4}-\d{2}$/.test(month) ? `${month}-01` : today());
-const safePositiveInt = (value, fallback = 1) => {
-  const number = parseInt(String(value || '').replace(',', '.'), 10);
-  return Number.isFinite(number) && number > 0 ? number : fallback;
+const monthDefaultDate = (month) => (/^\d{4}-\d{2}$/.test(month) ? `${month}-01` : new Date().toISOString().slice(0, 10));
+const firstId = (items) => (items && items.length ? items[0].id : '');
+const pad2 = (value) => String(value).padStart(2, '0');
+const normalizeMonth = (value) => {
+  const cleaned = String(value || '').trim().replace('/', '-');
+  const match = cleaned.match(/^(\d{4})-(\d{1,2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+  return `${year}-${pad2(month)}`;
+};
+const addMonths = (monthKey, delta) => {
+  const normalized = normalizeMonth(monthKey) || defaultStartMonth;
+  const [year, month] = normalized.split('-').map(Number);
+  const index = year * 12 + (month - 1) + delta;
+  const nextYear = Math.floor(index / 12);
+  const nextMonth = (index % 12) + 1;
+  return `${nextYear}-${pad2(nextMonth)}`;
 };
 
-const firstMember = (members) => (members && members.length ? members[0] : 'Membre 1');
-const firstCategoryId = (categories) => (categories && categories.length ? categories[0].id : 'weekends');
+const initialState = {
+  members: [
+    { id: 'steve', name: 'Steve' },
+    { id: 'sorelle', name: 'Sorelle' },
+  ],
+  categories: [
+    { id: 'weekends', name: 'Weekends', monthlyPerPerson: 40, description: 'Courses, transports, sorties, etc.', locked: false, active: true },
+    { id: 'ecole', name: 'Semaines écoles', monthlyPerPerson: 20, description: 'Repas, transports, sorties pendant les semaines école.', locked: false, active: true },
+    { id: 'vacances', name: 'Vacances', monthlyPerPerson: 50, description: 'Vacances 1 à 3 fois par an.', locked: false, active: true },
+    { id: 'cadeaux', name: 'Cadeaux proches', monthlyPerPerson: 20, description: 'Cadeaux faits aux proches au nom du couple.', locked: false, active: true },
+    { id: 'epargne', name: 'Épargne bloquée', monthlyPerPerson: 50, description: 'Réserve mutuelle pour imprévus majeurs.', locked: true, active: true },
+  ],
+  expenses: [],
+  contributions: [],
+};
 
 export default function App() {
-  const [members, setMembers] = useState(initialMembers);
-  const [categories, setCategories] = useState(initialCategories);
+  const [apiUrl, setApiUrl] = useState('');
+  const [apiSecret, setApiSecret] = useState('');
+  const [connected, setConnected] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('Mode local');
+  const [members, setMembers] = useState(initialState.members);
+  const [categories, setCategories] = useState(initialState.categories);
   const [expenses, setExpenses] = useState([]);
   const [contributions, setContributions] = useState([]);
-  const [startMonth, setStartMonth] = useState(defaultStartMonth);
   const [selectedMonth, setSelectedMonth] = useState(defaultStartMonth);
+  const [monthDraft, setMonthDraft] = useState(defaultStartMonth);
   const [tab, setTab] = useState('dashboard');
+  const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(defaultStartMonth) });
+  const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(defaultStartMonth) });
+  const [autoDraft, setAutoDraft] = useState({ mode: 'all', memberId: 'steve', monthsCount: '1', date: monthDefaultDate(defaultStartMonth) });
   const [categoryModal, setCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [settingsModal, setSettingsModal] = useState(false);
   const [memberDraft, setMemberDraft] = useState('');
-  const [editingMember, setEditingMember] = useState(null);
-  const [memberNameDraft, setMemberNameDraft] = useState('');
-  const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', paidBy: 'Steve', categoryId: 'weekends', date: today() });
-  const [contributionDraft, setContributionDraft] = useState({ amount: '', person: 'Steve', categoryId: 'weekends', date: today() });
-  const [autoPerson, setAutoPerson] = useState('Steve');
-  const [autoDate, setAutoDate] = useState(monthDefaultDate(defaultStartMonth));
-  const [autoMonths, setAutoMonths] = useState('1');
+
+  useEffect(() => { loadLocal(); }, []);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    saveLocal();
+    if (!firstId(members) || !firstId(categories)) return;
+    setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
+    setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
+    setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
+  }, [members, categories, expenses, contributions, selectedMonth, apiUrl, apiSecret]);
 
   useEffect(() => {
-    saveData();
-  }, [members, categories, expenses, contributions, startMonth, selectedMonth]);
-
-  useEffect(() => {
-    if (members.indexOf(expenseDraft.paidBy) === -1) {
-      setExpenseDraft((draft) => ({ ...draft, paidBy: firstMember(members) }));
-    }
-    if (members.indexOf(contributionDraft.person) === -1) {
-      setContributionDraft((draft) => ({ ...draft, person: firstMember(members) }));
-    }
-    if (members.indexOf(autoPerson) === -1) {
-      setAutoPerson(firstMember(members));
-    }
-  }, [members]);
-
-  useEffect(() => {
-    if (!categories.find((category) => category.id === expenseDraft.categoryId)) {
-      setExpenseDraft((draft) => ({ ...draft, categoryId: firstCategoryId(categories) }));
-    }
-    if (!categories.find((category) => category.id === contributionDraft.categoryId)) {
-      setContributionDraft((draft) => ({ ...draft, categoryId: firstCategoryId(categories) }));
-    }
-  }, [categories]);
-
-  const loadData = async () => {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      const loadedMembers = data.members && data.members.length ? data.members : initialMembers;
-      const loadedCategories = data.categories && data.categories.length ? data.categories : initialCategories;
-      setMembers(loadedMembers);
-      setCategories(loadedCategories.map((category) => ({ locked: false, ...category })));
-      setExpenses(data.expenses || []);
-      setContributions(data.contributions || []);
-      setStartMonth(data.startMonth || defaultStartMonth);
-      setSelectedMonth(data.selectedMonth || data.startMonth || defaultStartMonth);
-      setExpenseDraft((draft) => ({ ...draft, paidBy: firstMember(loadedMembers), categoryId: firstCategoryId(loadedCategories) }));
-      setContributionDraft((draft) => ({ ...draft, person: firstMember(loadedMembers), categoryId: firstCategoryId(loadedCategories) }));
-      setAutoPerson(firstMember(loadedMembers));
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger les données locales.');
-    }
-  };
-
-  const saveData = async () => {
-    try {
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ members, categories, expenses, contributions, startMonth, selectedMonth })
-      );
-    } catch (error) {
-      console.log(error);
-    }
-  };
-
-
-  useEffect(() => {
-    const defaultDate = monthDefaultDate(selectedMonth);
-    setExpenseDraft((draft) => ({
-      ...draft,
-      date: String(draft.date || '').startsWith(selectedMonth) ? draft.date : defaultDate,
-    }));
-    setContributionDraft((draft) => ({
-      ...draft,
-      date: String(draft.date || '').startsWith(selectedMonth) ? draft.date : defaultDate,
-    }));
-    setAutoDate((date) => (String(date || '').startsWith(selectedMonth) ? date : defaultDate));
+    setMonthDraft(selectedMonth);
+    const date = monthDefaultDate(selectedMonth);
+    setExpenseDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
+    setContributionDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
+    setAutoDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
   }, [selectedMonth]);
 
-  const monthExpenses = useMemo(
-    () => expenses.filter((expense) => String(expense.date || '').startsWith(selectedMonth)),
-    [expenses, selectedMonth]
-  );
+  useEffect(() => {
+    if (!apiUrl) return;
+    syncFromServer(false);
+    const timer = setInterval(() => syncFromServer(false), 15000);
+    return () => clearInterval(timer);
+  }, [apiUrl, apiSecret]);
 
-  const monthContributions = useMemo(
-    () => contributions.filter((contribution) => String(contribution.date || '').startsWith(selectedMonth)),
-    [contributions, selectedMonth]
-  );
-
-  const summary = useMemo(() => {
-    return categories.map((category) => {
-      const spent = monthExpenses
-        .filter((expense) => expense.categoryId === category.id)
-        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-      const paidIn = monthContributions
-        .filter((contribution) => contribution.categoryId === category.id)
-        .reduce((sum, contribution) => sum + Number(contribution.amount || 0), 0);
-      const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-      return {
-        ...category,
-        spent,
-        paidIn,
-        monthlyBudget,
-        remainingBudget: monthlyBudget - spent,
-        cashBalance: paidIn - spent,
-        overBudget: spent > monthlyBudget,
-        underFunded: paidIn < spent,
-      };
+  const request = async (path, options = {}) => {
+    if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
+    const url = `${apiUrl.replace(/\/$/, '')}${path}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
+        ...(options.headers || {}),
+      },
     });
-  }, [categories, monthExpenses, monthContributions, members]);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Erreur serveur ${response.status}`);
+    return data;
+  };
 
-  const totals = useMemo(() => {
-    return summary.reduce(
-      (acc, category) => ({
-        monthlyBudget: acc.monthlyBudget + category.monthlyBudget,
-        spent: acc.spent + category.spent,
-        paidIn: acc.paidIn + category.paidIn,
-        cashBalance: acc.cashBalance + category.cashBalance,
-      }),
-      { monthlyBudget: 0, spent: 0, paidIn: 0, cashBalance: 0 }
-    );
-  }, [summary]);
+  const applyServerState = (data) => {
+    setMembers(data.members || []);
+    setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
+    setExpenses(data.expenses || []);
+    setContributions(data.contributions || []);
+    setConnected(true);
+    setSyncMessage(`Synchronisé ${new Date().toLocaleTimeString('fr-FR').slice(0, 5)}`);
+  };
 
-  const personState = useMemo(() => {
-    return members.map((person) => {
-      const expected = categories.reduce((sum, category) => sum + Number(category.monthlyPerPerson || 0), 0);
-      const paid = monthContributions
-        .filter((contribution) => contribution.person === person)
-        .reduce((sum, contribution) => sum + Number(contribution.amount || 0), 0);
-      const personallyPaidExpenses = monthExpenses
-        .filter((expense) => expense.paidBy === person)
-        .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-      return { person, expected, paid, missing: expected - paid, personallyPaidExpenses };
-    });
-  }, [members, categories, monthContributions, monthExpenses]);
+  const syncFromServer = async (showAlert = true) => {
+    try {
+      const data = await request('/api/state');
+      applyServerState(data);
+      if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
+    } catch (error) {
+      setConnected(false);
+      setSyncMessage(`Hors ligne : ${error.message}`);
+      if (showAlert) Alert.alert('Synchronisation impossible', error.message);
+    }
+  };
+
+  const mutate = async (path, method, body, fallback) => {
+    try {
+      const data = await request(path, { method, body: JSON.stringify(body || {}) });
+      applyServerState(data);
+    } catch (error) {
+      setConnected(false);
+      setSyncMessage(`Mode local : ${error.message}`);
+      fallback?.();
+      Alert.alert('Serveur non disponible', `Action appliquée en local uniquement.\n\n${error.message}`);
+    }
+  };
+
+  const loadLocal = async () => {
+    try {
+      const [cache, storedApi, storedSecret] = await Promise.all([
+        AsyncStorage.getItem(CACHE_KEY),
+        AsyncStorage.getItem(API_KEY),
+        AsyncStorage.getItem(SECRET_KEY),
+      ]);
+      if (storedApi) setApiUrl(storedApi);
+      if (storedSecret) setApiSecret(storedSecret);
+      if (cache) {
+        const data = JSON.parse(cache);
+        setMembers(data.members || initialState.members);
+        setCategories(data.categories || initialState.categories);
+        setExpenses(data.expenses || []);
+        setContributions(data.contributions || []);
+        setSelectedMonth(data.selectedMonth || defaultStartMonth);
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de charger le cache local.');
+    }
+  };
+
+  const saveLocal = async () => {
+    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, selectedMonth }));
+    await AsyncStorage.setItem(API_KEY, apiUrl || '');
+    await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
+  };
+
+  const monthExpenses = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
+  const monthContributions = useMemo(() => contributions.filter((c) => String(c.date || '').startsWith(selectedMonth)), [contributions, selectedMonth]);
+
+  const summary = useMemo(() => categories.map((category) => {
+    const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
+    return { ...category, spent, paidIn, monthlyBudget, remainingBudget: monthlyBudget - spent, cashBalance: paidIn - spent, overBudget: spent > monthlyBudget };
+  }), [categories, members, monthExpenses, monthContributions]);
+
+  const totals = useMemo(() => summary.reduce((acc, c) => ({
+    monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
+    spent: acc.spent + c.spent,
+    paidIn: acc.paidIn + c.paidIn,
+    cashBalance: acc.cashBalance + c.cashBalance,
+  }), { monthlyBudget: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
+
+  const personState = useMemo(() => members.map((member) => {
+    const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
+    const paid = monthContributions.filter((c) => c.memberId === member.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const personallyPaidExpenses = monthExpenses.filter((e) => e.paidByMemberId === member.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    return { member, expected, paid, missing: expected - paid, personallyPaidExpenses };
+  }), [members, categories, monthContributions, monthExpenses]);
 
   const updateMonth = (direction) => {
-    const parts = selectedMonth.split('-').map(Number);
-    if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return;
-    const date = new Date(parts[0], parts[1] - 1 + direction, 1);
-    setSelectedMonth(date.toISOString().slice(0, 7));
+    setSelectedMonth((current) => addMonths(current, direction));
   };
 
-  const goToNewMonth = () => {
-    updateMonth(1);
-    setTab('dashboard');
-  };
-
-  const applyStartMonth = () => {
-    if (!/^\d{4}-\d{2}$/.test(startMonth)) {
-      Alert.alert('Mois invalide', 'Utilise le format YYYY-MM, par exemple 2026-07.');
-      return;
-    }
-    setSelectedMonth(startMonth);
-    Alert.alert('Mois de départ défini', `Le mois actif est maintenant ${startMonth}.`);
-  };
-
-  const openNewCategory = () => {
-    setEditingCategory({ id: null, name: '', monthlyPerPerson: '', description: '', locked: false });
-    setCategoryModal(true);
-  };
-
-  const openEditCategory = (category) => {
-    setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson || '') });
-    setCategoryModal(true);
-  };
-
-  const saveCategory = () => {
-    if (!editingCategory || !editingCategory.name.trim()) return Alert.alert('Catégorie incomplète', 'Ajoute un nom de catégorie.');
-    const monthlyPerPerson = parseAmount(editingCategory.monthlyPerPerson);
-    if (Number.isNaN(monthlyPerPerson) || monthlyPerPerson < 0) return Alert.alert('Budget invalide', 'Le budget doit être un nombre positif.');
-
-    if (editingCategory.id) {
-      setCategories((current) =>
-        current.map((category) =>
-          category.id === editingCategory.id ? { ...editingCategory, monthlyPerPerson } : category
-        )
-      );
-    } else {
-      setCategories((current) => [...current, { ...editingCategory, id: uid(), monthlyPerPerson }]);
-    }
-    setCategoryModal(false);
-  };
-
-  const deleteCategory = (categoryId) => {
-    const hasHistory = expenses.some((expense) => expense.categoryId === categoryId) || contributions.some((item) => item.categoryId === categoryId);
-    if (hasHistory) {
-      Alert.alert('Suppression impossible', 'Cette catégorie contient déjà un historique. Renomme-la ou garde-la pour conserver les données.');
-      return;
-    }
-    setCategories((current) => current.filter((category) => category.id !== categoryId));
+  const applyMonthDraft = () => {
+    const normalized = normalizeMonth(monthDraft);
+    if (!normalized) return Alert.alert('Mois invalide', 'Utilise le format AAAA-MM, par exemple 2026-07.');
+    setSelectedMonth(normalized);
   };
 
   const addExpense = () => {
     const amount = parseAmount(expenseDraft.amount);
     if (!expenseDraft.label.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
-    if (Number.isNaN(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
-    if (!String(expenseDraft.date || '').startsWith(selectedMonth)) return Alert.alert('Date hors mois actif', `La date doit commencer par ${selectedMonth} pour apparaître dans ce mois.`);
-
-    const category = summary.find((item) => item.id === expenseDraft.categoryId);
-    if (category && category.locked) {
-      Alert.alert(
-        'Caisse verrouillée',
-        `La caisse ${category.name} est verrouillée. Tu peux quand même ajouter la dépense si vous êtes tous les deux d’accord.`,
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Ajouter quand même', onPress: () => commitExpense(amount) },
-        ]
-      );
-      return;
-    }
-    if (category && amount > category.remainingBudget) {
-      Alert.alert(
-        'Budget dépassé',
-        `Cette dépense dépasse le budget restant de la caisse ${category.name}. Elle sera marquée en dépassement.`,
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Ajouter quand même', onPress: () => commitExpense(amount) },
-        ]
-      );
-      return;
-    }
-    commitExpense(amount);
-  };
-
-  const commitExpense = (amount) => {
-    setExpenses((current) => [{ ...expenseDraft, id: uid(), amount }, ...current]);
-    setExpenseDraft({ label: '', amount: '', paidBy: firstMember(members), categoryId: firstCategoryId(categories), date: monthDefaultDate(selectedMonth) });
+    if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!String(expenseDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    const payload = { ...expenseDraft, id: uid('expense'), amount };
+    mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
+    setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
   };
 
   const addContribution = () => {
     const amount = parseAmount(contributionDraft.amount);
-    if (Number.isNaN(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
-    if (!String(contributionDraft.date || '').startsWith(selectedMonth)) return Alert.alert('Date hors mois actif', `La date doit commencer par ${selectedMonth} pour apparaître dans ce mois.`);
-    setContributions((current) => [{ ...contributionDraft, id: uid(), amount }, ...current]);
-    setContributionDraft({ amount: '', person: firstMember(members), categoryId: firstCategoryId(categories), date: monthDefaultDate(selectedMonth) });
+    if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!String(contributionDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    const payload = { ...contributionDraft, id: uid('contribution'), amount };
+    mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
+    setContributionDraft((d) => ({ ...d, amount: '' }));
   };
 
-  const addAutoContributions = (mode) => {
-    const targetMembers = mode === 'all' ? members : [autoPerson];
-    const activeCategories = categories.filter((category) => Number(category.monthlyPerPerson || 0) > 0);
-    const monthsCount = safePositiveInt(autoMonths, 1);
-    const date = autoDate || monthDefaultDate(selectedMonth);
-    if (!String(date).startsWith(selectedMonth)) {
-      return Alert.alert('Date hors mois actif', `La date du versement doit commencer par ${selectedMonth} pour être comptée dans ce mois.`);
+  const addAutoContributions = () => {
+    if (!String(autoDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    const memberIds = autoDraft.mode === 'all' ? members.map((m) => m.id) : [autoDraft.memberId];
+    const monthsCount = Math.max(1, parseInt(autoDraft.monthsCount || '1', 10));
+    const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
+      id: uid('auto'), memberId, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0) * monthsCount, date: autoDraft.date, note: `Versement automatique (${monthsCount} mois)`,
+    })).filter((row) => row.amount > 0));
+    mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date }, () => setContributions((list) => [...localRows, ...list]));
+  };
+
+  const removeExpense = (id) => mutate(`/api/expenses/${id}`, 'DELETE', {}, () => setExpenses((list) => list.filter((e) => e.id !== id)));
+  const removeContribution = (id) => mutate(`/api/contributions/${id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== id)));
+
+  const saveCategory = () => {
+    const amount = parseAmount(editingCategory.monthlyPerPerson);
+    if (!editingCategory.name.trim()) return Alert.alert('Caisse incomplète', 'Ajoute un nom.');
+    if (!Number.isFinite(amount) || amount < 0) return Alert.alert('Budget invalide', 'Le budget doit être positif.');
+    const payload = { ...editingCategory, monthlyPerPerson: amount };
+    if (editingCategory.isNew) {
+      payload.id = uid('category');
+      mutate('/api/categories', 'POST', payload, () => setCategories((list) => [...list, { ...payload, active: true }]));
+    } else {
+      mutate(`/api/categories/${payload.id}`, 'PUT', payload, () => setCategories((list) => list.map((c) => (c.id === payload.id ? payload : c))));
     }
-    if (!targetMembers.length || !activeCategories.length) return Alert.alert('Rien à verser', 'Ajoute au moins un membre et une catégorie avec budget.');
-    const items = [];
-    targetMembers.forEach((person) => {
-      activeCategories.forEach((category) => {
-        items.push({
-          id: uid(),
-          person,
-          categoryId: category.id,
-          amount: Number(category.monthlyPerPerson || 0) * monthsCount,
-          date,
-          automatic: true,
-          monthsCount,
-        });
-      });
-    });
-    const total = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    setContributions((current) => [...items, ...current]);
-    Alert.alert('Versement automatique ajouté', `${items.length} lignes ajoutées. Total : ${formatEuro(total)} (${monthsCount} mois).`);
+    setCategoryModal(false);
+  };
+
+  const deleteCategory = (category) => {
+    Alert.alert('Supprimer la caisse', `Supprimer ${category.name} ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/categories/${category.id}`, 'DELETE', {}, () => setCategories((list) => list.filter((c) => c.id !== category.id))) },
+    ]);
   };
 
   const addMember = () => {
     const name = memberDraft.trim();
-    if (!name) return Alert.alert('Nom manquant', 'Entre le nom du membre.');
-    if (members.includes(name)) return Alert.alert('Déjà présent', 'Ce membre existe déjà.');
-    setMembers((current) => [...current, name]);
+    if (!name) return;
+    const payload = { id: uid('member'), name };
+    mutate('/api/members', 'POST', payload, () => setMembers((list) => [...list, payload]));
     setMemberDraft('');
   };
 
-  const saveMemberName = () => {
-    const nextName = memberNameDraft.trim();
-    if (!editingMember || !nextName) return;
-    if (members.includes(nextName) && nextName !== editingMember) return Alert.alert('Nom déjà utilisé', 'Choisis un autre nom.');
-    setMembers((current) => current.map((name) => (name === editingMember ? nextName : name)));
-    setExpenses((current) => current.map((expense) => expense.paidBy === editingMember ? { ...expense, paidBy: nextName } : expense));
-    setContributions((current) => current.map((contribution) => contribution.person === editingMember ? { ...contribution, person: nextName } : contribution));
-    if (expenseDraft.paidBy === editingMember) setExpenseDraft((draft) => ({ ...draft, paidBy: nextName }));
-    if (contributionDraft.person === editingMember) setContributionDraft((draft) => ({ ...draft, person: nextName }));
-    if (autoPerson === editingMember) setAutoPerson(nextName);
-    setEditingMember(null);
-    setMemberNameDraft('');
-  };
-
-  const removeMember = (name) => {
-    const hasHistory = expenses.some((expense) => expense.paidBy === name) || contributions.some((contribution) => contribution.person === name);
-    if (members.length <= 1) return Alert.alert('Impossible', 'Il faut garder au moins un membre.');
-    if (hasHistory) return Alert.alert('Suppression impossible', 'Ce membre a déjà un historique. Renomme-le plutôt pour conserver les données.');
-    setMembers((current) => current.filter((item) => item !== name));
-  };
-
-  const resetDemo = () => {
-    Alert.alert('Réinitialiser', 'Remettre les données de départ ?', [
+  const resetServer = () => {
+    Alert.alert('Réinitialiser', 'Supprimer dépenses, versements, membres et caisses puis remettre les valeurs par défaut ?', [
       { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Réinitialiser',
-        style: 'destructive',
-        onPress: () => {
-          setMembers(initialMembers);
-          setCategories(initialCategories);
-          setExpenses([]);
-          setContributions([]);
-          setStartMonth(defaultStartMonth);
-          setSelectedMonth(defaultStartMonth);
-          setExpenseDraft({ label: '', amount: '', paidBy: 'Steve', categoryId: 'weekends', date: monthDefaultDate(defaultStartMonth) });
-          setContributionDraft({ amount: '', person: 'Steve', categoryId: 'weekends', date: monthDefaultDate(defaultStartMonth) });
-          setAutoDate(monthDefaultDate(defaultStartMonth));
-          setAutoMonths('1');
-        },
-      },
+      { text: 'Reset', style: 'destructive', onPress: () => mutate('/api/reset', 'POST', {}, () => { setMembers(initialState.members); setCategories(initialState.categories); setExpenses([]); setContributions([]); }) },
     ]);
   };
 
+  const renderChoice = (items, selectedId, onSelect) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choiceRow}>
+      {items.map((item) => (
+        <TouchableOpacity key={item.id} style={[styles.choice, selectedId === item.id && styles.choiceActive]} onPress={() => onSelect(item.id)}>
+          <Text style={[styles.choiceText, selectedId === item.id && styles.choiceTextActive]}>{item.name}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const getMemberName = (id) => members.find((m) => m.id === id)?.name || 'Membre supprimé';
+  const getCategoryName = (id) => categories.find((c) => c.id === id)?.name || 'Caisse supprimée';
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
       <View style={styles.header}>
         <View>
-          <Text style={styles.appName}>S&S Budget</Text>
+          <Text style={styles.title}>S&S Budget</Text>
           <Text style={styles.subtitle}>Gestion de budget de couple</Text>
+          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
         </View>
-        <TouchableOpacity style={styles.resetButton} onPress={resetDemo}>
-          <Text style={styles.resetButtonText}>Reset</Text>
-        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
       </View>
 
       <View style={styles.monthRow}>
-        <TouchableOpacity style={styles.monthButton} onPress={() => updateMonth(-1)}><Text style={styles.monthButtonText}>‹</Text></TouchableOpacity>
-        <TextInput value={selectedMonth} onChangeText={setSelectedMonth} style={styles.monthInput} placeholder="YYYY-MM" />
-        <TouchableOpacity style={styles.monthButton} onPress={() => updateMonth(1)}><Text style={styles.monthButtonText}>›</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
+        <TextInput
+          style={styles.monthLabel}
+          value={monthDraft}
+          onChangeText={setMonthDraft}
+          onSubmitEditing={applyMonthDraft}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="numbers-and-punctuation"
+          placeholder="AAAA-MM"
+        />
+        <TouchableOpacity style={styles.monthOkButton} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
       </View>
 
       <View style={styles.tabsOuter}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.tabsScroll}
-          contentContainerStyle={styles.tabsContent}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
           {[
-            ['dashboard', 'Synthèse'],
-            ['expenses', 'Dépenses'],
-            ['contributions', 'Versements'],
-            ['categories', 'Caisses'],
-            ['settings', 'Réglages'],
+            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
           ].map(([key, label]) => (
             <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
               <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
@@ -411,37 +335,21 @@ export default function App() {
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {tab === 'dashboard' && (
           <>
-            <View style={styles.totalCard}>
-              <Text style={styles.cardTitleLight}>Vue générale du mois</Text>
-              <View style={styles.grid}>
-                <Metric label="Budget prévu" value={formatEuro(totals.monthlyBudget)} />
-                <Metric label="Dépensé" value={formatEuro(totals.spent)} />
-                <Metric label="Versé" value={formatEuro(totals.paidIn)} />
-                <Metric label="Solde compte" value={formatEuro(totals.cashBalance)} danger={totals.cashBalance < 0} />
+            <View style={styles.hero}>
+              <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
+              <View style={styles.metricGrid}>
+                <Metric label="Budget prévu" value={formatEuro(totals.monthlyBudget)} dark />
+                <Metric label="Dépensé" value={formatEuro(totals.spent)} dark />
+                <Metric label="Versé" value={formatEuro(totals.paidIn)} dark />
+                <Metric label="Solde compte" value={formatEuro(totals.cashBalance)} dark />
               </View>
             </View>
-            <View style={styles.actionsRowTop}>
-              <PrimaryButton label="Nouveau mois" onPress={goToNewMonth} />
-            </View>
-
+            <TouchableOpacity style={styles.primaryButton} onPress={() => updateMonth(1)}><Text style={styles.primaryButtonText}>Nouveau mois</Text></TouchableOpacity>
             <Text style={styles.sectionTitle}>État par membre</Text>
-            {personState.map((person) => (
-              <View key={person.person} style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{person.person}</Text>
-                  <Text style={[styles.badge, person.missing > 0 && styles.badgeDanger]}>
-                    {person.missing > 0 ? `Reste ${formatEuro(person.missing)}` : person.missing < 0 ? `Avance ${formatEuro(Math.abs(person.missing))}` : 'OK'}
-                  </Text>
-                </View>
-                <Text style={styles.line}>Prévu : {formatEuro(person.expected)}</Text>
-                <Text style={styles.line}>Déjà versé : {formatEuro(person.paid)}</Text>
-                <Text style={styles.line}>Dépenses payées personnellement : {formatEuro(person.personallyPaidExpenses)}</Text>
-              </View>
-            ))}
-
+            {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
             <Text style={styles.sectionTitle}>Situation des caisses</Text>
             {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
           </>
@@ -450,26 +358,21 @@ export default function App() {
         {tab === 'expenses' && (
           <>
             <Text style={styles.sectionTitle}>Ajouter une dépense</Text>
-            <FormCard>
-              <TextInput style={styles.input} placeholder="Libellé — ex: Courses samedi" value={expenseDraft.label} onChangeText={(label) => setExpenseDraft({ ...expenseDraft, label })} />
-              <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={expenseDraft.amount} onChangeText={(amount) => setExpenseDraft({ ...expenseDraft, amount })} />
-              <PickerRow label="Catégorie" items={categories.map((c) => [c.id, c.name])} value={expenseDraft.categoryId} onChange={(categoryId) => setExpenseDraft({ ...expenseDraft, categoryId })} />
-              <PickerRow label="Payé par" items={members.map((p) => [p, p])} value={expenseDraft.paidBy} onChange={(paidBy) => setExpenseDraft({ ...expenseDraft, paidBy })} />
-              <TextInput style={styles.input} placeholder="Date YYYY-MM-DD" value={expenseDraft.date} onChangeText={(date) => setExpenseDraft({ ...expenseDraft, date })} />
-              <PrimaryButton label="Ajouter la dépense" onPress={addExpense} />
-            </FormCard>
-
+            <View style={styles.card}>
+              <TextInput style={styles.input} placeholder="Libellé — ex: Courses samedi" value={expenseDraft.label} onChangeText={(label) => setExpenseDraft((d) => ({ ...d, label }))} />
+              <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={expenseDraft.amount} onChangeText={(amount) => setExpenseDraft((d) => ({ ...d, amount }))} />
+              <Text style={styles.label}>Catégorie</Text>{renderChoice(categories, expenseDraft.categoryId, (categoryId) => setExpenseDraft((d) => ({ ...d, categoryId })))}
+              <Text style={styles.label}>Payé par</Text>{renderChoice(members, expenseDraft.paidByMemberId, (paidByMemberId) => setExpenseDraft((d) => ({ ...d, paidByMemberId })))}
+              <TextInput style={styles.input} value={expenseDraft.date} onChangeText={(date) => setExpenseDraft((d) => ({ ...d, date }))} />
+              <TouchableOpacity style={styles.primaryButton} onPress={addExpense}><Text style={styles.primaryButtonText}>Ajouter la dépense</Text></TouchableOpacity>
+            </View>
             <Text style={styles.sectionTitle}>Dépenses du mois</Text>
-            {monthExpenses.length === 0 && <EmptyText text="Aucune dépense pour ce mois." />}
             {monthExpenses.map((expense) => (
               <View key={expense.id} style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{expense.label}</Text>
-                  <Text style={styles.amount}>{formatEuro(expense.amount)}</Text>
-                </View>
-                <Text style={styles.line}>{findCategoryName(categories, expense.categoryId)} · payé par {expense.paidBy}</Text>
+                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
+                <Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text>
                 <Text style={styles.muted}>{expense.date}</Text>
-                <DangerButton label="Supprimer" onPress={() => setExpenses((current) => current.filter((item) => item.id !== expense.id))} />
+                <TouchableOpacity style={styles.dangerButton} onPress={() => removeExpense(expense.id)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
               </View>
             ))}
           </>
@@ -478,35 +381,32 @@ export default function App() {
         {tab === 'contributions' && (
           <>
             <Text style={styles.sectionTitle}>Versement automatique</Text>
-            <FormCard>
-              <Text style={styles.helpText}>L’app lit le budget mensuel défini dans chaque caisse et répartit automatiquement le bon montant par membre. Exemple : Weekends 40 €, Vacances 50 €, etc. Mets 2 ou 3 mois pour prendre de l’avance.</Text>
-              <PickerRow label="Membre" items={members.map((p) => [p, p])} value={autoPerson} onChange={setAutoPerson} />
-              <TextInput style={styles.input} placeholder="Nombre de mois à verser — ex: 1" keyboardType="number-pad" value={autoMonths} onChangeText={setAutoMonths} />
-              <TextInput style={styles.input} placeholder="Date YYYY-MM-DD" value={autoDate} onChangeText={setAutoDate} />
-              <PrimaryButton label={`Valider auto pour ${autoPerson}`} onPress={() => addAutoContributions('one')} />
-              <SecondaryButton label="Valider auto pour tous les membres" onPress={() => addAutoContributions('all')} />
-            </FormCard>
+            <View style={styles.card}>
+              <Text style={styles.label}>Mode</Text>
+              <View style={styles.choiceRow}>
+                <TouchableOpacity style={[styles.choice, autoDraft.mode === 'all' && styles.choiceActive]} onPress={() => setAutoDraft((d) => ({ ...d, mode: 'all' }))}><Text style={[styles.choiceText, autoDraft.mode === 'all' && styles.choiceTextActive]}>Tous</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.choice, autoDraft.mode === 'one' && styles.choiceActive]} onPress={() => setAutoDraft((d) => ({ ...d, mode: 'one' }))}><Text style={[styles.choiceText, autoDraft.mode === 'one' && styles.choiceTextActive]}>Un membre</Text></TouchableOpacity>
+              </View>
+              {autoDraft.mode === 'one' && <>{renderChoice(members, autoDraft.memberId, (memberId) => setAutoDraft((d) => ({ ...d, memberId })))}</>}
+              <TextInput style={styles.input} placeholder="Nombre de mois" keyboardType="number-pad" value={autoDraft.monthsCount} onChangeText={(monthsCount) => setAutoDraft((d) => ({ ...d, monthsCount }))} />
+              <TextInput style={styles.input} value={autoDraft.date} onChangeText={(date) => setAutoDraft((d) => ({ ...d, date }))} />
+              <TouchableOpacity style={styles.primaryButton} onPress={addAutoContributions}><Text style={styles.primaryButtonText}>Verser automatiquement</Text></TouchableOpacity>
+            </View>
 
             <Text style={styles.sectionTitle}>Ajouter un versement manuel</Text>
-            <FormCard>
-              <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={contributionDraft.amount} onChangeText={(amount) => setContributionDraft({ ...contributionDraft, amount })} />
-              <PickerRow label="Personne" items={members.map((p) => [p, p])} value={contributionDraft.person} onChange={(person) => setContributionDraft({ ...contributionDraft, person })} />
-              <PickerRow label="Catégorie" items={categories.map((c) => [c.id, c.name])} value={contributionDraft.categoryId} onChange={(categoryId) => setContributionDraft({ ...contributionDraft, categoryId })} />
-              <TextInput style={styles.input} placeholder="Date YYYY-MM-DD" value={contributionDraft.date} onChangeText={(date) => setContributionDraft({ ...contributionDraft, date })} />
-              <PrimaryButton label="Ajouter le versement" onPress={addContribution} />
-            </FormCard>
-
+            <View style={styles.card}>
+              <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={contributionDraft.amount} onChangeText={(amount) => setContributionDraft((d) => ({ ...d, amount }))} />
+              <Text style={styles.label}>Membre</Text>{renderChoice(members, contributionDraft.memberId, (memberId) => setContributionDraft((d) => ({ ...d, memberId })))}
+              <Text style={styles.label}>Catégorie</Text>{renderChoice(categories, contributionDraft.categoryId, (categoryId) => setContributionDraft((d) => ({ ...d, categoryId })))}
+              <TextInput style={styles.input} value={contributionDraft.date} onChangeText={(date) => setContributionDraft((d) => ({ ...d, date }))} />
+              <TouchableOpacity style={styles.primaryButton} onPress={addContribution}><Text style={styles.primaryButtonText}>Ajouter le versement</Text></TouchableOpacity>
+            </View>
             <Text style={styles.sectionTitle}>Versements du mois</Text>
-            {monthContributions.length === 0 && <EmptyText text="Aucun versement pour ce mois." />}
             {monthContributions.map((contribution) => (
               <View key={contribution.id} style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{contribution.person}</Text>
-                  <Text style={styles.amount}>{formatEuro(contribution.amount)}</Text>
-                </View>
-                <Text style={styles.line}>{findCategoryName(categories, contribution.categoryId)}{contribution.automatic ? ' · automatique' : ''}</Text>
-                <Text style={styles.muted}>{contribution.date}</Text>
-                <DangerButton label="Supprimer" onPress={() => setContributions((current) => current.filter((item) => item.id !== contribution.id))} />
+                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
+                <Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles.muted}>{contribution.date}</Text>
+                <TouchableOpacity style={styles.dangerButton} onPress={() => removeContribution(contribution.id)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
               </View>
             ))}
           </>
@@ -514,260 +414,83 @@ export default function App() {
 
         {tab === 'categories' && (
           <>
-            <PrimaryButton label="Créer une caisse" onPress={openNewCategory} />
-            <Text style={styles.sectionTitle}>Caisses / catégories</Text>
-            {categories.map((category) => (
+            <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>
+            {summary.map((category) => (
               <View key={category.id} style={styles.card}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.cardTitle}>{category.name}</Text>
-                  <Text style={styles.amount}>{formatEuro(category.monthlyPerPerson)} / membre</Text>
-                </View>
-                <Text style={styles.line}>Budget total : {formatEuro(category.monthlyPerPerson * members.length)} / mois</Text>
-                <Text style={styles.line}>Statut : {category.locked ? 'Verrouillée avec confirmation avant dépense' : 'Libre'}</Text>
+                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
-                <View style={styles.actionsRow}>
-                  <SecondaryButton label="Modifier" onPress={() => openEditCategory(category)} />
-                  <DangerButton label="Supprimer" onPress={() => deleteCategory(category.id)} />
+                <Text style={styles.muted}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text>
+                <Text style={styles.muted}>Solde caisse : {formatEuro(category.cashBalance)}</Text>
+                <View style={styles.rowGap}>
+                  <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                 </View>
               </View>
             ))}
           </>
         )}
 
-        {tab === 'settings' && (
+        {tab === 'members' && (
           <>
-            <Text style={styles.sectionTitle}>Mois de départ</Text>
-            <FormCard>
-              <TextInput style={styles.input} placeholder="YYYY-MM" value={startMonth} onChangeText={setStartMonth} />
-              <PrimaryButton label="Utiliser ce mois" onPress={applyStartMonth} />
-            </FormCard>
-
             <Text style={styles.sectionTitle}>Membres</Text>
-            <FormCard>
-              <TextInput style={styles.input} placeholder="Ajouter un membre" value={memberDraft} onChangeText={setMemberDraft} />
-              <PrimaryButton label="Ajouter le membre" onPress={addMember} />
-            </FormCard>
-            {members.map((member) => (
-              <View key={member} style={styles.card}>
-                {editingMember === member ? (
-                  <>
-                    <TextInput style={styles.input} value={memberNameDraft} onChangeText={setMemberNameDraft} />
-                    <View style={styles.actionsRow}>
-                      <SecondaryButton label="Annuler" onPress={() => setEditingMember(null)} />
-                      <PrimaryButton label="Enregistrer" onPress={saveMemberName} />
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.cardTitle}>{member}</Text>
-                    </View>
-                    <View style={styles.actionsRow}>
-                      <SecondaryButton label="Renommer" onPress={() => { setEditingMember(member); setMemberNameDraft(member); }} />
-                      <DangerButton label="Supprimer" onPress={() => removeMember(member)} />
-                    </View>
-                  </>
-                )}
-              </View>
-            ))}
+            <View style={styles.card}>
+              <TextInput style={styles.input} placeholder="Nom du membre" value={memberDraft} onChangeText={setMemberDraft} />
+              <TouchableOpacity style={styles.primaryButton} onPress={addMember}><Text style={styles.primaryButtonText}>Ajouter le membre</Text></TouchableOpacity>
+            </View>
+            {members.map((member) => <View key={member.id} style={styles.card}><Text style={styles.cardTitle}>{member.name}</Text><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
       </ScrollView>
 
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setCategoryModal(false)} style={styles.modalHeaderButton}><Text style={styles.closeText}>Fermer</Text></TouchableOpacity>
-            <Text style={styles.modalTitle}>{editingCategory && editingCategory.id ? 'Modifier la caisse' : 'Nouvelle caisse'}</Text>
-            <TouchableOpacity onPress={saveCategory} style={styles.modalValidateButton}><Text style={styles.modalValidateText}>Valider</Text></TouchableOpacity>
-          </View>
-          <View style={styles.content}>
-            <TextInput style={styles.input} placeholder="Nom" value={(editingCategory && editingCategory.name) || ''} onChangeText={(name) => setEditingCategory({ ...editingCategory, name })} />
-            <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String((editingCategory && editingCategory.monthlyPerPerson) || '')} onChangeText={(monthlyPerPerson) => setEditingCategory({ ...editingCategory, monthlyPerPerson })} />
-            <TextInput style={[styles.input, styles.textArea]} placeholder="Description" multiline value={(editingCategory && editingCategory.description) || ''} onChangeText={(description) => setEditingCategory({ ...editingCategory, description })} />
-            <PickerRow label="Verrouillage optionnel" items={[[true, 'Verrouillée'], [false, 'Libre']]} value={editingCategory && editingCategory.locked} onChange={(locked) => setEditingCategory({ ...editingCategory, locked })} />
-            <Text style={styles.helpText}>Appuie sur Valider en haut à droite pour enregistrer cette caisse.</Text>
-          </View>
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <TextInput style={styles.input} placeholder="Nom" value={editingCategory?.name || ''} onChangeText={(name) => setEditingCategory((c) => ({ ...c, name }))} />
+            <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String(editingCategory?.monthlyPerPerson || '')} onChangeText={(monthlyPerPerson) => setEditingCategory((c) => ({ ...c, monthlyPerPerson }))} />
+            <TextInput style={[styles.input, styles.textarea]} placeholder="Description" multiline value={editingCategory?.description || ''} onChangeText={(description) => setEditingCategory((c) => ({ ...c, description }))} />
+            <Text style={styles.label}>Verrouillage optionnel</Text>
+            <View style={styles.choiceRow}>
+              <TouchableOpacity style={[styles.choice, editingCategory?.locked && styles.choiceActive]} onPress={() => setEditingCategory((c) => ({ ...c, locked: true }))}><Text style={[styles.choiceText, editingCategory?.locked && styles.choiceTextActive]}>Verrouillée</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.choice, !editingCategory?.locked && styles.choiceActive]} onPress={() => setEditingCategory((c) => ({ ...c, locked: false }))}><Text style={[styles.choiceText, !editingCategory?.locked && styles.choiceTextActive]}>Libre</Text></TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setCategoryModal(false)}><Text style={styles.secondaryButtonText}>Fermer sans enregistrer</Text></TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={settingsModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={styles.label}>URL API maison</Text>
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <Text style={styles.label}>Secret API optionnel</Text>
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
+            <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setApiUrl('')}><Text style={styles.secondaryButtonText}>Revenir en mode local</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.dangerButton} onPress={resetServer}><Text style={styles.dangerText}>Réinitialiser les données serveur</Text></TouchableOpacity>
+            <Text style={styles.help}>Sur vos téléphones, configurez la même URL Tailscale du vieux PC. Exemple : http://100.64.12.34:3001</Text>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-function findCategoryName(categories, categoryId) {
-  const found = categories.find((category) => category.id === categoryId);
-  return found ? found.name : 'Catégorie supprimée';
-}
-
-function Metric({ label, value, danger }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, danger && styles.dangerText]}>{value}</Text>
-    </View>
-  );
-}
-
-function CategorySummary({ category }) {
-  const percent = category.monthlyBudget > 0 ? Math.min(100, (category.spent / category.monthlyBudget) * 100) : 0;
-  let status = 'OK';
-  let statusStyle = styles.badge;
-  if (category.overBudget) {
-    status = 'Dépassement';
-    statusStyle = [styles.badge, styles.badgeDanger];
-  } else if (category.underFunded) {
-    status = 'À alimenter';
-    statusStyle = [styles.badge, styles.badgeWarning];
-  } else if (category.cashBalance > category.monthlyBudget) {
-    status = 'Avance';
-    statusStyle = [styles.badge, styles.badgeInfo];
-  }
-  return (
-    <View style={styles.card}>
-      <View style={styles.rowBetween}>
-        <Text style={styles.cardTitle}>{category.name}</Text>
-        <Text style={statusStyle}>{status}</Text>
-      </View>
-      <View style={styles.progressBar}><View style={[styles.progressFill, { width: `${percent}%` }, category.overBudget && styles.progressDanger]} /></View>
-      <Text style={styles.line}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text>
-      <Text style={styles.line}>Restant budget : {formatEuro(category.remainingBudget)}</Text>
-      <Text style={styles.line}>Solde de caisse : {formatEuro(category.cashBalance)}</Text>
-      {category.locked && <Text style={styles.muted}>Caisse verrouillée : confirmation demandée avant une dépense.</Text>}
-    </View>
-  );
-}
-
-function FormCard({ children }) {
-  return <View style={styles.card}>{children}</View>;
-}
-
-function PrimaryButton({ label, onPress }) {
-  return <TouchableOpacity style={styles.primaryButton} onPress={onPress}><Text style={styles.primaryButtonText}>{label}</Text></TouchableOpacity>;
-}
-
-function SecondaryButton({ label, onPress }) {
-  return <TouchableOpacity style={styles.secondaryButton} onPress={onPress}><Text style={styles.secondaryButtonText}>{label}</Text></TouchableOpacity>;
-}
-
-function DangerButton({ label, onPress }) {
-  return <TouchableOpacity style={styles.dangerButton} onPress={onPress}><Text style={styles.dangerButtonText}>{label}</Text></TouchableOpacity>;
-}
-
-function EmptyText({ text }) {
-  return <Text style={styles.empty}>{text}</Text>;
-}
-
-function PickerRow({ label, items, value, onChange }) {
-  return (
-    <View style={styles.pickerBox}>
-      <Text style={styles.pickerLabel}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {items.map(([key, itemLabel]) => (
-          <TouchableOpacity key={String(key)} style={[styles.chip, value === key && styles.activeChip]} onPress={() => onChange(key)}>
-            <Text style={[styles.chipText, value === key && styles.activeChipText]}>{itemLabel}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
+function Metric({ label, value }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
+function PersonCard({ state }) { return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
+function CategorySummary({ category }) { const pct = category.monthlyBudget ? Math.min(100, (category.spent / category.monthlyBudget) * 100) : 0; return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={category.overBudget ? styles.badgeWarn : styles.badgeOk}>{category.overBudget ? 'Dépassement' : 'OK'}</Text></View><View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View><Text style={styles.muted}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text><Text style={styles.muted}>Restant budget : {formatEuro(category.remainingBudget)}</Text><Text style={styles.muted}>Solde de caisse : {formatEuro(category.cashBalance)}</Text></View>; }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  header: { backgroundColor: '#111827', padding: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  appName: { color: 'white', fontSize: 28, fontWeight: '800' },
-  subtitle: { color: '#D1D5DB', marginTop: 4 },
-  resetButton: { backgroundColor: '#374151', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12 },
-  resetButtonText: { color: 'white', fontWeight: '700' },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' },
-  monthButton: { backgroundColor: '#111827', borderRadius: 12, width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  monthButtonText: { color: 'white', fontSize: 28, lineHeight: 30 },
-  monthInput: { flex: 1, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, textAlign: 'center', fontWeight: '700' },
-  tabsOuter: {
-    backgroundColor: 'white',
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  tabsScroll: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  tabsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  tab: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    backgroundColor: '#EEF2F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 104,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  activeTab: { backgroundColor: '#111827', borderColor: '#111827' },
-  tabText: { color: '#475467', fontSize: 13, fontWeight: '800' },
-  activeTabText: { color: 'white' },
-  content: { padding: 16, paddingBottom: 40 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', marginTop: 18, marginBottom: 10, color: '#111827' },
-  totalCard: { backgroundColor: '#111827', borderRadius: 22, padding: 18, marginBottom: 8 },
-  card: { backgroundColor: 'white', borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: '#111827' },
-  cardTitleLight: { fontSize: 17, fontWeight: '800', color: 'white' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
-  metric: { backgroundColor: '#1F2937', width: '48%', padding: 12, borderRadius: 16 },
-  metricLabel: { color: '#D1D5DB', fontSize: 12 },
-  metricValue: { color: 'white', fontSize: 18, fontWeight: '800', marginTop: 6 },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
-  line: { color: '#374151', marginTop: 8 },
-  muted: { color: '#6B7280', marginTop: 8, fontSize: 13 },
-  helpText: { color: '#4B5563', lineHeight: 20, marginBottom: 12 },
-  amount: { color: '#111827', fontWeight: '800', fontSize: 16 },
-  badge: { overflow: 'hidden', backgroundColor: '#DCFCE7', color: '#166534', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, fontWeight: '800', fontSize: 12 },
-  badgeDanger: { backgroundColor: '#FEE2E2', color: '#991B1B' },
-  badgeWarning: { backgroundColor: '#FEF3C7', color: '#92400E' },
-  badgeInfo: { backgroundColor: '#DBEAFE', color: '#1D4ED8' },
-  dangerText: { color: '#FCA5A5' },
-  progressBar: { height: 10, borderRadius: 999, backgroundColor: '#E5E7EB', overflow: 'hidden', marginTop: 12 },
-  progressFill: { height: '100%', backgroundColor: '#111827' },
-  progressDanger: { backgroundColor: '#DC2626' },
-  input: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, padding: 13, marginBottom: 10, fontSize: 15 },
-  textArea: { minHeight: 90, textAlignVertical: 'top' },
-  primaryButton: { backgroundColor: '#111827', padding: 14, borderRadius: 14, alignItems: 'center', marginTop: 4, flex: 1 },
-  primaryButtonText: { color: 'white', fontWeight: '800' },
-  secondaryButton: { backgroundColor: '#E5E7EB', padding: 12, borderRadius: 12, alignItems: 'center', flex: 1, marginTop: 8 },
-  secondaryButtonText: { color: '#111827', fontWeight: '800' },
-  dangerButton: { backgroundColor: '#FEE2E2', padding: 12, borderRadius: 12, alignItems: 'center', marginTop: 12, flex: 1 },
-  dangerButtonText: { color: '#991B1B', fontWeight: '800' },
-  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  actionsRowTop: { marginBottom: 8 },
-  empty: { color: '#6B7280', textAlign: 'center', padding: 18 },
-  pickerBox: { marginBottom: 10 },
-  pickerLabel: { fontWeight: '800', color: '#374151', marginBottom: 8 },
-  chip: { backgroundColor: '#F3F4F6', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, marginRight: 8, borderWidth: 1, borderColor: '#E5E7EB' },
-  activeChip: { backgroundColor: '#111827', borderColor: '#111827' },
-  chipText: { color: '#374151', fontWeight: '700' },
-  activeChipText: { color: 'white' },
-  modalContainer: { flex: 1, backgroundColor: '#F3F4F6' },
-  modalHeader: { backgroundColor: 'white', padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: '#E5E7EB', gap: 8 },
-  modalHeaderButton: { minWidth: 72, alignItems: 'flex-start' },
-  modalTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800', color: '#111827' },
-  closeText: { color: '#2563EB', fontWeight: '800' },
-  modalValidateButton: { minWidth: 76, backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, alignItems: 'center' },
-  modalValidateText: { color: 'white', fontWeight: '800' },
+  safe: { flex: 1, backgroundColor: '#F3F4F6' },
+  header: { backgroundColor: '#0F172A', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { color: 'white', fontSize: 31, fontWeight: '900' }, subtitle: { color: '#CBD5E1', fontSize: 16, marginTop: 2 }, syncText: { fontSize: 12, marginTop: 6, fontWeight: '700' }, online: { color: '#86EFAC' }, offline: { color: '#FCA5A5' },
+  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { color: 'white', fontWeight: '900' },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', width: 48, height: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', height: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
+  tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
+  content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
+  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' },
+  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });
