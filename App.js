@@ -52,6 +52,21 @@ const addMonths = (monthKey, delta) => {
   const nextMonth = (index % 12) + 1;
   return `${nextYear}-${pad2(nextMonth)}`;
 };
+const monthToIndex = (monthKey) => {
+  const normalized = normalizeMonth(monthKey);
+  if (!normalized) return null;
+  const [year, month] = normalized.split('-').map(Number);
+  return year * 12 + (month - 1);
+};
+
+const dateMonthKey = (date) => String(date || '').slice(0, 7);
+
+const isBeforeMonth = (date, monthKey) => {
+  const dateIndex = monthToIndex(dateMonthKey(date));
+  const selectedIndex = monthToIndex(monthKey);
+  if (dateIndex === null || selectedIndex === null) return false;
+  return dateIndex < selectedIndex;
+};
 
 const isValidDateForMonth = (date, monthKey) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return false;
@@ -239,19 +254,43 @@ export default function App() {
   const plannedMonthExpenses = useMemo(() => monthExpenseRows.filter(isPlannedAction), [monthExpenseRows]);
   const plannedMonthContributions = useMemo(() => monthContributionRows.filter(isPlannedAction), [monthContributionRows]);
 
+  const previousExpenses = useMemo(() => expenses.filter((e) => !isPlannedAction(e) && isBeforeMonth(e.date, selectedMonth)), [expenses, selectedMonth]);
+  const previousContributions = useMemo(() => contributions.filter((c) => !isPlannedAction(c) && isBeforeMonth(c.date, selectedMonth)), [contributions, selectedMonth]);
+
   const summary = useMemo(() => categories.map((category) => {
     const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
     const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    const previousSpent = previousExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const previousPaidIn = previousContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
     const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-    return { ...category, spent, paidIn, monthlyBudget, remainingBudget: monthlyBudget - spent, cashBalance: paidIn - spent, overBudget: spent > monthlyBudget };
-  }), [categories, members, monthExpenses, monthContributions]);
+    const carryOver = previousPaidIn - previousSpent;
+    const availableBudget = carryOver + monthlyBudget;
+    const remainingBudget = availableBudget - spent;
+    const cashBalance = carryOver + paidIn - spent;
+    return {
+      ...category,
+      spent,
+      paidIn,
+      previousSpent,
+      previousPaidIn,
+      carryOver,
+      monthlyBudget,
+      availableBudget,
+      remainingBudget,
+      cashBalance,
+      overBudget: spent > availableBudget,
+      needsFunding: cashBalance < 0,
+    };
+  }), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
 
   const totals = useMemo(() => summary.reduce((acc, c) => ({
     monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
+    availableBudget: acc.availableBudget + c.availableBudget,
+    carryOver: acc.carryOver + c.carryOver,
     spent: acc.spent + c.spent,
     paidIn: acc.paidIn + c.paidIn,
     cashBalance: acc.cashBalance + c.cashBalance,
-  }), { monthlyBudget: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
+  }), { monthlyBudget: 0, availableBudget: 0, carryOver: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
 
 
   const plannedTotals = useMemo(() => ({
@@ -260,6 +299,7 @@ export default function App() {
   }), [plannedMonthExpenses, plannedMonthContributions]);
 
   const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
+  const forecastCashBalance = totals.cashBalance + plannedTotals.paidIn - plannedTotals.spent;
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -452,12 +492,22 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <View style={styles.hero}>
               <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
               <View style={styles.metricGrid}>
-                <Metric label="Budget prévu" value={formatEuro(totals.monthlyBudget)} dark />
-                <Metric label="Dépensé" value={formatEuro(totals.spent)} dark />
-                <Metric label="Versé" value={formatEuro(totals.paidIn)} dark />
-                <Metric label="Solde compte" value={formatEuro(totals.cashBalance)} dark />
+                <Metric label="Report précédent" value={formatEuro(totals.carryOver)} dark />
+                <Metric label="Budget du mois" value={formatEuro(totals.monthlyBudget)} dark />
+                <Metric label="Versé ce mois" value={formatEuro(totals.paidIn)} dark />
+                <Metric label="Dépensé ce mois" value={formatEuro(totals.spent)} dark />
+                <Metric label="Solde réel" value={formatEuro(totals.cashBalance)} dark />
+                <Metric label="Solde prévisionnel" value={formatEuro(forecastCashBalance)} dark />
               </View>
             </View>
+            {hasPlannedActions && (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
+                <Text style={styles.muted}>Versements prévus : {formatEuro(plannedTotals.paidIn)}</Text>
+                <Text style={styles.muted}>Dépenses prévues : {formatEuro(plannedTotals.spent)}</Text>
+                <Text style={styles.muted}>Solde après actions prévues : {formatEuro(forecastCashBalance)}</Text>
+              </View>
+            )}
             <TouchableOpacity style={styles.primaryButton} onPress={() => updateMonth(1)}><Text style={styles.primaryButtonText}>Nouveau mois</Text></TouchableOpacity>
             <Text style={styles.sectionTitle}>État par membre</Text>
             {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
@@ -539,8 +589,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <View key={category.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
-                <Text style={styles.muted}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text>
-                <Text style={styles.muted}>Solde caisse : {formatEuro(category.cashBalance)}</Text>
+                <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
+                <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)} · Disponible budget : {formatEuro(category.availableBudget)}</Text>
+                <Text style={styles.muted}>Versé ce mois : {formatEuro(category.paidIn)} · Dépensé : {formatEuro(category.spent)}</Text>
+                <Text style={styles.muted}>Solde caisse réel : {formatEuro(category.cashBalance)}</Text>
                 {isAdmin && <View style={styles.rowGap}>
                   <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
@@ -606,7 +658,19 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
 function Metric({ label, value }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
 function PersonCard({ state }) { return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
-function CategorySummary({ category }) { const pct = category.monthlyBudget ? Math.min(100, (category.spent / category.monthlyBudget) * 100) : 0; return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={category.overBudget ? styles.badgeWarn : styles.badgeOk}>{category.overBudget ? 'Dépassement' : 'OK'}</Text></View><View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View><Text style={styles.muted}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text><Text style={styles.muted}>Restant budget : {formatEuro(category.remainingBudget)}</Text><Text style={styles.muted}>Solde de caisse : {formatEuro(category.cashBalance)}</Text></View>; }
+function CategorySummary({ category }) {
+  const pct = category.availableBudget ? Math.min(100, Math.max(0, (category.spent / category.availableBudget) * 100)) : 0;
+  const badgeStyle = category.needsFunding ? styles.badgeWarn : category.overBudget ? styles.badgeWarn : styles.badgeOk;
+  const badgeText = category.needsFunding ? 'À alimenter' : category.overBudget ? 'Dépassement' : 'OK';
+  return <View style={styles.card}>
+    <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
+    <View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
+    <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
+    <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)}</Text>
+    <Text style={styles.muted}>Disponible budget : {formatEuro(category.availableBudget)} · Dépensé : {formatEuro(category.spent)}</Text>
+    <Text style={styles.muted}>Solde caisse réel : {formatEuro(category.cashBalance)}</Text>
+  </View>;
+}
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F3F4F6' },
