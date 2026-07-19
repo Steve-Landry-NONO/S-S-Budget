@@ -18,10 +18,19 @@ const API_KEY = 'SS_BUDGET_V2_API_URL';
 const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
 const defaultStartMonth = '2026-07';
 
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const currentMonthKey = () => todayKey().slice(0, 7);
+
 const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
 const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
-const monthDefaultDate = (month) => (/^\d{4}-\d{2}$/.test(month) ? `${month}-01` : new Date().toISOString().slice(0, 10));
+const monthDefaultDate = (month) => {
+  const normalized = /^\d{4}-\d{2}$/.test(String(month || '')) ? month : currentMonthKey();
+
+  // Si le mois affiché est le mois courant, on propose la date du jour.
+  // Sinon, on propose le premier jour du mois consulté.
+  return normalized === currentMonthKey() ? todayKey() : `${normalized}-01`;
+};
 const firstId = (items) => (items && items.length ? items[0].id : '');
 const pad2 = (value) => String(value).padStart(2, '0');
 const normalizeMonth = (value) => {
@@ -40,6 +49,17 @@ const addMonths = (monthKey, delta) => {
   const nextYear = Math.floor(index / 12);
   const nextMonth = (index % 12) + 1;
   return `${nextYear}-${pad2(nextMonth)}`;
+};
+
+const isValidDateForMonth = (date, monthKey) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return false;
+
+  const [year, month, day] = String(date).split('-').map(Number);
+  const normalizedMonth = normalizeMonth(monthKey);
+  if (!normalizedMonth || `${year}-${pad2(month)}` !== normalizedMonth) return false;
+
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 };
 
 const initialState = {
@@ -67,12 +87,12 @@ export default function App() {
   const [categories, setCategories] = useState(initialState.categories);
   const [expenses, setExpenses] = useState([]);
   const [contributions, setContributions] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(defaultStartMonth);
-  const [monthDraft, setMonthDraft] = useState(defaultStartMonth);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [monthDraft, setMonthDraft] = useState(currentMonthKey());
   const [tab, setTab] = useState('dashboard');
-  const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(defaultStartMonth) });
-  const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(defaultStartMonth) });
-  const [autoDraft, setAutoDraft] = useState({ mode: 'all', memberId: 'steve', monthsCount: '1', date: monthDefaultDate(defaultStartMonth) });
+  const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
+  const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
+  const [autoDraft, setAutoDraft] = useState({ mode: 'all', memberId: 'steve', monthsCount: '1', date: monthDefaultDate(currentMonthKey()) });
   const [categoryModal, setCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [settingsModal, setSettingsModal] = useState(false);
@@ -91,9 +111,9 @@ export default function App() {
   useEffect(() => {
     setMonthDraft(selectedMonth);
     const date = monthDefaultDate(selectedMonth);
-    setExpenseDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
-    setContributionDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
-    setAutoDraft((d) => ({ ...d, date: String(d.date || '').startsWith(selectedMonth) ? d.date : date }));
+    setExpenseDraft((d) => ({ ...d, date }));
+    setContributionDraft((d) => ({ ...d, date }));
+    setAutoDraft((d) => ({ ...d, date }));
   }, [selectedMonth]);
 
   useEffect(() => {
@@ -167,7 +187,9 @@ export default function App() {
         setCategories(data.categories || initialState.categories);
         setExpenses(data.expenses || []);
         setContributions(data.contributions || []);
-        setSelectedMonth(data.selectedMonth || defaultStartMonth);
+        // Au lancement, l'app revient automatiquement sur le mois courant.
+        // L'historique reste accessible avec les flèches ou la saisie AAAA-MM.
+        setSelectedMonth(currentMonthKey());
       }
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de charger le cache local.');
@@ -218,7 +240,7 @@ export default function App() {
     const amount = parseAmount(expenseDraft.amount);
     if (!expenseDraft.label.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
-    if (!String(expenseDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    if (!isValidDateForMonth(expenseDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
     const payload = { ...expenseDraft, id: uid('expense'), amount };
     mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
     setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
@@ -227,14 +249,14 @@ export default function App() {
   const addContribution = () => {
     const amount = parseAmount(contributionDraft.amount);
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
-    if (!String(contributionDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    if (!isValidDateForMonth(contributionDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
     const payload = { ...contributionDraft, id: uid('contribution'), amount };
     mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
     setContributionDraft((d) => ({ ...d, amount: '' }));
   };
 
   const addAutoContributions = () => {
-    if (!String(autoDraft.date).startsWith(selectedMonth)) return Alert.alert('Date hors mois', `La date doit commencer par ${selectedMonth}.`);
+    if (!isValidDateForMonth(autoDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
     const memberIds = autoDraft.mode === 'all' ? members.map((m) => m.id) : [autoDraft.memberId];
     const monthsCount = Math.max(1, parseInt(autoDraft.monthsCount || '1', 10));
     const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
