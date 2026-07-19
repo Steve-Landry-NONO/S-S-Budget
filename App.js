@@ -116,6 +116,15 @@ const formatActivityDate = (value) => {
   return date.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+const isTechnicalLabel = (value) => /^(category|member|expense|contribution|log)_/.test(String(value || ''));
+const readableActivityLabel = (log) => {
+  const details = log?.details || {};
+  if (details.categoryName) return details.categoryName;
+  if (details.memberName) return details.memberName;
+  if (log?.label && !isTechnicalLabel(log.label)) return log.label;
+  return '';
+};
+
 
 const currentMemberRole = (member) => member?.role || (member?.id === 'steve' ? 'admin' : 'member');
 const isAdminMember = (member) => currentMemberRole(member) === 'admin';
@@ -516,6 +525,34 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
   const getMemberName = (id) => members.find((m) => m.id === id)?.name || 'Membre supprimé';
   const getCategoryName = (id) => categories.find((c) => c.id === id)?.name || 'Caisse supprimée';
+  const activityDetailLines = (log) => {
+    const details = log?.details || {};
+    const lines = [];
+    const categoryName = details.categoryName || (details.categoryId ? getCategoryName(details.categoryId) : '');
+    const memberName = details.memberName || (details.memberId ? getMemberName(details.memberId) : '');
+    const paidByMemberName = details.paidByMemberName || (details.paidByMemberId ? getMemberName(details.paidByMemberId) : '');
+
+    if (log.entityType === 'contribution') {
+      if (memberName && memberName !== 'Membre supprimé') lines.push(`Pour : ${memberName}`);
+      if (categoryName && categoryName !== 'Caisse supprimée') lines.push(`Caisse : ${categoryName}`);
+    }
+
+    if (log.entityType === 'expense') {
+      if (paidByMemberName && paidByMemberName !== 'Membre supprimé') lines.push(`Payé par : ${paidByMemberName}`);
+      if (categoryName && categoryName !== 'Caisse supprimée') lines.push(`Caisse : ${categoryName}`);
+    }
+
+    if ((log.action === 'category_deleted' || log.action === 'category_archived') && details.monthlyPerPerson !== undefined) {
+      lines.push(`Budget mensuel par personne : ${formatEuro(details.monthlyPerPerson)}`);
+    }
+
+    if ((log.action === 'auto_contributions_created' || log.action === 'auto_contributions_planned') && Array.isArray(details.memberNames)) {
+      lines.push(`Pour : ${details.memberNames.join(', ')}`);
+      if (details.monthsCount) lines.push(`Nombre de mois : ${details.monthsCount}`);
+    }
+
+    return lines;
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -695,15 +732,20 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
             </View>
             {activityRows.length === 0 && <View style={styles.card}><Text style={styles.muted}>Aucune activité enregistrée pour le moment.</Text></View>}
-            {activityRows.map((log) => (
-              <View key={log.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{activityLabel(log.action)}</Text><Text style={styles.badge}>{log.actorName || 'Système'}</Text></View>
-                {!!log.label && <Text style={styles.muted}>{log.label}</Text>}
-                {!!log.amount && <Text style={styles.muted}>Montant : {formatEuro(log.amount)}</Text>}
-                {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
-                <Text style={styles.lockedText}>{formatActivityDate(log.createdAt)}</Text>
-              </View>
-            ))}
+            {activityRows.map((log) => {
+              const mainLabel = readableActivityLabel(log);
+              const detailLines = activityDetailLines(log);
+              return (
+                <View key={log.id} style={styles.card}>
+                  <View style={styles.rowBetween}><Text style={styles.cardTitle}>{activityLabel(log.action)}</Text><Text style={styles.badge}>{log.actorName || 'Système'}</Text></View>
+                  {!!mainLabel && <Text style={styles.muted}>{mainLabel}</Text>}
+                  {detailLines.map((line) => <Text key={line} style={styles.muted}>{line}</Text>)}
+                  {!!log.amount && <Text style={styles.muted}>Montant : {formatEuro(log.amount)}</Text>}
+                  {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
+                  <Text style={styles.lockedText}>Action réalisée par : {log.actorName || 'Système'} · {formatActivityDate(log.createdAt)}</Text>
+                </View>
+              );
+            })}
           </>
         )}
       </ScrollView>

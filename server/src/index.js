@@ -69,6 +69,18 @@ function safeJson(value) {
   try { return JSON.stringify(value || {}); } catch (_) { return '{}'; }
 }
 
+async function getMemberNameById(id) {
+  if (!id) return '';
+  const row = await db.get('SELECT name FROM members WHERE id = ?', [id]);
+  return row?.name || String(id);
+}
+
+async function getCategoryNameById(id) {
+  if (!id) return '';
+  const row = await db.get('SELECT name FROM categories WHERE id = ?', [id]);
+  return row?.name || String(id);
+}
+
 async function logActivity(req, payload = {}) {
   try {
     const user = req.currentUser || await getCurrentUser(req);
@@ -215,13 +227,15 @@ app.put('/api/members/:id', requireAdmin, async (req, res, next) => {
 
 app.delete('/api/members/:id', requireAdmin, async (req, res, next) => {
   try {
+    const member = await db.get('SELECT id, name, role FROM members WHERE id = ?', [req.params.id]);
+    if (!member) return res.status(404).json({ error: 'Membre introuvable.' });
     const usedInExpenses = await db.get('SELECT COUNT(*) AS count FROM expenses WHERE paid_by_member_id = ?', [req.params.id]);
     const usedInContributions = await db.get('SELECT COUNT(*) AS count FROM contributions WHERE member_id = ?', [req.params.id]);
     if (usedInExpenses.count || usedInContributions.count) {
       return res.status(409).json({ error: 'Impossible de supprimer un membre avec historique.' });
     }
     await db.run('DELETE FROM members WHERE id = ?', [req.params.id]);
-    await logActivity(req, { action: 'member_deleted', entityType: 'member', entityId: req.params.id, label: req.params.id });
+    await logActivity(req, { action: 'member_deleted', entityType: 'member', entityId: req.params.id, label: member.name, details: { memberName: member.name, role: member.role } });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -262,14 +276,23 @@ app.put('/api/categories/:id', requireAdmin, async (req, res, next) => {
 
 app.delete('/api/categories/:id', requireAdmin, async (req, res, next) => {
   try {
+    const category = await db.get('SELECT id, name, monthly_per_person, locked FROM categories WHERE id = ?', [req.params.id]);
+    if (!category) return res.status(404).json({ error: 'Caisse introuvable.' });
     const usedInExpenses = await db.get('SELECT COUNT(*) AS count FROM expenses WHERE category_id = ?', [req.params.id]);
     const usedInContributions = await db.get('SELECT COUNT(*) AS count FROM contributions WHERE category_id = ?', [req.params.id]);
+    const details = {
+      categoryName: category.name,
+      monthlyPerPerson: Number(category.monthly_per_person || 0),
+      locked: Boolean(category.locked),
+      usedInExpenses: Number(usedInExpenses.count || 0),
+      usedInContributions: Number(usedInContributions.count || 0),
+    };
     if (usedInExpenses.count || usedInContributions.count) {
       await db.run('UPDATE categories SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [req.params.id]);
-      await logActivity(req, { action: 'category_archived', entityType: 'category', entityId: req.params.id, label: req.params.id });
+      await logActivity(req, { action: 'category_archived', entityType: 'category', entityId: req.params.id, label: category.name, details });
     } else {
       await db.run('DELETE FROM categories WHERE id = ?', [req.params.id]);
-      await logActivity(req, { action: 'category_deleted', entityType: 'category', entityId: req.params.id, label: req.params.id });
+      await logActivity(req, { action: 'category_deleted', entityType: 'category', entityId: req.params.id, label: category.name, details });
     }
     res.json(await getState());
   } catch (error) { next(error); }
@@ -289,7 +312,21 @@ app.post('/api/expenses', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, label, amount, req.body.categoryId, req.body.paidByMemberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
-    await logActivity(req, { action: status === 'planned' ? 'expense_planned' : 'expense_created', entityType: 'expense', entityId: id, label, amount, date: req.body.date, details: { categoryId: req.body.categoryId, paidByMemberId: req.body.paidByMemberId, status } });
+    await logActivity(req, {
+      action: status === 'planned' ? 'expense_planned' : 'expense_created',
+      entityType: 'expense',
+      entityId: id,
+      label,
+      amount,
+      date: req.body.date,
+      details: {
+        categoryId: req.body.categoryId,
+        categoryName: await getCategoryNameById(req.body.categoryId),
+        paidByMemberId: req.body.paidByMemberId,
+        paidByMemberName: await getMemberNameById(req.body.paidByMemberId),
+        status,
+      },
+    });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -304,7 +341,21 @@ app.delete('/api/expenses/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres dépenses récentes.' });
     }
     await db.run('DELETE FROM expenses WHERE id = ?', [req.params.id]);
-    await logActivity(req, { action: 'expense_deleted', entityType: 'expense', entityId: req.params.id, label: row.label, amount: row.amount, date: row.date, details: { categoryId: row.category_id, paidByMemberId: row.paid_by_member_id, status: row.status } });
+    await logActivity(req, {
+      action: 'expense_deleted',
+      entityType: 'expense',
+      entityId: req.params.id,
+      label: row.label,
+      amount: row.amount,
+      date: row.date,
+      details: {
+        categoryId: row.category_id,
+        categoryName: await getCategoryNameById(row.category_id),
+        paidByMemberId: row.paid_by_member_id,
+        paidByMemberName: await getMemberNameById(row.paid_by_member_id),
+        status: row.status,
+      },
+    });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -321,7 +372,21 @@ app.post('/api/contributions', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, amount, req.body.categoryId, req.body.memberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
-    await logActivity(req, { action: status === 'planned' ? 'contribution_planned' : 'contribution_created', entityType: 'contribution', entityId: id, label: 'Versement', amount, date: req.body.date, details: { categoryId: req.body.categoryId, memberId: req.body.memberId, status } });
+    await logActivity(req, {
+      action: status === 'planned' ? 'contribution_planned' : 'contribution_created',
+      entityType: 'contribution',
+      entityId: id,
+      label: 'Versement',
+      amount,
+      date: req.body.date,
+      details: {
+        categoryId: req.body.categoryId,
+        categoryName: await getCategoryNameById(req.body.categoryId),
+        memberId: req.body.memberId,
+        memberName: await getMemberNameById(req.body.memberId),
+        status,
+      },
+    });
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
@@ -336,7 +401,21 @@ app.delete('/api/contributions/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres versements récents.' });
     }
     await db.run('DELETE FROM contributions WHERE id = ?', [req.params.id]);
-    await logActivity(req, { action: 'contribution_deleted', entityType: 'contribution', entityId: req.params.id, label: 'Versement', amount: row.amount, date: row.date, details: { categoryId: row.category_id, memberId: row.member_id, status: row.status } });
+    await logActivity(req, {
+      action: 'contribution_deleted',
+      entityType: 'contribution',
+      entityId: req.params.id,
+      label: 'Versement',
+      amount: row.amount,
+      date: row.date,
+      details: {
+        categoryId: row.category_id,
+        categoryName: await getCategoryNameById(row.category_id),
+        memberId: row.member_id,
+        memberName: await getMemberNameById(row.member_id),
+        status: row.status,
+      },
+    });
     res.json(await getState());
   } catch (error) { next(error); }
 });
@@ -363,7 +442,19 @@ app.post('/api/auto-contributions', async (req, res, next) => {
       }
     }
     await db.run('COMMIT');
-    await logActivity(req, { action: status === 'planned' ? 'auto_contributions_planned' : 'auto_contributions_created', entityType: 'contribution', label: 'Versements automatiques', amount: categories.reduce((sum, category) => sum + Number(category.monthly_per_person || 0), 0) * monthsCount * memberIds.length, date, details: { memberIds, monthsCount, status } });
+    await logActivity(req, {
+      action: status === 'planned' ? 'auto_contributions_planned' : 'auto_contributions_created',
+      entityType: 'contribution',
+      label: 'Versements automatiques',
+      amount: categories.reduce((sum, category) => sum + Number(category.monthly_per_person || 0), 0) * monthsCount * memberIds.length,
+      date,
+      details: {
+        memberIds,
+        memberNames: await Promise.all(memberIds.map((memberId) => getMemberNameById(memberId))),
+        monthsCount,
+        status,
+      },
+    });
     res.status(201).json(await getState());
   } catch (error) {
     try { await db.run('ROLLBACK'); } catch (_) {}
