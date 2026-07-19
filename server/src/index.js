@@ -23,6 +23,15 @@ function normalizeAmount(value) {
   return amount;
 }
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeActionStatus(date, status) {
+  if (status === 'planned' || status === 'done') return status;
+  return String(date || '') > todayKey() ? 'planned' : 'done';
+}
+
 
 function parseDbDate(value) {
   if (!value) return new Date();
@@ -67,9 +76,9 @@ async function getState() {
     db.all('SELECT id, name, role, created_at, updated_at FROM members ORDER BY created_at ASC'),
     db.all(`SELECT id, name, monthly_per_person AS monthlyPerPerson, description, locked, active, created_at, updated_at
             FROM categories WHERE active = 1 ORDER BY created_at ASC`),
-    db.all(`SELECT id, label, amount, category_id AS categoryId, paid_by_member_id AS paidByMemberId, created_by_member_id AS createdByMemberId, date, note, created_at, updated_at
+    db.all(`SELECT id, label, amount, category_id AS categoryId, paid_by_member_id AS paidByMemberId, created_by_member_id AS createdByMemberId, date, note, status, created_at, updated_at
             FROM expenses ORDER BY date DESC, created_at DESC`),
-    db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, created_by_member_id AS createdByMemberId, date, note, created_at, updated_at
+    db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, created_by_member_id AS createdByMemberId, date, note, status, created_at, updated_at
             FROM contributions ORDER BY date DESC, created_at DESC`),
   ]);
   return {
@@ -173,10 +182,11 @@ app.post('/api/expenses', async (req, res, next) => {
     if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
     const id = req.body.id || uid('expense');
     const user = await getCurrentUser(req);
+    const status = normalizeActionStatus(req.body.date, req.body.status);
     await db.run(
-      `INSERT INTO expenses (id, label, amount, category_id, paid_by_member_id, created_by_member_id, date, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, label, amount, req.body.categoryId, req.body.paidByMemberId, user.id, req.body.date, String(req.body.note || '')]
+      `INSERT INTO expenses (id, label, amount, category_id, paid_by_member_id, created_by_member_id, date, note, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, label, amount, req.body.categoryId, req.body.paidByMemberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
     res.status(201).json(await getState());
   } catch (error) { next(error); }
@@ -202,10 +212,11 @@ app.post('/api/contributions', async (req, res, next) => {
     if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
     const id = req.body.id || uid('contribution');
     const user = await getCurrentUser(req);
+    const status = normalizeActionStatus(req.body.date, req.body.status);
     await db.run(
-      `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, amount, req.body.categoryId, req.body.memberId, user.id, req.body.date, String(req.body.note || '')]
+      `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, amount, req.body.categoryId, req.body.memberId, user.id, req.body.date, String(req.body.note || ''), status]
     );
     res.status(201).json(await getState());
   } catch (error) { next(error); }
@@ -230,6 +241,7 @@ app.post('/api/auto-contributions', async (req, res, next) => {
     const memberIds = Array.isArray(req.body.memberIds) && req.body.memberIds.length ? req.body.memberIds : [];
     const date = req.body.date;
     const monthsCount = Math.max(1, parseInt(req.body.monthsCount || '1', 10));
+    const status = normalizeActionStatus(date, req.body.status);
     const categories = await db.all('SELECT id, monthly_per_person FROM categories WHERE active = 1 ORDER BY created_at ASC');
     const user = await getCurrentUser(req);
 
@@ -239,9 +251,9 @@ app.post('/api/auto-contributions', async (req, res, next) => {
         const amount = Number(category.monthly_per_person || 0) * monthsCount;
         if (amount <= 0) continue;
         await db.run(
-          `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [uid('auto'), amount, category.id, memberId, user.id, date, `Versement automatique (${monthsCount} mois)`]
+          `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [uid('auto'), amount, category.id, memberId, user.id, date, `Versement automatique (${monthsCount} mois)`, status]
         );
       }
     }

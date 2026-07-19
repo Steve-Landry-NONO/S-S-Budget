@@ -64,6 +64,12 @@ const isValidDateForMonth = (date, monthKey) => {
   return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 };
 
+const isFutureDate = (date) => /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) && String(date) > todayKey();
+const normalizeActionStatus = (date, status) => status === 'planned' || status === 'done' ? status : (isFutureDate(date) ? 'planned' : 'done');
+const isPlannedAction = (action) => normalizeActionStatus(action?.date, action?.status) === 'planned';
+const statusLabel = (action) => isPlannedAction(action) ? 'Prévu' : 'Réalisé';
+const statusStyleName = (action) => isPlannedAction(action) ? 'badgePlanned' : 'badgeOk';
+
 
 const currentMemberRole = (member) => member?.role || (member?.id === 'steve' ? 'admin' : 'member');
 const isAdminMember = (member) => currentMemberRole(member) === 'admin';
@@ -226,8 +232,12 @@ export default function App() {
     await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
   };
 
-  const monthExpenses = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
-  const monthContributions = useMemo(() => contributions.filter((c) => String(c.date || '').startsWith(selectedMonth)), [contributions, selectedMonth]);
+  const monthExpenseRows = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
+  const monthContributionRows = useMemo(() => contributions.filter((c) => String(c.date || '').startsWith(selectedMonth)), [contributions, selectedMonth]);
+  const monthExpenses = useMemo(() => monthExpenseRows.filter((e) => !isPlannedAction(e)), [monthExpenseRows]);
+  const monthContributions = useMemo(() => monthContributionRows.filter((c) => !isPlannedAction(c)), [monthContributionRows]);
+  const plannedMonthExpenses = useMemo(() => monthExpenseRows.filter(isPlannedAction), [monthExpenseRows]);
+  const plannedMonthContributions = useMemo(() => monthContributionRows.filter(isPlannedAction), [monthContributionRows]);
 
   const summary = useMemo(() => categories.map((category) => {
     const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
@@ -242,6 +252,14 @@ export default function App() {
     paidIn: acc.paidIn + c.paidIn,
     cashBalance: acc.cashBalance + c.cashBalance,
   }), { monthlyBudget: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
+
+
+  const plannedTotals = useMemo(() => ({
+    spent: plannedMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
+    paidIn: plannedMonthContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0),
+  }), [plannedMonthExpenses, plannedMonthContributions]);
+
+  const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -264,33 +282,55 @@ export default function App() {
     setSelectedMonth(normalized);
   };
 
+  const confirmFutureDateIfNeeded = (date, actionLabel, onConfirm) => {
+    if (!isFutureDate(date)) return onConfirm('done');
+
+    Alert.alert(
+      'Action prévue',
+      `La date ${date} est dans le futur. Cette ${actionLabel} sera enregistrée comme action prévue et ne comptera pas dans le solde réel tant que la date n’est pas arrivée.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Enregistrer comme prévu', onPress: () => onConfirm('planned') },
+      ]
+    );
+  };
+
   const addExpense = () => {
     const amount = parseAmount(expenseDraft.amount);
     if (!expenseDraft.label.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
     if (!isValidDateForMonth(expenseDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
-    const payload = { ...expenseDraft, id: uid('expense'), amount, createdByMemberId: currentUserId };
-    mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
-    setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
+
+    confirmFutureDateIfNeeded(expenseDraft.date, 'dépense', (status) => {
+      const payload = { ...expenseDraft, id: uid('expense'), amount, status, createdByMemberId: currentUserId };
+      mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
+      setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
+    });
   };
 
   const addContribution = () => {
     const amount = parseAmount(contributionDraft.amount);
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
     if (!isValidDateForMonth(contributionDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
-    const payload = { ...contributionDraft, id: uid('contribution'), amount, createdByMemberId: currentUserId };
-    mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
-    setContributionDraft((d) => ({ ...d, amount: '' }));
+
+    confirmFutureDateIfNeeded(contributionDraft.date, 'versement', (status) => {
+      const payload = { ...contributionDraft, id: uid('contribution'), amount, status, createdByMemberId: currentUserId };
+      mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
+      setContributionDraft((d) => ({ ...d, amount: '' }));
+    });
   };
 
   const addAutoContributions = () => {
     if (!isValidDateForMonth(autoDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
     const memberIds = autoDraft.mode === 'all' ? members.map((m) => m.id) : [autoDraft.memberId];
     const monthsCount = Math.max(1, parseInt(autoDraft.monthsCount || '1', 10));
-    const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
-      id: uid('auto'), memberId, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0) * monthsCount, date: autoDraft.date, note: `Versement automatique (${monthsCount} mois)`,
-    })).filter((row) => row.amount > 0));
-    mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date }, () => setContributions((list) => [...localRows, ...list]));
+
+    confirmFutureDateIfNeeded(autoDraft.date, 'versement automatique', (status) => {
+      const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
+        id: uid('auto'), memberId, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0) * monthsCount, date: autoDraft.date, status, note: `Versement automatique (${monthsCount} mois)`,
+      })).filter((row) => row.amount > 0));
+      mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date, status }, () => setContributions((list) => [...localRows, ...list]));
+    });
   };
 
   const removeExpense = (expense) => {
@@ -438,10 +478,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <TouchableOpacity style={styles.primaryButton} onPress={addExpense}><Text style={styles.primaryButtonText}>Ajouter la dépense</Text></TouchableOpacity>
             </View>
             <Text style={styles.sectionTitle}>Dépenses du mois</Text>
-            {monthExpenses.map((expense) => (
+            {monthExpenseRows.map((expense) => (
               <View key={expense.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
-                <Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text>
+                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
                 <Text style={styles.muted}>{expense.date}</Text>
                 {canDeleteRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
                   <TouchableOpacity style={styles.dangerButton} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
@@ -477,10 +517,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <TouchableOpacity style={styles.primaryButton} onPress={addContribution}><Text style={styles.primaryButtonText}>Ajouter le versement</Text></TouchableOpacity>
             </View>
             <Text style={styles.sectionTitle}>Versements du mois</Text>
-            {monthContributions.map((contribution) => (
+            {monthContributionRows.map((contribution) => (
               <View key={contribution.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
-                <Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles.muted}>{contribution.date}</Text>
+                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
                 {canDeleteRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
                   <TouchableOpacity style={styles.dangerButton} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                 ) : (
@@ -577,6 +617,6 @@ const styles = StyleSheet.create({
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
   card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
   modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });
