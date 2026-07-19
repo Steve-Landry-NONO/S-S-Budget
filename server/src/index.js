@@ -7,6 +7,7 @@ const { openDb, absoluteDbPath } = require('./db');
 const app = express();
 const port = Number(process.env.PORT || 3001);
 const appSecret = process.env.APP_SECRET || '';
+const DELETE_WINDOW_DAYS = Number(process.env.DELETE_WINDOW_DAYS || 5);
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '2mb' }));
@@ -22,6 +23,34 @@ function normalizeAmount(value) {
   return amount;
 }
 
+
+function parseDbDate(value) {
+  if (!value) return new Date();
+  return new Date(String(value).replace(' ', 'T'));
+}
+
+function isWithinDeleteWindow(row) {
+  const created = parseDbDate(row?.created_at);
+  const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
+  return Number.isFinite(diffDays) && diffDays <= DELETE_WINDOW_DAYS;
+}
+
+async function getCurrentUser(req) {
+  const requestedId = String(req.headers['x-ss-budget-user-id'] || 'steve');
+  let member = await db.get('SELECT id, name, role FROM members WHERE id = ?', [requestedId]);
+  if (!member) member = await db.get("SELECT id, name, role FROM members WHERE id = 'steve'");
+  return member || { id: 'steve', name: 'Steve', role: 'admin' };
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    const user = await getCurrentUser(req);
+    if (user.role !== 'admin') return res.status(403).json({ error: 'Action réservée à un administrateur.' });
+    req.currentUser = user;
+    next();
+  } catch (error) { next(error); }
+}
+
 function requireSecret(req, res, next) {
   if (!appSecret || appSecret === 'change-moi-avec-une-phrase-longue') return next();
   const provided = req.headers['x-ss-budget-secret'];
@@ -35,12 +64,12 @@ let db;
 
 async function getState() {
   const [members, categories, expenses, contributions] = await Promise.all([
-    db.all('SELECT id, name, created_at, updated_at FROM members ORDER BY created_at ASC'),
+    db.all('SELECT id, name, role, created_at, updated_at FROM members ORDER BY created_at ASC'),
     db.all(`SELECT id, name, monthly_per_person AS monthlyPerPerson, description, locked, active, created_at, updated_at
             FROM categories WHERE active = 1 ORDER BY created_at ASC`),
-    db.all(`SELECT id, label, amount, category_id AS categoryId, paid_by_member_id AS paidByMemberId, date, note, created_at, updated_at
+    db.all(`SELECT id, label, amount, category_id AS categoryId, paid_by_member_id AS paidByMemberId, created_by_member_id AS createdByMemberId, date, note, created_at, updated_at
             FROM expenses ORDER BY date DESC, created_at DESC`),
-    db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, date, note, created_at, updated_at
+    db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, created_by_member_id AS createdByMemberId, date, note, created_at, updated_at
             FROM contributions ORDER BY date DESC, created_at DESC`),
   ]);
   return {
@@ -60,17 +89,17 @@ app.get('/api/state', async (req, res, next) => {
   try { res.json(await getState()); } catch (error) { next(error); }
 });
 
-app.post('/api/members', async (req, res, next) => {
+app.post('/api/members', requireAdmin, async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Le nom du membre est obligatoire.' });
     const id = req.body.id || uid('member');
-    await db.run('INSERT INTO members (id, name) VALUES (?, ?)', [id, name]);
+    await db.run('INSERT INTO members (id, name, role) VALUES (?, ?, ?)', [id, name, req.body.role === 'admin' ? 'admin' : 'member']);
     res.status(201).json(await getState());
   } catch (error) { next(error); }
 });
 
-app.put('/api/members/:id', async (req, res, next) => {
+app.put('/api/members/:id', requireAdmin, async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Le nom du membre est obligatoire.' });
@@ -79,7 +108,7 @@ app.put('/api/members/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.delete('/api/members/:id', async (req, res, next) => {
+app.delete('/api/members/:id', requireAdmin, async (req, res, next) => {
   try {
     const usedInExpenses = await db.get('SELECT COUNT(*) AS count FROM expenses WHERE paid_by_member_id = ?', [req.params.id]);
     const usedInContributions = await db.get('SELECT COUNT(*) AS count FROM contributions WHERE member_id = ?', [req.params.id]);
@@ -91,7 +120,7 @@ app.delete('/api/members/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post('/api/categories', async (req, res, next) => {
+app.post('/api/categories', requireAdmin, async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
     const monthlyPerPerson = normalizeAmount(req.body.monthlyPerPerson);
@@ -107,7 +136,7 @@ app.post('/api/categories', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.put('/api/categories/:id', async (req, res, next) => {
+app.put('/api/categories/:id', requireAdmin, async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
     const monthlyPerPerson = normalizeAmount(req.body.monthlyPerPerson);
@@ -123,7 +152,7 @@ app.put('/api/categories/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.delete('/api/categories/:id', async (req, res, next) => {
+app.delete('/api/categories/:id', requireAdmin, async (req, res, next) => {
   try {
     const usedInExpenses = await db.get('SELECT COUNT(*) AS count FROM expenses WHERE category_id = ?', [req.params.id]);
     const usedInContributions = await db.get('SELECT COUNT(*) AS count FROM contributions WHERE category_id = ?', [req.params.id]);
@@ -143,10 +172,11 @@ app.post('/api/expenses', async (req, res, next) => {
     if (!label) return res.status(400).json({ error: 'Le libellé est obligatoire.' });
     if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
     const id = req.body.id || uid('expense');
+    const user = await getCurrentUser(req);
     await db.run(
-      `INSERT INTO expenses (id, label, amount, category_id, paid_by_member_id, date, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, label, amount, req.body.categoryId, req.body.paidByMemberId, req.body.date, String(req.body.note || '')]
+      `INSERT INTO expenses (id, label, amount, category_id, paid_by_member_id, created_by_member_id, date, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, label, amount, req.body.categoryId, req.body.paidByMemberId, user.id, req.body.date, String(req.body.note || '')]
     );
     res.status(201).json(await getState());
   } catch (error) { next(error); }
@@ -154,6 +184,13 @@ app.post('/api/expenses', async (req, res, next) => {
 
 app.delete('/api/expenses/:id', async (req, res, next) => {
   try {
+    const user = await getCurrentUser(req);
+    const row = await db.get('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Dépense introuvable.' });
+    if (!isWithinDeleteWindow(row)) return res.status(403).json({ error: `Suppression impossible après ${DELETE_WINDOW_DAYS} jours.` });
+    if (user.role !== 'admin' && row.paid_by_member_id !== user.id && row.created_by_member_id !== user.id) {
+      return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres dépenses récentes.' });
+    }
     await db.run('DELETE FROM expenses WHERE id = ?', [req.params.id]);
     res.json(await getState());
   } catch (error) { next(error); }
@@ -164,10 +201,11 @@ app.post('/api/contributions', async (req, res, next) => {
     const amount = normalizeAmount(req.body.amount);
     if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
     const id = req.body.id || uid('contribution');
+    const user = await getCurrentUser(req);
     await db.run(
-      `INSERT INTO contributions (id, amount, category_id, member_id, date, note)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, amount, req.body.categoryId, req.body.memberId, req.body.date, String(req.body.note || '')]
+      `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, amount, req.body.categoryId, req.body.memberId, user.id, req.body.date, String(req.body.note || '')]
     );
     res.status(201).json(await getState());
   } catch (error) { next(error); }
@@ -175,6 +213,13 @@ app.post('/api/contributions', async (req, res, next) => {
 
 app.delete('/api/contributions/:id', async (req, res, next) => {
   try {
+    const user = await getCurrentUser(req);
+    const row = await db.get('SELECT * FROM contributions WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Versement introuvable.' });
+    if (!isWithinDeleteWindow(row)) return res.status(403).json({ error: `Suppression impossible après ${DELETE_WINDOW_DAYS} jours.` });
+    if (user.role !== 'admin' && row.member_id !== user.id && row.created_by_member_id !== user.id) {
+      return res.status(403).json({ error: 'Un membre ne peut supprimer que ses propres versements récents.' });
+    }
     await db.run('DELETE FROM contributions WHERE id = ?', [req.params.id]);
     res.json(await getState());
   } catch (error) { next(error); }
@@ -186,6 +231,7 @@ app.post('/api/auto-contributions', async (req, res, next) => {
     const date = req.body.date;
     const monthsCount = Math.max(1, parseInt(req.body.monthsCount || '1', 10));
     const categories = await db.all('SELECT id, monthly_per_person FROM categories WHERE active = 1 ORDER BY created_at ASC');
+    const user = await getCurrentUser(req);
 
     await db.run('BEGIN TRANSACTION');
     for (const memberId of memberIds) {
@@ -193,9 +239,9 @@ app.post('/api/auto-contributions', async (req, res, next) => {
         const amount = Number(category.monthly_per_person || 0) * monthsCount;
         if (amount <= 0) continue;
         await db.run(
-          `INSERT INTO contributions (id, amount, category_id, member_id, date, note)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [uid('auto'), amount, category.id, memberId, date, `Versement automatique (${monthsCount} mois)`]
+          `INSERT INTO contributions (id, amount, category_id, member_id, created_by_member_id, date, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [uid('auto'), amount, category.id, memberId, user.id, date, `Versement automatique (${monthsCount} mois)`]
         );
       }
     }
@@ -207,7 +253,7 @@ app.post('/api/auto-contributions', async (req, res, next) => {
   }
 });
 
-app.post('/api/reset', async (req, res, next) => {
+app.post('/api/reset', requireAdmin, async (req, res, next) => {
   try {
     await db.exec(`
       DELETE FROM expenses;

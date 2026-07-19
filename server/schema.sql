@@ -3,6 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS members (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -24,6 +25,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   amount REAL NOT NULL,
   category_id TEXT NOT NULL,
   paid_by_member_id TEXT NOT NULL,
+  created_by_member_id TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -37,6 +39,7 @@ CREATE TABLE IF NOT EXISTS contributions (
   amount REAL NOT NULL,
   category_id TEXT NOT NULL,
   member_id TEXT NOT NULL,
+  created_by_member_id TEXT NOT NULL DEFAULT '',
   date TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -50,9 +53,12 @@ CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
 CREATE INDEX IF NOT EXISTS idx_contributions_date ON contributions(date);
 CREATE INDEX IF NOT EXISTS idx_contributions_category ON contributions(category_id);
 
-INSERT OR IGNORE INTO members (id, name) VALUES
-  ('steve', 'Steve'),
-  ('sorelle', 'Sorelle');
+INSERT OR IGNORE INTO members (id, name, role) VALUES
+  ('steve', 'Steve', 'admin'),
+  ('sorelle', 'Sorelle', 'member');
+
+UPDATE members SET role = 'admin' WHERE id = 'steve';
+UPDATE members SET role = 'member' WHERE id = 'sorelle' AND (role IS NULL OR role = '');
 
 INSERT OR IGNORE INTO categories (id, name, monthly_per_person, description, locked, active) VALUES
   ('weekends', 'Weekends', 40, 'Courses, transports, sorties, etc.', 0, 1),

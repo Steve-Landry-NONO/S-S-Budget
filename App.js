@@ -16,6 +16,8 @@ import { StatusBar } from 'expo-status-bar';
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
 const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
+const USER_KEY = 'SS_BUDGET_V2_CURRENT_USER_ID';
+const DELETE_WINDOW_DAYS = 5;
 const defaultStartMonth = '2026-07';
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -62,10 +64,27 @@ const isValidDateForMonth = (date, monthKey) => {
   return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 };
 
+
+const currentMemberRole = (member) => member?.role || (member?.id === 'steve' ? 'admin' : 'member');
+const isAdminMember = (member) => currentMemberRole(member) === 'admin';
+const daysSinceCreated = (createdAt) => {
+  const created = createdAt ? new Date(String(createdAt).replace(' ', 'T')) : new Date();
+  const diff = Date.now() - created.getTime();
+  if (!Number.isFinite(diff)) return 0;
+  return diff / (1000 * 60 * 60 * 24);
+};
+const canDeleteRecentAction = (action, currentUserId, currentRole, ownerField) => {
+  if (!action) return false;
+  const isRecent = daysSinceCreated(action.created_at || action.createdAt) <= DELETE_WINDOW_DAYS;
+  if (!isRecent) return false;
+  if (currentRole === 'admin') return true;
+  return action[ownerField] === currentUserId;
+};
+
 const initialState = {
   members: [
-    { id: 'steve', name: 'Steve' },
-    { id: 'sorelle', name: 'Sorelle' },
+    { id: 'steve', name: 'Steve', role: 'admin' },
+    { id: 'sorelle', name: 'Sorelle', role: 'member' },
   ],
   categories: [
     { id: 'weekends', name: 'Weekends', monthlyPerPerson: 40, description: 'Courses, transports, sorties, etc.', locked: false, active: true },
@@ -81,6 +100,7 @@ const initialState = {
 export default function App() {
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [currentUserId, setCurrentUserId] = useState('steve');
   const [connected, setConnected] = useState(false);
   const [syncMessage, setSyncMessage] = useState('Mode local');
   const [members, setMembers] = useState(initialState.members);
@@ -106,7 +126,7 @@ export default function App() {
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, selectedMonth, apiUrl, apiSecret]);
+  }, [members, categories, expenses, contributions, selectedMonth, apiUrl, apiSecret, currentUserId]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -121,7 +141,7 @@ export default function App() {
     syncFromServer(false);
     const timer = setInterval(() => syncFromServer(false), 15000);
     return () => clearInterval(timer);
-  }, [apiUrl, apiSecret]);
+  }, [apiUrl, apiSecret, currentUserId]);
 
   const request = async (path, options = {}) => {
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
@@ -131,6 +151,7 @@ export default function App() {
       headers: {
         'Content-Type': 'application/json',
         ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
+        ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
         ...(options.headers || {}),
       },
     });
@@ -140,7 +161,7 @@ export default function App() {
   };
 
   const applyServerState = (data) => {
-    setMembers(data.members || []);
+    setMembers((data.members || []).map((m) => ({ ...m, role: currentMemberRole(m) })));
     setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
     setExpenses(data.expenses || []);
     setContributions(data.contributions || []);
@@ -174,16 +195,18 @@ export default function App() {
 
   const loadLocal = async () => {
     try {
-      const [cache, storedApi, storedSecret] = await Promise.all([
+      const [cache, storedApi, storedSecret, storedUserId] = await Promise.all([
         AsyncStorage.getItem(CACHE_KEY),
         AsyncStorage.getItem(API_KEY),
         AsyncStorage.getItem(SECRET_KEY),
+        AsyncStorage.getItem(USER_KEY),
       ]);
       if (storedApi) setApiUrl(storedApi);
       if (storedSecret) setApiSecret(storedSecret);
+      if (storedUserId) setCurrentUserId(storedUserId);
       if (cache) {
         const data = JSON.parse(cache);
-        setMembers(data.members || initialState.members);
+        setMembers((data.members || initialState.members).map((m) => ({ ...m, role: currentMemberRole(m) })));
         setCategories(data.categories || initialState.categories);
         setExpenses(data.expenses || []);
         setContributions(data.contributions || []);
@@ -200,6 +223,7 @@ export default function App() {
     await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, selectedMonth }));
     await AsyncStorage.setItem(API_KEY, apiUrl || '');
     await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
+    await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
   };
 
   const monthExpenses = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
@@ -226,6 +250,10 @@ export default function App() {
     return { member, expected, paid, missing: expected - paid, personallyPaidExpenses };
   }), [members, categories, monthContributions, monthExpenses]);
 
+  const currentMember = useMemo(() => members.find((m) => m.id === currentUserId) || members[0] || initialState.members[0], [members, currentUserId]);
+  const currentRole = currentMemberRole(currentMember);
+  const isAdmin = currentRole === 'admin';
+
   const updateMonth = (direction) => {
     setSelectedMonth((current) => addMonths(current, direction));
   };
@@ -241,7 +269,7 @@ export default function App() {
     if (!expenseDraft.label.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
     if (!isValidDateForMonth(expenseDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
-    const payload = { ...expenseDraft, id: uid('expense'), amount };
+    const payload = { ...expenseDraft, id: uid('expense'), amount, createdByMemberId: currentUserId };
     mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
     setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
   };
@@ -250,7 +278,7 @@ export default function App() {
     const amount = parseAmount(contributionDraft.amount);
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
     if (!isValidDateForMonth(contributionDraft.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
-    const payload = { ...contributionDraft, id: uid('contribution'), amount };
+    const payload = { ...contributionDraft, id: uid('contribution'), amount, createdByMemberId: currentUserId };
     mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
     setContributionDraft((d) => ({ ...d, amount: '' }));
   };
@@ -265,8 +293,25 @@ export default function App() {
     mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date }, () => setContributions((list) => [...localRows, ...list]));
   };
 
-  const removeExpense = (id) => mutate(`/api/expenses/${id}`, 'DELETE', {}, () => setExpenses((list) => list.filter((e) => e.id !== id)));
-  const removeContribution = (id) => mutate(`/api/contributions/${id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== id)));
+  const removeExpense = (expense) => {
+    if (!canDeleteRecentAction(expense, currentUserId, currentRole, 'paidByMemberId')) {
+      return Alert.alert('Suppression bloquée', `Une dépense ne peut être supprimée que pendant ${DELETE_WINDOW_DAYS} jours. Un membre ne peut supprimer que ses propres actions.`);
+    }
+    Alert.alert('Supprimer la dépense', `Supprimer « ${expense.label} » ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/expenses/${expense.id}`, 'DELETE', {}, () => setExpenses((list) => list.filter((e) => e.id !== expense.id))) },
+    ]);
+  };
+
+  const removeContribution = (contribution) => {
+    if (!canDeleteRecentAction(contribution, currentUserId, currentRole, 'memberId')) {
+      return Alert.alert('Suppression bloquée', `Un versement ne peut être supprimé que pendant ${DELETE_WINDOW_DAYS} jours. Un membre ne peut supprimer que ses propres actions.`);
+    }
+    Alert.alert('Supprimer le versement', `Supprimer le versement de ${formatEuro(contribution.amount)} ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== contribution.id))) },
+    ]);
+  };
 
   const saveCategory = () => {
     const amount = parseAmount(editingCategory.monthlyPerPerson);
@@ -297,11 +342,15 @@ export default function App() {
     setMemberDraft('');
   };
 
-  const resetServer = () => {
-    Alert.alert('Réinitialiser', 'Supprimer dépenses, versements, membres et caisses puis remettre les valeurs par défaut ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: () => mutate('/api/reset', 'POST', {}, () => { setMembers(initialState.members); setCategories(initialState.categories); setExpenses([]); setContributions([]); }) },
-    ]);
+  const showRoleInfo = () => {
+    Alert.alert(
+      'Rôles et sécurité',
+      `Utilisateur actuel : ${currentMember?.name || currentUserId}
+Rôle : ${isAdmin ? 'admin' : 'membre'}
+
+La réinitialisation serveur est désactivée dans l’app pour éviter les erreurs.
+Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
+    );
   };
 
   const renderChoice = (items, selectedId, onSelect) => (
@@ -394,7 +443,11 @@ export default function App() {
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
                 <Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text>
                 <Text style={styles.muted}>{expense.date}</Text>
-                <TouchableOpacity style={styles.dangerButton} onPress={() => removeExpense(expense.id)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                {canDeleteRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
+                  <TouchableOpacity style={styles.dangerButton} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                ) : (
+                  <Text style={styles.lockedText}>Suppression verrouillée après {DELETE_WINDOW_DAYS} jours ou réservée au membre concerné.</Text>
+                )}
               </View>
             ))}
           </>
@@ -428,7 +481,11 @@ export default function App() {
               <View key={contribution.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
                 <Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles.muted}>{contribution.date}</Text>
-                <TouchableOpacity style={styles.dangerButton} onPress={() => removeContribution(contribution.id)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                {canDeleteRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
+                  <TouchableOpacity style={styles.dangerButton} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                ) : (
+                  <Text style={styles.lockedText}>Suppression verrouillée après {DELETE_WINDOW_DAYS} jours ou réservée au membre concerné.</Text>
+                )}
               </View>
             ))}
           </>
@@ -436,17 +493,18 @@ export default function App() {
 
         {tab === 'categories' && (
           <>
-            <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>
+            {!isAdmin && <View style={styles.card}><Text style={styles.cardTitle}>Lecture seule</Text><Text style={styles.muted}>Les caisses sont visibles par tous, mais leur création, modification ou suppression est réservée à l’administrateur.</Text></View>}
+            {isAdmin && <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>}
             {summary.map((category) => (
               <View key={category.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
                 <Text style={styles.muted}>Budget : {formatEuro(category.monthlyBudget)} · Dépensé : {formatEuro(category.spent)}</Text>
                 <Text style={styles.muted}>Solde caisse : {formatEuro(category.cashBalance)}</Text>
-                <View style={styles.rowGap}>
+                {isAdmin && <View style={styles.rowGap}>
                   <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
-                </View>
+                </View>}
               </View>
             ))}
           </>
@@ -455,11 +513,14 @@ export default function App() {
         {tab === 'members' && (
           <>
             <Text style={styles.sectionTitle}>Membres</Text>
-            <View style={styles.card}>
+            {isAdmin && <View style={styles.card}>
               <TextInput style={styles.input} placeholder="Nom du membre" value={memberDraft} onChangeText={setMemberDraft} />
               <TouchableOpacity style={styles.primaryButton} onPress={addMember}><Text style={styles.primaryButtonText}>Ajouter le membre</Text></TouchableOpacity>
-            </View>
-            {members.map((member) => <View key={member.id} style={styles.card}><Text style={styles.cardTitle}>{member.name}</Text><Text style={styles.muted}>ID : {member.id}</Text></View>)}
+            </View>}
+            <Text style={styles.label}>Utilisateur de ce téléphone</Text>
+            {renderChoice(members, currentUserId, setCurrentUserId)}
+            <Text style={styles.help}>Ce choix permet à l’app et au serveur de savoir qui réalise les actions. Steve est administrateur, Sorelle est membre.</Text>
+            {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
       </ScrollView>
@@ -489,9 +550,12 @@ export default function App() {
             <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
             <Text style={styles.label}>Secret API optionnel</Text>
             <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
+            <Text style={styles.label}>Utilisateur de ce téléphone</Text>
+            {renderChoice(members, currentUserId, setCurrentUserId)}
+            <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de cet utilisateur.</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => setApiUrl('')}><Text style={styles.secondaryButtonText}>Revenir en mode local</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.dangerButton} onPress={resetServer}><Text style={styles.dangerText}>Réinitialiser les données serveur</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'Le téléphone utilisera seulement son cache local et ne partagera plus les données avec l’autre téléphone.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => setApiUrl('') }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
             <Text style={styles.help}>Sur vos téléphones, configurez la même URL Tailscale du vieux PC. Exemple : http://100.64.12.34:3001</Text>
           </ScrollView>
         </SafeAreaView>
@@ -513,6 +577,6 @@ const styles = StyleSheet.create({
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
   card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
   modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });
