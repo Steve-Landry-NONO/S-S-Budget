@@ -331,6 +331,65 @@ app.post('/api/expenses', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+app.put('/api/expenses/:id', async (req, res, next) => {
+  try {
+    const user = await getCurrentUser(req);
+    const row = await db.get('SELECT * FROM expenses WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Dépense introuvable.' });
+    if (!isWithinDeleteWindow(row)) return res.status(403).json({ error: `Modification impossible après ${DELETE_WINDOW_DAYS} jours.` });
+    if (user.role !== 'admin' && row.paid_by_member_id !== user.id && row.created_by_member_id !== user.id) {
+      return res.status(403).json({ error: 'Un membre ne peut modifier que ses propres dépenses récentes.' });
+    }
+
+    const label = String(req.body.label || '').trim();
+    const amount = normalizeAmount(req.body.amount);
+    if (!label) return res.status(400).json({ error: 'Le libellé est obligatoire.' });
+    if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
+    const status = normalizeActionStatus(req.body.date, req.body.status);
+
+    const oldCategoryName = await getCategoryNameById(row.category_id);
+    const oldPaidByMemberName = await getMemberNameById(row.paid_by_member_id);
+    const newCategoryName = await getCategoryNameById(req.body.categoryId);
+    const newPaidByMemberName = await getMemberNameById(req.body.paidByMemberId);
+
+    await db.run(
+      `UPDATE expenses
+       SET label = ?, amount = ?, category_id = ?, paid_by_member_id = ?, date = ?, note = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [label, amount, req.body.categoryId, req.body.paidByMemberId, req.body.date, String(req.body.note || ''), status, req.params.id]
+    );
+
+    await logActivity(req, {
+      action: 'expense_updated',
+      entityType: 'expense',
+      entityId: req.params.id,
+      label,
+      amount,
+      date: req.body.date,
+      details: {
+        oldLabel: row.label,
+        newLabel: label,
+        oldAmount: row.amount,
+        newAmount: amount,
+        oldDate: row.date,
+        newDate: req.body.date,
+        oldCategoryId: row.category_id,
+        newCategoryId: req.body.categoryId,
+        oldCategoryName,
+        newCategoryName,
+        oldPaidByMemberId: row.paid_by_member_id,
+        newPaidByMemberId: req.body.paidByMemberId,
+        oldPaidByMemberName,
+        newPaidByMemberName,
+        oldStatus: row.status,
+        newStatus: status,
+      },
+    });
+
+    res.json(await getState());
+  } catch (error) { next(error); }
+});
+
 app.delete('/api/expenses/:id', async (req, res, next) => {
   try {
     const user = await getCurrentUser(req);
@@ -388,6 +447,61 @@ app.post('/api/contributions', async (req, res, next) => {
       },
     });
     res.status(201).json(await getState());
+  } catch (error) { next(error); }
+});
+
+app.put('/api/contributions/:id', async (req, res, next) => {
+  try {
+    const user = await getCurrentUser(req);
+    const row = await db.get('SELECT * FROM contributions WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Versement introuvable.' });
+    if (!isWithinDeleteWindow(row)) return res.status(403).json({ error: `Modification impossible après ${DELETE_WINDOW_DAYS} jours.` });
+    if (user.role !== 'admin' && row.member_id !== user.id && row.created_by_member_id !== user.id) {
+      return res.status(403).json({ error: 'Un membre ne peut modifier que ses propres versements récents.' });
+    }
+
+    const amount = normalizeAmount(req.body.amount);
+    if (amount === null || amount <= 0) return res.status(400).json({ error: 'Le montant doit être supérieur à 0.' });
+    const status = normalizeActionStatus(req.body.date, req.body.status);
+
+    const oldCategoryName = await getCategoryNameById(row.category_id);
+    const oldMemberName = await getMemberNameById(row.member_id);
+    const newCategoryName = await getCategoryNameById(req.body.categoryId);
+    const newMemberName = await getMemberNameById(req.body.memberId);
+
+    await db.run(
+      `UPDATE contributions
+       SET amount = ?, category_id = ?, member_id = ?, date = ?, note = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [amount, req.body.categoryId, req.body.memberId, req.body.date, String(req.body.note || ''), status, req.params.id]
+    );
+
+    await logActivity(req, {
+      action: 'contribution_updated',
+      entityType: 'contribution',
+      entityId: req.params.id,
+      label: 'Versement',
+      amount,
+      date: req.body.date,
+      details: {
+        oldAmount: row.amount,
+        newAmount: amount,
+        oldDate: row.date,
+        newDate: req.body.date,
+        oldCategoryId: row.category_id,
+        newCategoryId: req.body.categoryId,
+        oldCategoryName,
+        newCategoryName,
+        oldMemberId: row.member_id,
+        newMemberId: req.body.memberId,
+        oldMemberName,
+        newMemberName,
+        oldStatus: row.status,
+        newStatus: status,
+      },
+    });
+
+    res.json(await getState());
   } catch (error) { next(error); }
 });
 

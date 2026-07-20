@@ -90,9 +90,11 @@ const activityActionLabels = {
   expense_created: 'Dépense ajoutée',
   expense_planned: 'Dépense prévue',
   expense_deleted: 'Dépense supprimée',
+  expense_updated: 'Dépense modifiée',
   contribution_created: 'Versement ajouté',
   contribution_planned: 'Versement prévu',
   contribution_deleted: 'Versement supprimé',
+  contribution_updated: 'Versement modifié',
   auto_contributions_created: 'Versements automatiques',
   auto_contributions_planned: 'Versements automatiques prévus',
   category_created: 'Caisse ajoutée',
@@ -142,6 +144,9 @@ const canDeleteRecentAction = (action, currentUserId, currentRole, ownerField) =
   return action[ownerField] === currentUserId;
 };
 
+const canEditRecentAction = canDeleteRecentAction;
+
+
 const initialState = {
   members: [
     { id: 'steve', name: 'Steve', role: 'admin' },
@@ -174,6 +179,8 @@ export default function App() {
   const [tab, setTab] = useState('dashboard');
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editingContribution, setEditingContribution] = useState(null);
   const [autoDraft, setAutoDraft] = useState({ mode: 'all', memberId: 'steve', monthsCount: '1', date: monthDefaultDate(currentMonthKey()) });
   const [categoryModal, setCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -437,6 +444,59 @@ export default function App() {
     ]);
   };
 
+
+  const startEditExpense = (expense) => {
+    if (!canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId')) {
+      return Alert.alert('Modification bloquée', `Une dépense ne peut être modifiée que pendant ${DELETE_WINDOW_DAYS} jours. Un membre ne peut modifier que ses propres actions.`);
+    }
+    setEditingExpense({
+      ...expense,
+      amount: String(expense.amount ?? '').replace('.', ','),
+      label: String(expense.label || ''),
+      categoryId: expense.categoryId,
+      paidByMemberId: expense.paidByMemberId,
+      date: expense.date,
+    });
+  };
+
+  const saveExpenseEdit = () => {
+    const amount = parseAmount(editingExpense?.amount);
+    if (!editingExpense?.label?.trim()) return Alert.alert('Dépense incomplète', 'Ajoute un libellé.');
+    if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!isValidDateForMonth(editingExpense.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
+
+    confirmFutureDateIfNeeded(editingExpense.date, 'dépense modifiée', (status) => {
+      const payload = { ...editingExpense, amount, status };
+      mutate(`/api/expenses/${editingExpense.id}`, 'PUT', payload, () => setExpenses((list) => list.map((e) => e.id === editingExpense.id ? { ...e, ...payload } : e)));
+      setEditingExpense(null);
+    });
+  };
+
+  const startEditContribution = (contribution) => {
+    if (!canEditRecentAction(contribution, currentUserId, currentRole, 'memberId')) {
+      return Alert.alert('Modification bloquée', `Un versement ne peut être modifié que pendant ${DELETE_WINDOW_DAYS} jours. Un membre ne peut modifier que ses propres actions.`);
+    }
+    setEditingContribution({
+      ...contribution,
+      amount: String(contribution.amount ?? '').replace('.', ','),
+      categoryId: contribution.categoryId,
+      memberId: contribution.memberId,
+      date: contribution.date,
+    });
+  };
+
+  const saveContributionEdit = () => {
+    const amount = parseAmount(editingContribution?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Montant invalide', 'Le montant doit être supérieur à 0.');
+    if (!isValidDateForMonth(editingContribution.date, selectedMonth)) return Alert.alert('Date invalide', `Utilise une vraie date du mois ${selectedMonth}, au format AAAA-MM-JJ.`);
+
+    confirmFutureDateIfNeeded(editingContribution.date, 'versement modifié', (status) => {
+      const payload = { ...editingContribution, amount, status };
+      mutate(`/api/contributions/${editingContribution.id}`, 'PUT', payload, () => setContributions((list) => list.map((c) => c.id === editingContribution.id ? { ...c, ...payload } : c)));
+      setEditingContribution(null);
+    });
+  };
+
   const saveCategory = () => {
     const amount = parseAmount(editingCategory.monthlyPerPerson);
     if (!editingCategory.name.trim()) return Alert.alert('Caisse incomplète', 'Ajoute un nom.');
@@ -551,6 +611,17 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       if (details.monthsCount) lines.push(`Nombre de mois : ${details.monthsCount}`);
     }
 
+    if (log.action === 'expense_updated' || log.action === 'contribution_updated') {
+      if (details.oldAmount !== undefined && details.newAmount !== undefined && Number(details.oldAmount) !== Number(details.newAmount)) {
+        lines.push(`Montant : ${formatEuro(details.oldAmount)} → ${formatEuro(details.newAmount)}`);
+      }
+      if (details.oldDate && details.newDate && details.oldDate !== details.newDate) lines.push(`Date : ${details.oldDate} → ${details.newDate}`);
+      if (details.oldCategoryName && details.newCategoryName && details.oldCategoryName !== details.newCategoryName) lines.push(`Caisse : ${details.oldCategoryName} → ${details.newCategoryName}`);
+      if (details.oldPaidByMemberName && details.newPaidByMemberName && details.oldPaidByMemberName !== details.newPaidByMemberName) lines.push(`Payé par : ${details.oldPaidByMemberName} → ${details.newPaidByMemberName}`);
+      if (details.oldMemberName && details.newMemberName && details.oldMemberName !== details.newMemberName) lines.push(`Pour : ${details.oldMemberName} → ${details.newMemberName}`);
+      if (details.oldStatus && details.newStatus && details.oldStatus !== details.newStatus) lines.push(`Statut : ${details.oldStatus === 'planned' ? 'Prévu' : 'Réalisé'} → ${details.newStatus === 'planned' ? 'Prévu' : 'Réalisé'}`);
+    }
+
     return lines;
   };
 
@@ -641,10 +712,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
                 <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
                 <Text style={styles.muted}>{expense.date}</Text>
-                {canDeleteRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
-                  <TouchableOpacity style={styles.dangerButton} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                {canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
+                  <View style={styles.rowGap}>
+                    <TouchableOpacity style={styles.smallButton} onPress={() => startEditExpense(expense)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.smallDanger} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                  </View>
                 ) : (
-                  <Text style={styles.lockedText}>Suppression verrouillée après {DELETE_WINDOW_DAYS} jours ou réservée au membre concerné.</Text>
+                  <Text style={styles.lockedText}>Modification et suppression verrouillées après {DELETE_WINDOW_DAYS} jours ou réservées au membre concerné.</Text>
                 )}
               </View>
             ))}
@@ -679,10 +753,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <View key={contribution.id} style={styles.card}>
                 <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
                 <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
-                {canDeleteRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
-                  <TouchableOpacity style={styles.dangerButton} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                {canEditRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
+                  <View style={styles.rowGap}>
+                    <TouchableOpacity style={styles.smallButton} onPress={() => startEditContribution(contribution)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.smallDanger} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
+                  </View>
                 ) : (
-                  <Text style={styles.lockedText}>Suppression verrouillée après {DELETE_WINDOW_DAYS} jours ou réservée au membre concerné.</Text>
+                  <Text style={styles.lockedText}>Modification et suppression verrouillées après {DELETE_WINDOW_DAYS} jours ou réservées au membre concerné.</Text>
                 )}
               </View>
             ))}
@@ -749,6 +826,42 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
           </>
         )}
       </ScrollView>
+
+
+      <Modal visible={!!editingExpense} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setEditingExpense(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
+            <Text style={styles.modalTitle}>Modifier dépense</Text>
+            <TouchableOpacity onPress={saveExpenseEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <TextInput style={styles.input} placeholder="Libellé" value={editingExpense?.label || ''} onChangeText={(label) => setEditingExpense((e) => ({ ...e, label }))} />
+            <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={String(editingExpense?.amount || '')} onChangeText={(amount) => setEditingExpense((e) => ({ ...e, amount }))} />
+            <Text style={styles.label}>Catégorie</Text>{renderChoice(categories, editingExpense?.categoryId, (categoryId) => setEditingExpense((e) => ({ ...e, categoryId })))}
+            <Text style={styles.label}>Payé par</Text>{renderChoice(members, editingExpense?.paidByMemberId, (paidByMemberId) => setEditingExpense((e) => ({ ...e, paidByMemberId })))}
+            <TextInput style={styles.input} value={editingExpense?.date || ''} onChangeText={(date) => setEditingExpense((e) => ({ ...e, date }))} />
+            <Text style={styles.help}>La modification est autorisée uniquement pendant 5 jours. Les changements sont ajoutés au journal d’activité.</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={!!editingContribution} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setEditingContribution(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
+            <Text style={styles.modalTitle}>Modifier versement</Text>
+            <TouchableOpacity onPress={saveContributionEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <TextInput style={styles.input} placeholder="Montant" keyboardType="decimal-pad" value={String(editingContribution?.amount || '')} onChangeText={(amount) => setEditingContribution((c) => ({ ...c, amount }))} />
+            <Text style={styles.label}>Membre</Text>{renderChoice(members, editingContribution?.memberId, (memberId) => setEditingContribution((c) => ({ ...c, memberId })))}
+            <Text style={styles.label}>Catégorie</Text>{renderChoice(categories, editingContribution?.categoryId, (categoryId) => setEditingContribution((c) => ({ ...c, categoryId })))}
+            <TextInput style={styles.input} value={editingContribution?.date || ''} onChangeText={(date) => setEditingContribution((c) => ({ ...c, date }))} />
+            <Text style={styles.help}>La modification est autorisée uniquement pendant 5 jours. Les changements sont ajoutés au journal d’activité.</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
