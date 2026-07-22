@@ -69,6 +69,15 @@ function safeJson(value) {
   try { return JSON.stringify(value || {}); } catch (_) { return '{}'; }
 }
 
+function parseReadBy(value) {
+  try {
+    const parsed = JSON.parse(value || '[]');
+    return Array.isArray(parsed) ? parsed.map((id) => String(id)) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 async function getMemberNameById(id) {
   if (!id) return '';
   const row = await db.get('SELECT name FROM members WHERE id = ?', [id]);
@@ -84,9 +93,13 @@ async function getCategoryNameById(id) {
 async function logActivity(req, payload = {}) {
   try {
     const user = req.currentUser || await getCurrentUser(req);
+    // L'auteur de l'action est considéré comme ayant déjà "lu" sa propre activité :
+    // ça évite qu'il voie son propre journal se marquer "non lu" et garde le badge
+    // de non-lus centré sur ce que fait l'AUTRE personne.
+    const readByMemberIds = user?.id ? [String(user.id)] : [];
     await db.run(
-      `INSERT INTO activity_logs (id, actor_member_id, actor_name, action, entity_type, entity_id, label, amount, date, details)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO activity_logs (id, actor_member_id, actor_name, action, entity_type, entity_id, label, amount, date, details, read_by_member_ids)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         uid('log'),
         user?.id || '',
@@ -98,6 +111,7 @@ async function logActivity(req, payload = {}) {
         payload.amount === undefined || payload.amount === null ? null : Number(payload.amount),
         payload.date || null,
         safeJson(payload.details || {}),
+        JSON.stringify(readByMemberIds),
       ]
     );
   } catch (error) {
@@ -183,7 +197,7 @@ async function getState() {
             FROM expenses ORDER BY date DESC, created_at DESC`),
     db.all(`SELECT id, amount, category_id AS categoryId, member_id AS memberId, created_by_member_id AS createdByMemberId, date, note, status, created_at, updated_at
             FROM contributions ORDER BY date DESC, created_at DESC`),
-    db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, created_at AS createdAt
+    db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, read_by_member_ids AS readByMemberIds, created_at AS createdAt
             FROM activity_logs ORDER BY created_at DESC LIMIT 100`),
   ]);
   return {
@@ -191,7 +205,11 @@ async function getState() {
     categories: categories.map((c) => ({ ...c, locked: Boolean(c.locked), active: Boolean(c.active) })),
     expenses,
     contributions,
-    activityLogs: activityLogs.map((log) => ({ ...log, details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })() })),
+    activityLogs: activityLogs.map((log) => ({
+      ...log,
+      details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })(),
+      readByMemberIds: parseReadBy(log.readByMemberIds),
+    })),
     serverTime: new Date().toISOString(),
   };
 }
@@ -580,9 +598,52 @@ app.post('/api/auto-contributions', async (req, res, next) => {
 
 app.get('/api/activity-logs', async (req, res, next) => {
   try {
-    const rows = await db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, created_at AS createdAt
+    const rows = await db.all(`SELECT id, actor_member_id AS actorMemberId, actor_name AS actorName, action, entity_type AS entityType, entity_id AS entityId, label, amount, date, details, read_by_member_ids AS readByMemberIds, created_at AS createdAt
                                FROM activity_logs ORDER BY created_at DESC LIMIT 200`);
-    res.json({ ok: true, activityLogs: rows.map((log) => ({ ...log, details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })() })) });
+    res.json({
+      ok: true,
+      activityLogs: rows.map((log) => ({
+        ...log,
+        details: (() => { try { return JSON.parse(log.details || '{}'); } catch (_) { return {}; } })(),
+        readByMemberIds: parseReadBy(log.readByMemberIds),
+      })),
+    });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/activity-logs/read-all', async (req, res, next) => {
+  try {
+    const user = await getCurrentUser(req);
+    const rows = await db.all('SELECT id, read_by_member_ids FROM activity_logs');
+    await db.run('BEGIN TRANSACTION');
+    try {
+      for (const row of rows) {
+        const readBy = parseReadBy(row.read_by_member_ids);
+        if (!readBy.includes(user.id)) {
+          readBy.push(user.id);
+          await db.run('UPDATE activity_logs SET read_by_member_ids = ? WHERE id = ?', [JSON.stringify(readBy), row.id]);
+        }
+      }
+      await db.run('COMMIT');
+    } catch (error) {
+      await db.run('ROLLBACK');
+      throw error;
+    }
+    res.json(await getState());
+  } catch (error) { next(error); }
+});
+
+app.post('/api/activity-logs/:id/read', async (req, res, next) => {
+  try {
+    const user = await getCurrentUser(req);
+    const row = await db.get('SELECT id, read_by_member_ids FROM activity_logs WHERE id = ?', [req.params.id]);
+    if (!row) return res.status(404).json({ error: 'Activité introuvable.' });
+    const readBy = parseReadBy(row.read_by_member_ids);
+    if (!readBy.includes(user.id)) {
+      readBy.push(user.id);
+      await db.run('UPDATE activity_logs SET read_by_member_ids = ? WHERE id = ?', [JSON.stringify(readBy), req.params.id]);
+    }
+    res.json(await getState());
   } catch (error) { next(error); }
 });
 

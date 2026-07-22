@@ -126,6 +126,7 @@ const readableActivityLabel = (log) => {
   if (log?.label && !isTechnicalLabel(log.label)) return log.label;
   return '';
 };
+const isLogUnread = (log, currentUserId) => !(log?.readByMemberIds || []).includes(currentUserId);
 
 
 const currentMemberRole = (member) => member?.role || (member?.id === 'steve' ? 'admin' : 'member');
@@ -362,6 +363,10 @@ export default function App() {
   const currentRole = currentMemberRole(currentMember);
   const isAdmin = currentRole === 'admin';
   const activityRows = useMemo(() => (activityLogs || []).slice(0, 80), [activityLogs]);
+  const unreadActivityCount = useMemo(
+    () => (activityLogs || []).filter((log) => isLogUnread(log, currentUserId)).length,
+    [activityLogs, currentUserId]
+  );
 
   const updateMonth = (direction) => {
     setSelectedMonth((current) => addMonths(current, direction));
@@ -442,6 +447,20 @@ export default function App() {
       { text: 'Annuler', style: 'cancel' },
       { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== contribution.id))) },
     ]);
+  };
+
+  const markActivityRead = (logId) => {
+    mutate(`/api/activity-logs/${logId}/read`, 'POST', {}, () => {
+      setActivityLogs((list) => list.map((log) => (log.id === logId
+        ? { ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) }
+        : log)));
+    });
+  };
+
+  const markAllActivityRead = () => {
+    mutate('/api/activity-logs/read-all', 'POST', {}, () => {
+      setActivityLogs((list) => list.map((log) => ({ ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) })));
+    });
   };
 
 
@@ -656,7 +675,8 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       <View style={styles.tabsOuter}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
           {[
-            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'], ['activity', 'Journal'],
+            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
+            ['activity', unreadActivityCount > 0 ? `Journal • ${unreadActivityCount}` : 'Journal'],
           ].map(([key, label]) => (
             <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
               <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
@@ -807,19 +827,37 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Dernières actions</Text>
               <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
+              <Text style={styles.muted}>{unreadActivityCount > 0 ? `${unreadActivityCount} activité${unreadActivityCount > 1 ? 's' : ''} non lue${unreadActivityCount > 1 ? 's' : ''} pour vous.` : 'Tout est à jour pour vous.'}</Text>
+              {unreadActivityCount > 0 && (
+                <View style={styles.rowGap}>
+                  <TouchableOpacity style={styles.smallButton} onPress={markAllActivityRead}><Text style={styles.smallButtonText}>Tout marquer comme lu</Text></TouchableOpacity>
+                </View>
+              )}
             </View>
             {activityRows.length === 0 && <View style={styles.card}><Text style={styles.muted}>Aucune activité enregistrée pour le moment.</Text></View>}
             {activityRows.map((log) => {
               const mainLabel = readableActivityLabel(log);
               const detailLines = activityDetailLines(log);
+              const unread = isLogUnread(log, currentUserId);
               return (
                 <View key={log.id} style={styles.card}>
-                  <View style={styles.rowBetween}><Text style={styles.cardTitle}>{activityLabel(log.action)}</Text><Text style={styles.badge}>{log.actorName || 'Système'}</Text></View>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.cardTitle}>{activityLabel(log.action)}</Text>
+                    <View style={styles.badgeRow}>
+                      {unread && <Text style={styles.badgeWarn}>Nouveau</Text>}
+                      <Text style={styles.badge}>{log.actorName || 'Système'}</Text>
+                    </View>
+                  </View>
                   {!!mainLabel && <Text style={styles.muted}>{mainLabel}</Text>}
                   {detailLines.map((line) => <Text key={line} style={styles.muted}>{line}</Text>)}
                   {!!log.amount && <Text style={styles.muted}>Montant : {formatEuro(log.amount)}</Text>}
                   {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
                   <Text style={styles.lockedText}>Action réalisée par : {log.actorName || 'Système'} · {formatActivityDate(log.createdAt)}</Text>
+                  {unread && (
+                    <View style={styles.rowGap}>
+                      <TouchableOpacity style={styles.smallButton} onPress={() => markActivityRead(log.id)}><Text style={styles.smallButtonText}>Marquer comme lu</Text></TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -935,6 +973,6 @@ const styles = StyleSheet.create({
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
   card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
   modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });

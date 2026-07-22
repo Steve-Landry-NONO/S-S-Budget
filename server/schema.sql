@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   amount REAL,
   date TEXT,
   details TEXT NOT NULL DEFAULT '{}',
+  read_by_member_ids TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
