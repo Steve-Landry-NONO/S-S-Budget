@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 
@@ -645,6 +645,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   };
 
   return (
+    <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
       <View style={styles.header}>
@@ -945,6 +946,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
