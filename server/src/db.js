@@ -41,6 +41,11 @@ async function ensureActivityLogsTable(db) {
 async function migrateDb(db) {
   await ensureActivityLogsTable(db);
   await addColumnIfMissing(db, 'members', 'role', "TEXT NOT NULL DEFAULT 'member'");
+  // Colonnes V2.8 (authentification par PIN) : additives, pin_hash vide = PIN pas encore défini.
+  await addColumnIfMissing(db, 'members', 'pin_salt', "TEXT NOT NULL DEFAULT ''");
+  await addColumnIfMissing(db, 'members', 'pin_hash', "TEXT NOT NULL DEFAULT ''");
+  await addColumnIfMissing(db, 'members', 'failed_pin_attempts', "INTEGER NOT NULL DEFAULT 0");
+  await addColumnIfMissing(db, 'members', 'pin_locked_until', "TEXT");
   await addColumnIfMissing(db, 'expenses', 'created_by_member_id', "TEXT NOT NULL DEFAULT ''");
   await addColumnIfMissing(db, 'contributions', 'created_by_member_id', "TEXT NOT NULL DEFAULT ''");
   await addColumnIfMissing(db, 'expenses', 'status', "TEXT NOT NULL DEFAULT 'done'");

@@ -4,6 +4,10 @@ CREATE TABLE IF NOT EXISTS members (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member',
+  pin_salt TEXT NOT NULL DEFAULT '',
+  pin_hash TEXT NOT NULL DEFAULT '',
+  failed_pin_attempts INTEGER NOT NULL DEFAULT 0,
+  pin_locked_until TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -17,11 +17,14 @@ const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
 const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
 const USER_KEY = 'SS_BUDGET_V2_CURRENT_USER_ID';
+const AUTH_TOKEN_KEY = 'SS_BUDGET_V2_AUTH_TOKEN';
+const AUTH_EXPIRES_KEY = 'SS_BUDGET_V2_AUTH_EXPIRES_AT';
 const DELETE_WINDOW_DAYS = 5;
 const defaultStartMonth = '2026-07';
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const currentMonthKey = () => todayKey().slice(0, 7);
+const isValidPinFormat = (pin) => /^\d{4,8}$/.test(String(pin || ''));
 
 const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
 const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
@@ -109,6 +112,10 @@ const activityActionLabels = {
   export_csv_created: 'Export CSV créé',
   backup_restored: 'Sauvegarde restaurée',
   server_reset: 'Réinitialisation serveur',
+  member_login: 'Connexion',
+  pin_created: 'PIN créé',
+  pin_updated: 'PIN modifié',
+  login_locked: 'Profil verrouillé temporairement',
 };
 const activityLabel = (action) => activityActionLabels[action] || 'Action';
 const formatActivityDate = (value) => {
@@ -188,6 +195,19 @@ export default function App() {
   const [settingsModal, setSettingsModal] = useState(false);
   const [memberDraft, setMemberDraft] = useState('');
 
+  const [bootLoading, setBootLoading] = useState(true);
+  const [authToken, setAuthToken] = useState('');
+  const [authTokenExpiresAt, setAuthTokenExpiresAt] = useState('');
+  const [authMembers, setAuthMembers] = useState([]);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [pinStage, setPinStage] = useState(null);
+  const [profileModal, setProfileModal] = useState(false);
+  const [pinManageModal, setPinManageModal] = useState(false);
+  const [pinManageDraft, setPinManageDraft] = useState({ currentPin: '', newPin: '', newPin2: '' });
+
+  const isSessionValid = () => Boolean(authToken) && Boolean(authTokenExpiresAt) && new Date(authTokenExpiresAt).getTime() > Date.now();
+
   useEffect(() => { loadLocal(); }, []);
 
   useEffect(() => {
@@ -196,7 +216,7 @@ export default function App() {
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId]);
+  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -207,11 +227,15 @@ export default function App() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    if (!apiUrl) return;
+    if (!apiUrl || !isSessionValid()) return;
     syncFromServer(false);
-    const timer = setInterval(() => syncFromServer(false), 15000);
+    const timer = setInterval(() => { if (isSessionValid()) syncFromServer(false); }, 15000);
     return () => clearInterval(timer);
-  }, [apiUrl, apiSecret, currentUserId]);
+  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
+
+  useEffect(() => {
+    if (apiUrl && !isSessionValid()) fetchAuthStatus();
+  }, [apiUrl, authToken, authTokenExpiresAt]);
 
   const request = async (path, options = {}) => {
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
@@ -222,11 +246,22 @@ export default function App() {
         'Content-Type': 'application/json',
         ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
         ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
+        ...(authToken ? { 'x-ss-budget-auth-token': authToken } : {}),
         ...(options.headers || {}),
       },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || `Erreur serveur ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(data.error || `Erreur serveur ${response.status}`);
+      error.code = data.code;
+      if (response.status === 401 && data.code === 'AUTH_REQUIRED') {
+        setAuthToken('');
+        setAuthTokenExpiresAt('');
+        setConnected(false);
+        setSyncMessage('Session expirée');
+      }
+      throw error;
+    }
     return data;
   };
 
@@ -247,6 +282,11 @@ export default function App() {
       if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
     } catch (error) {
       setConnected(false);
+      if (error.code === 'AUTH_REQUIRED') {
+        setSyncMessage('Session expirée');
+        if (showAlert) Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
+        return;
+      }
       setSyncMessage(`Hors ligne : ${error.message}`);
       if (showAlert) Alert.alert('Synchronisation impossible', error.message);
     }
@@ -258,23 +298,126 @@ export default function App() {
       applyServerState(data);
     } catch (error) {
       setConnected(false);
+      if (error.code === 'AUTH_REQUIRED') {
+        setSyncMessage('Session expirée');
+        Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
+        return;
+      }
       setSyncMessage(`Mode local : ${error.message}`);
       fallback?.();
       Alert.alert('Serveur non disponible', `Action appliquée en local uniquement.\n\n${error.message}`);
     }
   };
 
+  const fetchAuthStatus = async () => {
+    setAuthError('');
+    setAuthLoading(true);
+    try {
+      const data = await request('/api/auth/status');
+      setAuthMembers(data.members || []);
+    } catch (error) {
+      setAuthError(error.message || 'Impossible de contacter le serveur.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const openPinStage = (member) => {
+    setAuthError('');
+    setPinStage({ memberId: member.id, memberName: member.name, mode: member.pinSet ? 'login' : 'create', pin: '', pin2: '' });
+  };
+
+  const closePinStage = () => setPinStage(null);
+
+  const applyLoginSuccess = (data) => {
+    setCurrentUserId(data.member.id);
+    setAuthToken(data.authToken);
+    setAuthTokenExpiresAt(data.expiresAt);
+    setPinStage(null);
+    setProfileModal(false);
+    setAuthError('');
+    Alert.alert('Profil changé', `Connecté en tant que ${data.member.name}.`);
+  };
+
+  const submitPinStage = async () => {
+    if (!pinStage) return;
+    const pin = pinStage.pin.trim();
+    if (!isValidPinFormat(pin)) return Alert.alert('PIN invalide', 'Le PIN doit contenir entre 4 et 8 chiffres.');
+
+    if (pinStage.mode === 'create') {
+      if (pin !== pinStage.pin2.trim()) return Alert.alert('PIN différent', 'Les deux PIN saisis ne correspondent pas.');
+      setAuthLoading(true);
+      try {
+        await request('/api/auth/set-pin', { method: 'POST', body: JSON.stringify({ memberId: pinStage.memberId, pin }) });
+        const loginData = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ memberId: pinStage.memberId, pin }) });
+        Alert.alert('PIN créé', `Le PIN de ${pinStage.memberName} a été créé.`);
+        applyLoginSuccess(loginData);
+      } catch (error) {
+        Alert.alert('Création impossible', error.message);
+      } finally {
+        setAuthLoading(false);
+      }
+    } else {
+      setAuthLoading(true);
+      try {
+        const loginData = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ memberId: pinStage.memberId, pin }) });
+        applyLoginSuccess(loginData);
+      } catch (error) {
+        Alert.alert('Connexion refusée', error.message);
+        setPinStage((stage) => (stage ? { ...stage, pin: '' } : stage));
+        fetchAuthStatus();
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+  };
+
+  const openProfileSwitch = () => {
+    setProfileModal(true);
+    fetchAuthStatus();
+  };
+
+  const logout = () => {
+    setAuthToken('');
+    setAuthTokenExpiresAt('');
+    setSettingsModal(false);
+    Alert.alert('Déconnecté', 'Reconnecte-toi avec ton PIN pour continuer.');
+  };
+
+  const submitPinManage = async () => {
+    const { currentPin, newPin, newPin2 } = pinManageDraft;
+    if (!isValidPinFormat(newPin)) return Alert.alert('PIN invalide', 'Le nouveau PIN doit contenir entre 4 et 8 chiffres.');
+    if (newPin !== newPin2) return Alert.alert('PIN différent', 'Les deux PIN saisis ne correspondent pas.');
+    try {
+      await request('/api/auth/set-pin', { method: 'POST', body: JSON.stringify({ memberId: currentUserId, pin: newPin, currentPin }) });
+      setPinManageModal(false);
+      setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' });
+      Alert.alert('PIN modifié', 'Ton PIN a été mis à jour.');
+    } catch (error) {
+      Alert.alert('Modification impossible', error.message);
+    }
+  };
+
   const loadLocal = async () => {
     try {
-      const [cache, storedApi, storedSecret, storedUserId] = await Promise.all([
+      const [cache, storedApi, storedSecret, storedUserId, storedToken, storedExpires] = await Promise.all([
         AsyncStorage.getItem(CACHE_KEY),
         AsyncStorage.getItem(API_KEY),
         AsyncStorage.getItem(SECRET_KEY),
         AsyncStorage.getItem(USER_KEY),
+        AsyncStorage.getItem(AUTH_TOKEN_KEY),
+        AsyncStorage.getItem(AUTH_EXPIRES_KEY),
       ]);
       if (storedApi) setApiUrl(storedApi);
       if (storedSecret) setApiSecret(storedSecret);
       if (storedUserId) setCurrentUserId(storedUserId);
+      const stillValid = storedToken && storedExpires && new Date(storedExpires).getTime() > Date.now();
+      if (stillValid) {
+        setAuthToken(storedToken);
+        setAuthTokenExpiresAt(storedExpires);
+      } else if (storedToken || storedExpires) {
+        await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_EXPIRES_KEY]);
+      }
       if (cache) {
         const data = JSON.parse(cache);
         setMembers((data.members || initialState.members).map((m) => ({ ...m, role: currentMemberRole(m) })));
@@ -288,6 +431,8 @@ export default function App() {
       }
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de charger le cache local.');
+    } finally {
+      setBootLoading(false);
     }
   };
 
@@ -296,6 +441,8 @@ export default function App() {
     await AsyncStorage.setItem(API_KEY, apiUrl || '');
     await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
     await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken || '');
+    await AsyncStorage.setItem(AUTH_EXPIRES_KEY, authTokenExpiresAt || '');
   };
 
   const monthExpenseRows = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
@@ -602,6 +749,89 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     </ScrollView>
   );
 
+  const renderPinStageForm = () => (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{pinStage.mode === 'create' ? `Créer le PIN de ${pinStage.memberName}` : `PIN de ${pinStage.memberName}`}</Text>
+      <Text style={styles.muted}>{pinStage.mode === 'create' ? 'Choisis un PIN à 4-8 chiffres, connu de toi seul(e).' : 'Entre ton PIN pour continuer.'}</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="PIN (4 à 8 chiffres)"
+        keyboardType="number-pad"
+        secureTextEntry
+        maxLength={8}
+        value={pinStage.pin}
+        onChangeText={(pin) => setPinStage((s) => ({ ...s, pin }))}
+      />
+      {pinStage.mode === 'create' && (
+        <TextInput
+          style={styles.input}
+          placeholder="Confirme le PIN"
+          keyboardType="number-pad"
+          secureTextEntry
+          maxLength={8}
+          value={pinStage.pin2}
+          onChangeText={(pin2) => setPinStage((s) => ({ ...s, pin2 }))}
+        />
+      )}
+      <TouchableOpacity style={styles.primaryButton} onPress={submitPinStage} disabled={authLoading}>
+        <Text style={styles.primaryButtonText}>{pinStage.mode === 'create' ? 'Créer et se connecter' : 'Se connecter'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryButton} onPress={closePinStage}>
+        <Text style={styles.secondaryButtonText}>Annuler</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderAuthMemberList = () => (
+    <>
+      {authError ? <View style={styles.card}><Text style={styles.muted}>{authError}</Text></View> : null}
+      {authLoading && !authMembers.length ? <Text style={styles.muted}>Chargement…</Text> : null}
+      {authMembers.map((member) => (
+        <View key={member.id} style={styles.card}>
+          <View style={styles.rowBetween}>
+            <Text style={styles.cardTitle}>{member.name}</Text>
+            <Text style={member.locked ? styles.badgeWarn : (member.pinSet ? styles.badgeOk : styles.badge)}>
+              {member.locked ? 'Verrouillé' : member.pinSet ? 'PIN défini' : 'PIN à créer'}
+            </Text>
+          </View>
+          {member.locked ? (
+            <Text style={styles.muted}>Réessaie après {formatActivityDate(member.lockedUntil)}.</Text>
+          ) : (
+            <TouchableOpacity style={styles.primaryButton} onPress={() => openPinStage(member)}>
+              <Text style={styles.primaryButtonText}>{member.pinSet ? 'Entrer mon PIN' : 'Créer mon PIN'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+      <TouchableOpacity style={styles.secondaryButton} onPress={fetchAuthStatus}><Text style={styles.secondaryButtonText}>Rafraîchir</Text></TouchableOpacity>
+    </>
+  );
+
+  const renderAuthGate = () => (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="light" />
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>S&S Budget</Text>
+          <Text style={styles.subtitle}>Connexion sécurisée</Text>
+        </View>
+      </View>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+        {!apiUrl ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Configurer le serveur</Text>
+            <Text style={styles.muted}>Renseigne l’URL Tailscale du serveur avant de te connecter.</Text>
+            <Text style={styles.label}>URL API maison</Text>
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <Text style={styles.label}>Secret API optionnel</Text>
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
+            <TouchableOpacity style={styles.primaryButton} onPress={fetchAuthStatus}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
+          </View>
+        ) : pinStage ? renderPinStageForm() : renderAuthMemberList()}
+      </ScrollView>
+    </SafeAreaView>
+  );
+
   const getMemberName = (id) => members.find((m) => m.id === id)?.name || 'Membre supprimé';
   const getCategoryName = (id) => categories.find((c) => c.id === id)?.name || 'Caisse supprimée';
   const activityDetailLines = (log) => {
@@ -643,6 +873,22 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
     return lines;
   };
+
+  if (bootLoading) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.safe}><StatusBar style="light" /></SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  if (!isSessionValid()) {
+    return (
+      <SafeAreaProvider>
+        {renderAuthGate()}
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -815,9 +1061,15 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <TextInput style={styles.input} placeholder="Nom du membre" value={memberDraft} onChangeText={setMemberDraft} />
               <TouchableOpacity style={styles.primaryButton} onPress={addMember}><Text style={styles.primaryButtonText}>Ajouter le membre</Text></TouchableOpacity>
             </View>}
-            <Text style={styles.label}>Utilisateur de ce téléphone</Text>
-            {renderChoice(members, currentUserId, setCurrentUserId)}
-            <Text style={styles.help}>Ce choix permet à l’app et au serveur de savoir qui réalise les actions. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
+            <Text style={styles.label}>Profil de ce téléphone</Text>
+            <View style={styles.card}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
+                <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
+              </View>
+              <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
+            </View>
+            <Text style={styles.help}>Le changement de profil demande le PIN du profil cible. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
             {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
@@ -927,12 +1179,22 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
             <Text style={styles.label}>Secret API optionnel</Text>
             <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
-            <Text style={styles.label}>Utilisateur de ce téléphone</Text>
-            {renderChoice(members, currentUserId, setCurrentUserId)}
-            <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de cet utilisateur.</Text>
+            <Text style={styles.label}>Profil de ce téléphone</Text>
+            <View style={styles.card}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
+                <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
+              </View>
+              <View style={styles.rowGap}>
+                <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.smallButton} onPress={() => setPinManageModal(true)}><Text style={styles.smallButtonText}>Modifier mon PIN</Text></TouchableOpacity>
+              </View>
+            </View>
+            <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de ce profil connecté par PIN.</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'Le téléphone utilisera seulement son cache local et ne partagera plus les données avec l’autre téléphone.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => setApiUrl('') }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Il faudra ressaisir ton PIN pour continuer.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
             {isAdmin && <View style={styles.card}>
               <Text style={styles.cardTitle}>Sauvegarde et exports</Text>
               <Text style={styles.muted}>Actions réservées à l’administrateur. Les fichiers sont créés sur le serveur dans server/backups/.</Text>
@@ -942,6 +1204,38 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <TouchableOpacity style={styles.secondaryButton} onPress={showRestoreInfo}><Text style={styles.secondaryButtonText}>Aide restauration</Text></TouchableOpacity>
             </View>}
             <Text style={styles.help}>Sur vos téléphones, configurez la même URL Tailscale du vieux PC. Exemple : http://100.64.12.34:3001</Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={profileModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => { setProfileModal(false); setPinStage(null); }}><Text style={styles.modalAction}>Fermer</Text></TouchableOpacity>
+            <Text style={styles.modalTitle}>Changer de profil</Text>
+            <Text style={styles.modalAction}> </Text>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            {pinStage ? renderPinStageForm() : renderAuthMemberList()}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={pinManageModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => { setPinManageModal(false); setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' }); }}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
+            <Text style={styles.modalTitle}>Modifier mon PIN</Text>
+            <TouchableOpacity onPress={submitPinManage}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={styles.label}>PIN actuel</Text>
+            <TextInput style={styles.input} placeholder="PIN actuel" keyboardType="number-pad" secureTextEntry maxLength={8} value={pinManageDraft.currentPin} onChangeText={(currentPin) => setPinManageDraft((d) => ({ ...d, currentPin }))} />
+            <Text style={styles.label}>Nouveau PIN</Text>
+            <TextInput style={styles.input} placeholder="Nouveau PIN (4 à 8 chiffres)" keyboardType="number-pad" secureTextEntry maxLength={8} value={pinManageDraft.newPin} onChangeText={(newPin) => setPinManageDraft((d) => ({ ...d, newPin }))} />
+            <Text style={styles.label}>Confirme le nouveau PIN</Text>
+            <TextInput style={styles.input} placeholder="Confirme le nouveau PIN" keyboardType="number-pad" secureTextEntry maxLength={8} value={pinManageDraft.newPin2} onChangeText={(newPin2) => setPinManageDraft((d) => ({ ...d, newPin2 }))} />
+            <Text style={styles.help}>Le PIN n’est jamais stocké en clair : le serveur ne conserve qu’un hash salé.</Text>
           </ScrollView>
         </SafeAreaView>
       </Modal>
