@@ -11,7 +11,7 @@ export const palette = Object.freeze({
   background: '#F7F8FA',
   surface: '#FFFFFF',
   danger: '#C84B59',
-  muted: '#66758C',
+  muted: '#596A81',
   border: '#E6EBF2',
   lightBlue: '#EEF2FF',
   lightGreen: '#E8F8F1',
