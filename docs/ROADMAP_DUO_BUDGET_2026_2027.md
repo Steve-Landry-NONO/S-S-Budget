@@ -48,8 +48,9 @@ Les dates sont des objectifs de planification et seront recalibrées selon les t
 - Le compte rendu standard est : « Réalisé, preuve, en cours, risques, décisions attendues, prochain livrable ».
 - Les comptes rendus automatisés nécessitent une automatisation active disponible ; les sessions de développement autonomes nécessitent un environnement d'exécution configuré.
 
-## Premier état connu
-- Branche de fondations : `feature/v3-premium-duo-foundations` (non fusionnée).
-- Lot 01 : `feature/duo-budget-v3-glance-first-screen`, PR #3 brouillon.
-- Prochaine recette obligatoire : lancer Expo SDK 54, tester Duo Glance, vérifier PIN/session et revenir vers le prototype.
-- Vérifier l'état des CI avant tout merge (aucun workflow détecté lors de la création du lot 01).
+## État au 5 novembre 2026
+- PR #1 marque et PR #2 fondations Premium Duo : **fusionnées dans `main`**.
+- Lot 01 : `feature/duo-budget-v3-glance-first-screen`, PR #3 **brouillon, base `main`**.
+- GitHub Actions : workflow d'assertions statiques, parsing Babel et export web Expo exécuté avec succès sur le lot 01. Cela ne valide pas les builds Android/iOS.
+- Recette obligatoire avant fusion : tester Duo Glance sur appareils, authentification PIN, sessions, accessibilité et comportement responsive.
+- Documentation : README enrichi du logo officiel et de captures Figma V3.0.7 ; aucune APK Android publiée à ce stade.
