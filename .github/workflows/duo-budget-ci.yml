@@ -1,0 +1,44 @@
+name: Duo Budget — PR quality gates
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feature/v3-premium-duo-foundations
+  push:
+    branches:
+      - feature/duo-budget-v3-glance-first-screen
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: duo-budget-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  react-native-checks:
+    name: Static checks and Expo web bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install JS dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+      - name: Validate Duo Glance privacy and integration boundaries
+        run: node scripts/check-glance.js
+      - name: Check JavaScript syntax in test script
+        run: node --check scripts/check-glance.js
+      - name: Parse Expo entry and Duo Glance JSX
+        run: |
+          node -e "const babel=require('@babel/core');for(const path of ['App.js','src/features/glance/DuoGlanceScreen.js']) {babel.transformFileSync(path,{presets:['babel-preset-expo']});console.log('Parsed',path)}"
+      - name: Generate Expo web preview bundle
+        env:
+          EXPO_NO_TELEMETRY: '1'
+        run: npx expo export --platform web --output-dir dist
