@@ -1,434 +1,194 @@
-# S&S Budget
+<div align="center">
+  <img src="brand/svg/duo-logo-horizontal-dark.svg" alt="Duo Budget — nuage et cœur" width="420" />
 
-**S&S Budget** est une application mobile de gestion budgétaire pensée pour un couple ou un foyer. Elle permet de suivre les versements, les dépenses, les caisses budgétaires et les soldes mensuels depuis plusieurs téléphones, avec une synchronisation privée via un serveur personnel.
+  <h3>Le budget à deux, en toute simplicité.</h3>
 
-Le projet est conçu pour rester simple, autonome et peu coûteux : l'application fonctionne avec **Expo / React Native** côté mobile, une API **Node.js / Express** côté serveur, et une base **SQLite** locale. L'ensemble peut être hébergé sur un vieux PC Linux, sans abonnement cloud obligatoire.
+  <p>Une application mobile de gestion du budget partagé : enveloppes, dépenses, versements, prévisions et projets à construire ensemble.</p>
 
----
-
-## Objectif du projet
-
-S&S Budget vise à offrir un outil clair pour gérer un budget commun :
-
-- suivre les dépenses du foyer ;
-- organiser l'argent par caisses budgétaires ;
-- enregistrer les versements de chaque personne ;
-- visualiser les soldes par mois ;
-- conserver les reports non dépensés d'un mois sur l'autre ;
-- synchroniser les données entre plusieurs téléphones ;
-- garder la maîtrise des données grâce à un serveur privé.
-
-L'application peut être utilisée dans un couple, mais le principe est extensible à tout petit foyer ou binôme qui souhaite gérer des enveloppes budgétaires communes.
+  <p>
+    <a href="https://www.figma.com/design/ejg17Px9X7tsMsTAvVwwiT/">🎨 Figma V3.0.7</a> ·
+    <a href="https://github.com/Steve-Landry-NONO/S-S-Budget/pull/3">🛠️ PR #3 — Duo Glance</a> ·
+    <a href="docs/ROADMAP_DUO_BUDGET_2026_2027.md">🗓️ Roadmap</a>
+  </p>
+</div>
 
 ---
 
-## Version actuelle
+> [!IMPORTANT]
+> **Duo Budget est en développement.** La maquette Figma **V3.0.7 Premium Duo Alive** est notre référence graphique gelée, **pas une application terminée**. La branche \`main\` conserve l'application historique fonctionnelle S&S Budget V2 et comprend désormais le kit de marque (#1) et les premières fondations UI (#2). **Duo Glance est codé dans la PR #3, encore en brouillon et non fusionnée.** Les images ci-dessous sont des **captures de Figma**, et non des captures de l'application compilée. Ne pas saisir de véritables informations financières dans une démo publique.
 
-Version fonctionnelle actuelle : **V2.2.3**
+## Aperçu de l'expérience Duo Budget
 
-Principales capacités déjà intégrées :
+<table>
+  <tr><th>Duo Glance — accueil</th><th>Accueil — synthèse</th><th>Enveloppes — organisation</th><th>Mon duo — espace partagé</th></tr>
+  <tr>
+    <td align="center"><img src="docs/assets/figma-v3.0.7/duo-glance.png" width="220" alt="Maquette Figma Duo Glance : bulles de démonstration et entrée vers la connexion" /></td>
+    <td align="center"><img src="docs/assets/figma-v3.0.7/dashboard.png" width="220" alt="Maquette Figma de la synthèse financière Duo Budget" /></td>
+    <td align="center"><img src="docs/assets/figma-v3.0.7/envelopes.png" width="220" alt="Maquette Figma des enveloppes budgétaires" /></td>
+    <td align="center"><img src="docs/assets/figma-v3.0.7/mon-duo.png" width="220" alt="Maquette Figma du profil Mon duo" /></td>
+  </tr>
+</table>
 
-- application mobile Expo / React Native ;
-- serveur self-hosted Node.js / Express ;
-- base SQLite locale ;
-- synchronisation via réseau local ou Tailscale ;
-- gestion des membres ;
-- gestion des caisses budgétaires ;
-- dépenses et versements ;
-- versements automatiques ;
-- navigation mensuelle ;
-- dates intelligentes ;
-- rôles et actions sensibles ;
-- actions prévues ;
-- solde réel et solde prévisionnel ;
-- reports mensuels automatiques par caisse ;
-- migrations SQLite robustes.
+*Visuels exportés du fichier Figma validé V3.0.7. Captures de référence, potentiellement différentes des builds mobiles à venir. Les montants affichés sont des données fictives de présentation.*
 
----
+**Direction visuelle :** bleu nuit \`#0F1C2E\`, bleu signature \`#5775E8\`, vert positif \`#2BAA89\`, ambre \`#E9A14E\`, fond \`#F7F8FA\`. Le **nuage + cœur** est notre marque officielle. Typographie et contrastes suivent les règles définies dans Figma V3.0.7.
 
-## Philosophie produit
+- [Design system et écrans Figma](https://www.figma.com/design/ejg17Px9X7tsMsTAvVwwiT/)
+- [Motion Lab — 11 concepts expérimentaux](https://www.figma.com/design/ejg17Px9X7tsMsTAvVwwiT/?node-id=111-62) — **non intégrés aux écrans définitifs**
+- [Responsive QA](https://www.figma.com/design/ejg17Px9X7tsMsTAvVwwiT/?node-id=146-62) — variantes 360 / 390 / 430 px
 
-S&S Budget repose sur trois idées simples :
+## État réel du développement
 
-1. **Un budget doit être lisible.**  
-   Les informations importantes doivent être compréhensibles rapidement : budget prévu, montant versé, montant dépensé, reste disponible.
+| Partie | Statut vérifiable | Suite |
+| --- | --- | --- |
+| Application historique V2 (Expo + API personnelle) | **Présente sur \`main\`** : fonctionnalités de budget et authentification PIN | Préserver et couvrir par des tests avant migration |
+| Identité Duo Budget, logo et ressources SVG | **PR #1 fusionnée** dans \`main\` | Exporter les assets natifs PNG et vérifier leur rendu sur appareil |
+| Tokens Premium Duo, \`BalanceCard\`, \`PremiumButton\` | **PR #2 fusionnée** dans \`main\` | Intégrer aux écrans à partir de données métier réelles |
+| Duo Glance pré-authentification | **PR #3 en brouillon**, non fusionnée | Recette iOS/Android, PIN et accessibilité |
+| CI — garde-fous, Babel JSX et export Expo Web | **Validée par GitHub Actions sur PR #3** | Étendre aux tests unitaires, natifs et de régression |
+| Navigation finale et nouveaux écrans | **À développer** | 4 onglets Accueil / Enveloppes / Activité / Mon duo |
+| Animations Motion Lab | **Maquettes seulement** | Implémentation progressive après validation mobile |
+| Compte multi-duo grand public | **Non livré** | Architecture, isolation des données, authentification et sécurité à concevoir |
 
-2. **Les données doivent rester privées.**  
-   L'application privilégie un serveur personnel accessible via Tailscale ou réseau local, sans exposition publique obligatoire.
+L'historique du dépôt et certains noms de paquets conservent **S&S Budget** par souci de compatibilité. L'identité produit cible est **Duo Budget**. La version technique de \`app.json\` ne représente pas à elle seule la maturité de l'interface V3.
 
-3. **Les rôles ne doivent pas être genrés.**  
-   L'application peut avoir une personne administratrice et une personne membre, mais ces rôles sont fonctionnels, pas liés au fait d'être Monsieur ou Madame. Dans un foyer, Madame peut tout autant être administratrice que Monsieur. L'implémentation par défaut peut choisir un ordre pratique, mais le modèle produit reste neutre et adaptable.
+### Fonctionnalités présentes dans l'héritage V2
 
----
+- Gestion des membres, rôles fonctionnels et connexion PIN.
+- Enveloppes (« caisses » historiques), budgets, versements et dépenses.
+- Dépenses / versements prévus, historiques et suivi des membres.
+- Soldes **réels** distincts des **prévisionnels**, reports mensuels par enveloppe.
+- Journal d'activité, modifications récentes contrôlées et exports/sauvegardes côté serveur selon les droits.
+- Synchronisation privée via API Node.js/Express + SQLite, accessible sur réseau local / Tailscale.
 
-## Architecture générale
+**Règle financière incontournable :** le solde réel ne doit jamais être calculé depuis un objectif budgétaire ; une opération future ne doit pas influencer les montants réalisés. Les calculs V2 restent la référence jusqu'à extraction de sélecteurs testés.
 
-```text
-Téléphone personne A ─┐
-                      ├── App Expo / React Native ── API Node.js ── SQLite
-Téléphone personne B ─┘                         serveur personnel Linux
-```
+## Architecture actuelle
 
-Pour un usage privé, le scénario recommandé est :
+\`\`\`text
+  Mobile Expo / React Native (SDK 54)
+  ├── App.js                        Application historique V2
+  ├── src/theme/tokens.js           Tokens Premium Duo ✅
+  ├── src/components/              BalanceCard, PremiumButton ✅
+  └── src/features/glance/          Duo Glance (PR #3 uniquement)
+                  |
+                  | Session PIN / API privée
+                  v
+  Node.js / Express ─── SQLite locale
+       Serveur personnel (LAN / Tailscale)
+\`\`\`
 
-```text
-Téléphones + serveur personnel connectés au même réseau Tailscale
-```
+**Pas de connexion bancaire ni de service bancaire réglementé** : Duo Budget est un outil d'organisation budgétaire. L'infrastructure de la bêta grand public devra prendre en charge de nombreux duos isolés les uns des autres ; l'architecture SQLite auto-hébergée n'est **pas** encore cette infrastructure.
 
-L'API n'a donc pas besoin d'être ouverte publiquement sur Internet.
+### Repères du dépôt
 
----
+| Chemin | Usage |
+| --- | --- |
+| \`App.js\` | Interface V2 et connexion aux fonctionnalités existantes |
+| \`src/theme/tokens.js\` | Couleurs et styles sémantiques |
+| \`src/components/\` | Composants UI préparatoires |
+| \`src/features/glance/\` | Premier écran V3, présent sur la branche PR #3 |
+| \`brand/svg/\` | Sources officielles du logo, des icônes et du splash |
+| \`server/\` | API privée, données et migrations SQLite |
+| \`docs/ROADMAP_DUO_BUDGET_2026_2027.md\` | Planning et critères de réception |
+| \`docs/V3_0_7_DEV_LOT_01.md\` | Recette détaillée du premier lot |
+| \`.github/workflows/duo-budget-ci.yml\` | CI introduite avec la PR #3 |
 
-## Contenu du projet
+## Démarrer en développement
 
-```text
-.
-├── App.js                  # Application mobile Expo / React Native
-├── app.json                # Configuration Expo
-├── package.json            # Dépendances frontend
-├── babel.config.js
-├── assets/                 # Icônes et ressources visuelles
-└── server/
-    ├── package.json        # Dépendances backend
-    ├── schema.sql          # Structure SQLite + données initiales
-    ├── .env.example        # Exemple de configuration serveur
-    └── src/
-        ├── db.js           # Connexion DB + migrations robustes
-        ├── initDb.js       # Initialisation de la base
-        └── index.js        # API Express
-```
+Prérequis : **Node.js** et **npm**, Git, téléphone Android/iOS avec Expo Go compatible ou simulateur. L'application actuelle utilise **Expo SDK 54**. Le serveur n'est pas nécessaire pour voir la démonstration fictive de Duo Glance, mais il l'est pour se connecter et retrouver les opérations réelles de la V2.
 
----
+\`\`\`bash
+git clone https://github.com/Steve-Landry-NONO/S-S-Budget.git
+cd S-S-Budget
 
-## Fonctionnalités principales
+# Branch du premier écran V3 (non fusionnée dans main)
+git switch feature/duo-budget-v3-glance-first-screen
 
-### Synthèse mensuelle
+npm install
+node scripts/check-glance.js
+npx expo start -c
+\`\`\`
 
-La vue de synthèse affiche :
+Scanne le QR code avec Expo Go si la version installée est compatible. Sinon, utiliser un simulateur ou préparer un **build EAS Preview** ; l'APK Android sera traité dans un lot ultérieur, il n'est **pas encore distribué**.
 
-- budget prévu du mois ;
-- report précédent ;
-- total versé ;
-- total dépensé ;
-- solde compte réel ;
-- solde prévisionnel lorsque des actions prévues existent ;
-- état par membre ;
-- état par caisse.
+Pour un premier contrôle web :
 
-### Caisses budgétaires
+\`\`\`bash
+npx expo export --platform web --output-dir dist
+\`\`\`
 
-Les caisses représentent les enveloppes du budget commun, par exemple :
+Pour les vérifications de dépendances :
 
-- week-ends ;
-- semaines d'école ou de travail ;
-- vacances ;
-- cadeaux ;
-- épargne ;
-- toute autre catégorie personnalisée.
+\`\`\`bash
+npx expo-doctor
+\`\`\`
 
-Chaque caisse peut avoir :
+La CI GitHub sur la PR #3 vérifie la confidentialité statique de Duo Glance, la transformation Babel de l'interface et l'export web Expo. **Elle ne remplace pas** les tests de connexion PIN ni les essais sur appareil Android/iOS.
 
-- un budget mensuel ;
-- des dépenses associées ;
-- un report précédent ;
-- un disponible réel ;
-- un disponible prévisionnel.
+### Serveur historique, mode privé
 
-### Reports mensuels automatiques
-
-Depuis la V2.2.3, l'argent non utilisé n'est plus perdu visuellement au changement de mois.
-
-Exemple :
-
-```text
-Juin
-Budget : 360 €
-Versé : 360 €
-Dépensé : 0 €
-Solde fin juin : 360 €
-
-Juillet
-Report précédent : 360 €
-Versements juillet : 40 €
-Dépenses juillet : 53,14 €
-Solde réel : 346,86 €
-```
-
-Le report est aussi conservé par caisse : chaque enveloppe garde son propre reste disponible.
-
-### Actions prévues
-
-Une dépense ou un versement peut être enregistré à une date future du mois sélectionné.
-
-Dans ce cas :
-
-- l'action est marquée comme **Prévue** ;
-- elle n'impacte pas le solde réel ;
-- elle impacte le solde prévisionnel ;
-- elle permet d'anticiper la situation du compte.
-
-### Rôles et sécurité
-
-L'application distingue deux types de rôles :
-
-```text
-admin  : personne autorisée à gérer les actions sensibles
-member : personne autorisée à utiliser l'application au quotidien
-```
-
-Les rôles ne sont pas liés au genre ou à la place dans le couple. Le rôle admin peut être attribué à Monsieur ou Madame selon l'organisation du foyer.
-
-Règles actuelles :
-
-- les actions sensibles sont limitées ;
-- la réinitialisation dangereuse n'est pas exposée dans l'interface courante ;
-- les suppressions sont encadrées ;
-- les anciennes actions sont protégées ;
-- le serveur prépare les permissions côté API.
-
----
-
-## Installation du serveur
-
-### Prérequis recommandés
-
-- Linux ou machine équivalente ;
-- Node.js 20 ou version récente ;
-- npm ;
-- SQLite ;
-- Git.
-
-Sur une machine Linux récente, il est recommandé d'utiliser Node.js 20 plutôt que la version parfois ancienne fournie par défaut par certaines distributions.
-
-### Installation rapide
-
-```bash
-git clone git@github.com:Steve-Landry-NONO/S-S-Budget.git
-cd S-S-Budget/server
+\`\`\`bash
+cd server
 cp .env.example .env
 npm install
 npm run init-db
 npm run dev
-```
+\`\`\`
 
-Le serveur démarre par défaut sur :
+Tester en local : \`curl http://localhost:3001/api/health\`. Les téléphones doivent pouvoir joindre l'API sur le même réseau privé ou via Tailscale. **Ne pas exposer sans audit le port serveur sur Internet** ; protéger \`server/.env\`, la base SQLite et toutes les sauvegardes. Toute migration de données doit être sauvegardée et testée avant déploiement.
 
-```text
-http://0.0.0.0:3001
-```
+## Plan de développement — sprints de deux semaines
 
-Test local :
+| Sprint | Fenêtre indicative | Objectif | Livrable / garde-fou |
+| --- | --- | --- | --- |
+| **S0 — Fondations** | 5–11 nov. 2026 | GitHub, CI, Duo Glance, alignement des branches | PR #3 testée sur appareils, PIN préservé |
+| **S1 — Navigation** | 12–25 nov. | 4 onglets, thème, safe areas | Parcours accessibles sur 360 / 390 / 430 px |
+| **S2 — Dashboard** | 26 nov.–9 déc. | Soldes réalisés/prévisionnels, report, activité rapide | Parité chiffrée avec V2 |
+| **S3 — Enveloppes** | 10–23 déc. | Liste, détail, dépense, versement | Rôles et calculs vérifiés |
+| **S4 — Opérations** | 24 déc.–6 janv. 2027 | Transferts, opérations prévues, historique | Scénarios d'intégrité et confirmations |
+| **S5 — Mon duo** | 7–20 janv. | Profil, invitations pilotes, permissions | Sessions et droits côté API |
+| **S6 — Motion & a11y** | 21 janv.–3 fév. | Gestes retenus, reduced motion, VoiceOver/TalkBack | Pas de régression UX |
+| **S7 — Bêta privée** | 4–17 fév. | EAS preview, tests et corrections P0/P1 | Recette sur plusieurs téléphones |
+| **S8+ — Bêta publique** | Dès fin fév., cible modulable | Auth/cloud multi-duo, sécurité, monitoring, stores | Audit et validations avant diffusion |
 
-```bash
-curl http://localhost:3001/api/health
-```
+Ces échéances sont **indicatives**. Le rythme sera ajusté selon la qualité des builds, les validations et les éventuelles contraintes des stores. La bêta publique peut s'étendre jusqu'au printemps 2027.
 
----
+➡️ [Feuille de route détaillée et règles de validation](docs/ROADMAP_DUO_BUDGET_2026_2027.md)
 
-## Configuration Tailscale recommandée
+## Méthode de pilotage
 
-Tailscale permet de connecter les téléphones et le serveur dans un réseau privé sécurisé, sans ouvrir le serveur sur Internet.
+- **Design Freeze :** aucun changement du fichier Figma V3.0.7 sans décision explicite.
+- **Une tâche → une branche → une PR :** pas de fusion directe sur \`main\`.
+- **Définition de terminé :** code, preuve de test, capture ou build quand pertinent, contrôle sécurité, puis validation.
+- **Livraison quotidienne :** le suivi programmé consulte le dépôt et rapporte les changements réels, blocages, tests et décisions requises ; il ne doit jamais annoncer du code inexistant.
+- **Revue à chaque sprint :** démo mobile, traitement des anomalies bloquantes et décision go/no-go.
+- **Données sensibles :** aucune donnée financière de production dans Figma, les tests publics ou les captures ; toutes les démos publiques sont fictives.
+- **CI :** obligatoire avant une fusion touchant la logique d'application ; les tests sur Android et iOS restent distincts de l'export web.
 
-Sur le serveur personnel :
+## Tests et livraison Android (à venir)
 
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-tailscale ip -4
-```
+**Étape suivante après ce README :** préparer une version Duo Budget installable sur Android **via EAS Build (APK de test)**, sans renoncer à **Expo Go** pour les boucles rapides. Les deux modes répondent à des besoins différents :
 
-Tailscale retourne une IP privée du type :
+- **Expo Go :** développement et vérification rapide depuis le QR code, avec des limites pour certains modules natifs.
+- **APK Preview :** installation autonome, tests de gestes et de navigation, recueil de feedback sur appareil.
+- **iOS :** distribution de test à organiser séparément (TestFlight / signature Apple).
+- **Avant diffusion :** valider le SDK, les identifiants Android, le contenu des assets, les secrets EAS, le PIN et le comportement hors-ligne.
 
-```text
-100.xx.yy.zz
-```
+**Aucune APK de test n'est annoncée comme disponible à ce stade.**
 
-Dans l'application mobile :
+## Historique et suivi
 
-```text
-Config → URL API maison → http://100.xx.yy.zz:3001
-```
+- **V2 (S&S Budget)** : application historique self-hosted avec budgets, prévisions, reports, journal et PIN ; le dernier commit de \`main\` avant la migration V3 était « Version 2.8 — Authentification par PIN et verrouillage des profils ».
+- **V3.0.7 (Figma)** : design et responsive gelés, Motion Lab séparé.
+- **PR #1** : kit de marque vectoriel — fusionné dans \`main\`.
+- **PR #2** : tokens et composants UI — fusionnés dans \`main\`.
+- **PR #3** : Duo Glance, entrée de connexion et CI — **en brouillon** ; vérifications web en CI réussies, recette mobile restant à faire.
 
-Chaque téléphone doit utiliser la même URL API pour se synchroniser avec le même serveur.
-
----
-
-## Lancer l'application mobile en développement
-
-À la racine du projet :
-
-```bash
-npm install
-npx expo start -c
-```
-
-Avec Expo Go, scanner le QR code depuis le téléphone.
-
-Si l'application doit passer par l'IP Tailscale du serveur ou du poste de développement :
-
-```bash
-REACT_NATIVE_PACKAGER_HOSTNAME=100.xx.yy.zz npx expo start --lan -c
-```
+[Comparer les pull requests](https://github.com/Steve-Landry-NONO/S-S-Budget/pulls) · [Consulter la PR #3](https://github.com/Steve-Landry-NONO/S-S-Budget/pull/3)
 
 ---
 
-## API principale
-
-### Santé du serveur
-
-```http
-GET /api/health
-```
-
-### État complet synchronisé
-
-```http
-GET /api/state
-```
-
-### Membres
-
-```http
-POST /api/members
-PUT /api/members/:id
-DELETE /api/members/:id
-```
-
-### Caisses
-
-```http
-POST /api/categories
-PUT /api/categories/:id
-DELETE /api/categories/:id
-```
-
-### Dépenses
-
-```http
-POST /api/expenses
-DELETE /api/expenses/:id
-```
-
-### Versements
-
-```http
-POST /api/contributions
-DELETE /api/contributions/:id
-POST /api/auto-contributions
-```
-
-Les routes sensibles doivent rester protégées par le secret API et les règles de rôle.
-
----
-
-## Sécurité
-
-Le fichier `server/.env` permet de définir un secret partagé :
-
-```text
-APP_SECRET=une-phrase-longue-et-privee
-```
-
-Lorsque `APP_SECRET` est défini, l'application doit envoyer ce secret dans l'en-tête :
-
-```text
-x-ss-budget-secret
-```
-
-Recommandations :
-
-- ne pas exposer le port `3001` publiquement ;
-- privilégier Tailscale ou un réseau local privé ;
-- définir un `APP_SECRET` robuste ;
-- ne pas versionner `server/.env` ;
-- sauvegarder régulièrement la base SQLite ;
-- limiter les actions sensibles au rôle admin.
-
----
-
-## Base de données
-
-La base SQLite est stockée dans :
-
-```text
-server/data/ss-budget.sqlite
-```
-
-Ce fichier contient les données réelles de l'application. Il ne doit pas être supprimé sans sauvegarde.
-
-Les migrations robustes ajoutent automatiquement les colonnes nécessaires lorsque l'application évolue, par exemple :
-
-- rôle des membres ;
-- créateur d'une action ;
-- statut réalisé / prévu ;
-- autres champs nécessaires aux futures versions.
-
----
-
-## Sauvegarde simple
-
-Sauvegarde manuelle de la base :
-
-```bash
-cp server/data/ss-budget.sqlite ~/backup-ss-budget-$(date +%F).sqlite
-```
-
-La prochaine étape produit prévue est d'ajouter une vraie fonctionnalité d'export et de restauration.
-
----
-
-## Historique des versions
-
-| Version | Contenu principal |
-|---|---|
-| V1.0 | Première version mobile de S&S Budget |
-| V1.1 | Application rendue plus générique et modulable |
-| V1.1.1 | Amélioration de la lisibilité de la navigation |
-| V1.1.2 | Corrections sur dates, versements et caisses |
-| V2.0 | Mode self-hosted avec serveur maison |
-| V2.1 | Dates intelligentes et navigation mensuelle améliorée |
-| V2.2 | Sécurité, rôles et actions sensibles |
-| V2.2.1 | Actions prévues et solde prévisionnel |
-| V2.2.2 | Migrations SQLite robustes |
-| V2.2.3 | Reports mensuels automatiques par caisse |
-
----
-
-## Roadmap
-
-### V2.3 — Sauvegarde, export et restauration
-
-- export JSON complet ;
-- export CSV des dépenses et versements ;
-- sauvegardes automatiques ;
-- restauration manuelle sécurisée ;
-- bouton admin d'export.
-
-### V2.4 — Journal d'activité
-
-- historique des actions ;
-- création, suppression, modification ;
-- membre à l'origine de l'action ;
-- horodatage ;
-- meilleure traçabilité.
-
-### V2.5 — Modification des dépenses et versements
-
-- modifier une dépense récente ;
-- modifier un versement récent ;
-- corriger une erreur de montant ou de caisse ;
-- verrouiller les anciennes actions.
-
-### V2.6 — Logo, splash screen et finition visuelle
-
-- logo personnalisé ;
-- écran de lancement ;
-- icônes propres ;
-- meilleure cohérence visuelle ;
-- préparation éventuelle à une PWA installable.
-
----
-
-## Licence
-
-MIT
+<div align="center">
+  <sub>Duo Budget · Premium Duo Alive · Développé progressivement avec validation produit et contrôle qualité.</sub>
+</div>

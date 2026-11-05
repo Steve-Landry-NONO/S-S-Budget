@@ -12,6 +12,7 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -172,6 +173,7 @@ const initialState = {
 };
 
 export default function App() {
+  const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
   const [currentUserId, setCurrentUserId] = useState('steve');
@@ -812,9 +814,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       <StatusBar style="light" />
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>S&S Budget</Text>
+          <Text style={styles.title}>Duo Budget</Text>
           <Text style={styles.subtitle}>Connexion sécurisée</Text>
         </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retour à l'aperçu" onPress={() => setShowGlance(true)} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>← Aperçu</Text>
+        </TouchableOpacity>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {!apiUrl ? (
@@ -885,7 +890,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   if (!isSessionValid()) {
     return (
       <SafeAreaProvider>
-        {renderAuthGate()}
+        {showGlance ? (
+          <DuoGlanceScreen
+            onSignIn={() => setShowGlance(false)}
+            onCreateAccount={() => setShowGlance(false)}
+          />
+        ) : renderAuthGate()}
       </SafeAreaProvider>
     );
   }
