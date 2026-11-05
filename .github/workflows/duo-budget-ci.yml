@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/v3-premium-duo-foundations
+      - feature/duo-budget-v3-glance-first-screen
   push:
     branches:
       - feature/duo-budget-v3-glance-first-screen
