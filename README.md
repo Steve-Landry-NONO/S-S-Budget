@@ -166,7 +166,13 @@ Ces échéances sont **indicatives**. Le rythme sera ajusté selon la qualité d
 - **Données sensibles :** aucune donnée financière de production dans Figma, les tests publics ou les captures ; toutes les démos publiques sont fictives.
 - **CI :** obligatoire avant une fusion touchant la logique d'application ; les tests sur Android et iOS restent distincts de l'export web.
 
-## Tests et livraison Android (à venir)
+## Tests et livraison Android (en préparation)
+
+> **APK interne : configuration EAS Preview préparée dans la branche Android, mais aucune APK compilée ou publiée pour l'instant.** L'identité Android Preview `com.ss.budgetcouple.preview` évite de remplacer l'application historique.
+
+**Procédure détaillée :** [Build Android Preview / APK](docs/ANDROID_PREVIEW_BUILD.md).
+
+
 
 **Étape suivante après ce README :** préparer une version Duo Budget installable sur Android **via EAS Build (APK de test)**, sans renoncer à **Expo Go** pour les boucles rapides. Les deux modes répondent à des besoins différents :
 
@@ -175,7 +181,7 @@ Ces échéances sont **indicatives**. Le rythme sera ajusté selon la qualité d
 - **iOS :** distribution de test à organiser séparément (TestFlight / signature Apple).
 - **Avant diffusion :** valider le SDK, les identifiants Android, le contenu des assets, les secrets EAS, le PIN et le comportement hors-ligne.
 
-**Aucune APK de test n'est annoncée comme disponible à ce stade.**
+**La configuration `eas.json` et les contrôles Android sont prêts sur la branche Preview.** Le build reste à lancer depuis un compte Expo connecté ; aucun APK ni lien de téléchargement n'existe encore.
 
 ## Historique et suivi
 

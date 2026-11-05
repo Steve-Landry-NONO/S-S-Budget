@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/v3-premium-duo-foundations
+      - feature/duo-budget-v3-glance-first-screen
   push:
     branches:
       - feature/duo-budget-v3-glance-first-screen
@@ -33,8 +34,13 @@ jobs:
         run: npm install --no-package-lock --no-audit --no-fund
       - name: Validate Duo Glance privacy and integration boundaries
         run: node scripts/check-glance.js
-      - name: Check JavaScript syntax in test script
-        run: node --check scripts/check-glance.js
+      - name: Verify Android Preview profile and identifier isolation
+        run: node scripts/check-android-preview.js
+      - name: Check JavaScript syntax in regression scripts
+        run: |
+          node --check scripts/check-glance.js
+          node --check scripts/check-android-preview.js
+          node --check app.config.js
       - name: Parse Expo entry and Duo Glance JSX
         run: |
           node -e "const babel=require('@babel/core');for(const path of ['App.js','src/features/glance/DuoGlanceScreen.js']) {babel.transformFileSync(path,{presets:['babel-preset-expo']});console.log('Parsed',path)}"
