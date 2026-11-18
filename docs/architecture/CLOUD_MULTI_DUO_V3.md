@@ -134,3 +134,33 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Scénarios d'acceptation :** duo EUR avec deux décimales; duo XAF avec montants entiers; duo USD indépendant; saisie XAF fractionnaire rejetée; opération d'une devise différente rejetée; changement de devise avec historique refusé; soldes et exports cohérents dans la devise du duo; aucun mélange de devises entre duos.
 
 **État technique :** décision documentée, sans modification du SQL, des calculs ou de l'interface. Choix exact des devises disponibles, formatage localisé et politique de changement de devise à finaliser.
+
+
+## 13. Décision produit D-006 — Archivage ou suppression encadrée (validée le 18/11/2026)
+
+**Choix produit :** à la fin d'un duo, les membres peuvent choisir entre **archiver l'espace** et **engager une suppression encadrée**. Ce sont deux workflows distincts, pas une suppression immédiate par simple bouton.
+
+### Archivage
+
+- Passage du duo dans un état clôturé/archivé, avec interdiction de nouvelles opérations financières et de modifications de l'historique.
+- Consultation et export de l'historique commun selon des permissions explicites, sans accès à d'autres duos; modalités et durée d'accès à valider.
+- Prévoir journal d'audit de l'archivage et traitement des invitations en attente (révocation).
+- La possibilité de réactivation, les droits après départ d'un partenaire et la durée de conservation restent à arbitrer.
+
+### Suppression encadrée
+
+- Demande authentifiée et traçable; confirmation renforcée et information des partenaires selon les règles à définir. Prévoir export préalable et, si approprié, délai de rétractation.
+- Une demande unilatérale ne déclenche **pas** immédiatement la destruction irréversible des données communes. En cas de désaccord, d'absence de réponse ou de risque d'abus, prévoir un mécanisme de résolution distinct.
+- Distinguer suppression de l'espace partagé, départ volontaire d'un membre et exercice des droits individuels sur les données personnelles. Les règles de conservation et d'effacement doivent respecter les obligations légales applicables, à vérifier avant lancement.
+- Après effacement définitif, empêcher toute restauration non autorisée; définir la politique de sauvegardes et leur expiration.
+
+### Conséquences techniques proposées (non implémentées)
+
+- États métier candidats : `active`, `archived`, `deletion_pending`, `deleted` (ce dernier pouvant correspondre à l'absence physique des données).
+- Contrôler les transitions côté serveur/base et verrouiller les écritures financières dès archivage ou demande de suppression selon la politique retenue.
+- Journaliser les demandes, confirmations, annulations et opérations d'export sans inclure de secrets ni de données excessives.
+- Ne pas confondre suppression du duo et suppression du compte Auth : un compte peut exister indépendamment d'un espace partagé.
+
+**Tests à prévoir :** opérations refusées après archivage; export autorisé uniquement aux ayants droit; troisième membre toujours interdit; suppression directe par un seul membre refusée; demande de suppression concurrente et révocation d'invitations; respect des délais et des droits individuels; impossibilité de consulter les données définitivement supprimées.
+
+**État technique :** décision produit documentée; aucun workflow d'archivage, d'export ou de suppression implémenté. Délais, confirmations exactes et conservation restent à décider.
