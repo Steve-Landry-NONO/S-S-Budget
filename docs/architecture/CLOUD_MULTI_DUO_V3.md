@@ -8,7 +8,7 @@ Le backend V2 est une API Express/SQLite (`server/src/index.js`, `server/src/db.
 
 ## 2. Objectif et frontières
 
-- Application iOS/Android Expo, authentification cloud, espaces `duos` isolés, deux membres maximum **pour le MVP** (à confirmer produit).
+- Application iOS/Android Expo, authentification cloud, espaces `duos` isolés, deux membres maximum **pour le MVP — décision validée le 18/11/2026**.
 - PostgreSQL comme source de vérité, Auth Supabase comme candidat d'identité, politiques RLS côté base, HTTPS et permissions côté API/RPC.
 - Le poste Ubuntu et Codespaces servent au développement, jamais à l'hébergement permanent.
 - Pas de synchronisation de données financières réelles, pas de secrets dans Git ni dans l'app.
@@ -55,7 +55,7 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 
 ## 7. Plan de livraison proposé
 
-1. Valider les décisions produit : duo limité à deux personnes, invitation, devise, rôles, suppression, partage des opérations.
+1. Valider les décisions produit restantes : invitation, devise, rôles, suppression, partage des opérations. La limite de deux membres par duo est déjà validée.
 2. Auditer les fonctions V2 dans `server/src/index.js` (calculs, autorisations, exports, sauvegardes) et créer des tests de référence.
 3. Mettre en place un environnement PostgreSQL **de développement** séparé, avec migrations versionnées.
 4. Écrire et tester les politiques RLS et fonctions transactionnelles; vérifier la séparation de deux duos fictifs.
@@ -63,3 +63,17 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 6. Effectuer audit sécurité, sauvegardes, restauration et conformité avant bêta.
 
 **Non fait :** projet Supabase, base cloud, authentification V3, RLS exécutée, migrations et tests d'intégration.
+
+## 8. Décision produit D-001 — Deux membres maximum (validée le 18/11/2026)
+
+- Un espace budgétaire `duo` peut accueillir **au maximum deux comptes utilisateurs distincts**; un même utilisateur ne peut pas occuper deux sièges du même duo.
+- Les deux membres ont une identité Auth indépendante. Les dépenses et contributions sont rattachées au duo, pas à un ordinateur ni à une installation locale.
+- Le premier membre est provisoirement désigné `owner`; les pouvoirs exacts de ce rôle, les invitations, les départs et la reprise de propriété restent à valider.
+- Le quota doit être imposé **dans une transaction côté base/serveur**, y compris lors d'acceptations simultanées d'invitations. Un contrôle côté mobile ou un simple `COUNT(*)` sans verrouillage n'est pas suffisant.
+- Toute invitation doit être associée à un duo, avoir une expiration et un statut; l'acceptation doit être authentifiée et atomique. Le modèle d'invitations reste à concevoir.
+- Les comptes ne doivent pas pouvoir se donner eux-mêmes un rôle `owner` ni changer leur `duo_id` via une écriture directe.
+- La limite de deux personnes est une règle produit du MVP; une éventuelle évolution future nécessitera une nouvelle décision explicite.
+
+**Tests d'acceptation ajoutés :** création du premier membre autorisée; deuxième membre autorisé; troisième refusé; deux acceptations concurrentes pour le dernier siège ne peuvent pas produire trois membres; invitation expirée refusée; même utilisateur ne peut pas rejoindre deux fois le même duo; accès aux données révoqué après départ.
+
+**État technique :** cette décision est documentée, mais la contrainte transactionnelle et les invitations ne sont pas encore implémentées dans le brouillon SQL.
