@@ -164,3 +164,20 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests à prévoir :** opérations refusées après archivage; export autorisé uniquement aux ayants droit; troisième membre toujours interdit; suppression directe par un seul membre refusée; demande de suppression concurrente et révocation d'invitations; respect des délais et des droits individuels; impossibilité de consulter les données définitivement supprimées.
 
 **État technique :** décision produit documentée; aucun workflow d'archivage, d'export ou de suppression implémenté. Délais, confirmations exactes et conservation restent à décider.
+
+
+## 14. Décision produit D-007 — Dépenses communes et personnelles privées (validée le 18/11/2026)
+
+**Règle produit :** l'application distingue le budget commun, visible et gérable par les deux membres du duo, et le budget personnel privé de chaque utilisateur, accessible uniquement à son propriétaire. Le caractère privé est une contrainte de sécurité côté base/API, jamais un simple filtre d'interface.
+
+- **Commun :** enveloppes, dépenses, contributions et soldes partagés; visibilité pour les deux membres autorisés du duo.
+- **Personnel :** dépenses et enveloppes privées, avec propriétaire explicite (`owner_user_id`) et contrôles d'accès garantissant qu'aucun autre membre, même le créateur du duo, ne peut les lire ou modifier.
+- **Calculs :** une opération privée ne modifie jamais les soldes, objectifs, reports ou prévisions du budget commun. Les agrégats communs ne doivent pas révéler indirectement les dépenses privées.
+- **Surfaces de fuite à auditer :** historique et journal d'activité, notifications push/email, exports, recherche, statistiques, sauvegardes accessibles au client, erreurs API, temps réel et données en cache sur un appareil partagé.
+- **Architecture à arbitrer avant SQL :** préférer une séparation explicite entre ressources du duo et ressources personnelles de l'utilisateur (tables ou schémas distincts), plutôt qu'un simple booléen `is_private` sur les tables partagées. Les ressources personnelles doivent avoir une identité de propriétaire et une politique de conservation indépendantes du cycle de vie du duo.
+- **Transitions :** tout déplacement d'une dépense personnelle vers le commun ou inversement exige une action explicite et une vérification d'autorisation; ne jamais exposer rétroactivement des détails privés sans confirmation.
+- **Portée à préciser :** comptes/solde personnel, contributions depuis un budget personnel vers le duo, devise du budget personnel, export personnel, confidentialité des catégories et cas de changement de partenaire.
+
+**Tests à prévoir :** membre A lit ses dépenses privées; membre B reçoit zéro ligne et aucun total privé de A; B ne peut pas modifier les dépenses privées de A; A et B lisent les dépenses communes; les agrégats communs ne varient pas après dépense privée; les journaux, exports et notifications communs ne révèlent pas les détails privés; quitter ou supprimer le duo ne supprime pas automatiquement les données personnelles sans politique explicite.
+
+**État technique :** décision documentée uniquement. Le brouillon SQL actuel ne distingue pas encore correctement données personnelles et données communes; les tables, politiques RLS et calculs doivent être revus avant toute exécution.
