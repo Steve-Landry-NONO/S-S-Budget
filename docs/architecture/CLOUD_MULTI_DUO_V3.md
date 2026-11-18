@@ -22,7 +22,7 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 
 ## 4. Règles financières à préserver
 
-- Montants stockés en `numeric(18,2)` (devise unique EUR pour le MVP **à confirmer** ; si multi-devises, revoir précision et conversion).
+- Montants stockés en `numeric(18,2)` pour le modèle initial (précision de stockage à valider selon les devises autorisées). Une seule devise ISO 4217 est autorisée par duo pour le MVP, avec validation du nombre de décimales par devise et sans conversion automatique (décision D-005).
 - Solde réel calculé exclusivement à partir des opérations `done`; les `planned` ne modifient que le prévisionnel.
 - Objectifs budgétaires et contributions attendues ne sont jamais assimilés à de l'argent disponible.
 - Reports mensuels, verrouillage des enveloppes, dates de réalisation, transferts et corrections doivent être spécifiés et testés contre la V2 avant migration.
@@ -120,3 +120,17 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Non tranché :** suppression consensuelle ou délai d'opposition, règles de départ volontaire, traitement des données après séparation, transfert de propriété, export des données personnelles, possibilité de modification d'une opération créée par l'autre membre.
 
 **État technique :** décision documentée uniquement, aucune politique RLS ni workflow d'administration sensible implémenté.
+
+
+## 12. Décision produit D-005 — Une devise de référence par duo (validée le 18/11/2026)
+
+- À la création, chaque duo choisit **une devise ISO 4217** parmi les devises autorisées (notamment EUR, XAF et USD).
+- Toutes les enveloppes, dépenses, contributions, soldes, objectifs, reports et exports d'un duo sont exprimés dans **cette seule devise**. Aucune conversion de change automatique ni opération multidevise dans le MVP.
+- Les devises n'ont pas toutes la même précision : EUR et USD ont deux décimales, XAF n'a pas de décimales. Valider la précision par devise à l'entrée, au calcul et à l'affichage; éviter les calculs monétaires en flottants JavaScript.
+- Modèle candidat : `duos.currency_code char(3) not null` avec contrainte de valeurs autorisées, et table de métadonnées des devises (`code`, `minor_units`) ou référentiel équivalent. Le brouillon SQL doit encore être adapté.
+- Les montants ne sont jamais convertis silencieusement lors d'un changement de devise. Pour un duo avec historique, le changement doit être bloqué jusqu'à la définition d'un workflow explicite (conversion documentée, nouvel espace ou autre politique).
+- La devise ne doit pas être modifiable directement par un client en contournant les contrôles métier.
+
+**Scénarios d'acceptation :** duo EUR avec deux décimales; duo XAF avec montants entiers; duo USD indépendant; saisie XAF fractionnaire rejetée; opération d'une devise différente rejetée; changement de devise avec historique refusé; soldes et exports cohérents dans la devise du duo; aucun mélange de devises entre duos.
+
+**État technique :** décision documentée, sans modification du SQL, des calculs ou de l'interface. Choix exact des devises disponibles, formatage localisé et politique de changement de devise à finaliser.
