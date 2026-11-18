@@ -55,7 +55,7 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 
 ## 7. Plan de livraison proposé
 
-1. Valider les décisions produit restantes : invitation, devise, rôles, suppression, partage des opérations. La limite de deux membres par duo est déjà validée.
+1. Valider les décisions produit restantes : devise, rôles, suppression, partage des opérations, et paramètres de sécurité. La limite de deux membres, les invitations par lien/email et l'authentification email/mot de passe avec déverrouillage PIN/biométrie sont validées.
 2. Auditer les fonctions V2 dans `server/src/index.js` (calculs, autorisations, exports, sauvegardes) et créer des tests de référence.
 3. Mettre en place un environnement PostgreSQL **de développement** séparé, avec migrations versionnées.
 4. Écrire et tester les politiques RLS et fonctions transactionnelles; vérifier la séparation de deux duos fictifs.
@@ -91,3 +91,17 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Scénarios d'acceptation :** acceptation par lien et par email; création de compte avant acceptation; email ciblé différent refusé; lien expiré ou révoqué refusé; deuxième consommation refusée; acceptations concurrentes pour la dernière place : une seule réussit; un troisième membre n'accède jamais au duo.
 
 **État technique :** décision documentée seulement. Aucune table d'invitations, API d'envoi, service d'email ou mécanisme de jeton n'a encore été créé.
+
+
+## 10. Décision produit D-003 — Authentification et déverrouillage (validée le 18/11/2026)
+
+- **Connexion initiale** : compte individuel par email vérifié et mot de passe via un fournisseur d'identité cloud (Supabase Auth candidat, non encore configuré). Chaque partenaire utilise son propre compte, jamais des identifiants partagés.
+- **Déverrouillage quotidien** : PIN local propre à l'appareil **ou** biométrie du système (Face ID / Touch ID / équivalent Android), au choix de l'utilisateur. Le PIN de déverrouillage local n'est pas le PIN serveur historique de la V2.
+- **Séparation des responsabilités** : le déverrouillage local protège l'accès à l'interface et aux secrets de session stockés dans le stockage sécurisé du téléphone; il ne remplace jamais l'authentification ni l'autorisation backend. Après expiration ou révocation de session, demander une reconnexion complète.
+- **Sécurité attendue** : mots de passe jamais stockés par l'app; jetons et éléments sensibles dans un stockage sécurisé adapté à iOS/Android; aucune clé de service privilégiée dans Expo; limitation des tentatives PIN, délais croissants et réauthentification pour opérations sensibles. Ne pas promettre une protection absolue contre un appareil compromis.
+- **Récupération** : réinitialisation du mot de passe par email, invalidation des sessions selon les capacités du fournisseur, et procédure de réinitialisation du PIN local après réauthentification; pas de contournement par un PIN codé en dur.
+- **Décisions techniques à valider** : durée de verrouillage automatique, politique biométrie/PIN de secours, changement de téléphone, durée de session, récupération hors ligne, vérification d'email avant accès aux duos, et comportement en cas de biométrie modifiée.
+
+**Scénarios de recette** : email non vérifié; mauvais mot de passe; mot de passe réinitialisé; session expirée; PIN erroné répété; biométrie indisponible; téléphone perdu; changement d'appareil; membre révoqué du duo; fermeture et réouverture de l'app; absence de réseau.
+
+**État technique :** décision produit documentée, aucune intégration Auth V3, biométrie ou PIN local V3 encore implémentée.
