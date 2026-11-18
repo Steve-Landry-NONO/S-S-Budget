@@ -58,8 +58,8 @@ export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
     float.setValue(0);
     if (reduceMotion) return undefined;
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(float, { toValue: 1, duration: 2900, useNativeDriver: true }),
-      Animated.timing(float, { toValue: 0, duration: 2900, useNativeDriver: true }),
+      Animated.timing(float, { toValue: 1, duration: 2900, useNativeDriver: false }),
+      Animated.timing(float, { toValue: 0, duration: 2900, useNativeDriver: false }),
     ]));
     loop.start();
     return () => loop.stop();
