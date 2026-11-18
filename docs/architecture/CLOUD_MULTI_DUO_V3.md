@@ -181,3 +181,20 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests à prévoir :** membre A lit ses dépenses privées; membre B reçoit zéro ligne et aucun total privé de A; B ne peut pas modifier les dépenses privées de A; A et B lisent les dépenses communes; les agrégats communs ne varient pas après dépense privée; les journaux, exports et notifications communs ne révèlent pas les détails privés; quitter ou supprimer le duo ne supprime pas automatiquement les données personnelles sans politique explicite.
 
 **État technique :** décision documentée uniquement. Le brouillon SQL actuel ne distingue pas encore correctement données personnelles et données communes; les tables, politiques RLS et calculs doivent être revus avant toute exécution.
+
+
+## 15. Décision produit D-008 — Contributions flexibles par enveloppe (validée le 18/11/2026)
+
+**Règle produit :** chaque enveloppe commune utilise par défaut une répartition de contribution **50/50** entre les deux membres. Les partenaires peuvent choisir une répartition personnalisée **par enveloppe**, exprimée en pourcentages ou en montants attendus. La somme des parts attendues doit correspondre à l'objectif total de l'enveloppe.
+
+- Les parts attendues ne sont **pas** des versements réels : conserver séparément l'objectif, la contribution attendue de chaque partenaire et les versements réellement effectués.
+- Exemple : objectif de 400 EUR, répartition 60/40 => attentes 240 EUR et 160 EUR; un versement réel de 100 EUR ne satisfait que partiellement l'attente de 240 EUR.
+- Les calculs doivent respecter la devise du duo et ses unités mineures (XAF : pas de centimes), avec règles déterministes d'arrondi et attribution du reliquat; ne pas calculer les montants monétaires en flottants JavaScript.
+- Les modifications de répartition doivent être historisées et ne doivent pas réécrire rétroactivement les versements ou dépenses déjà réalisés.
+- Les deux membres ayant des droits financiers égaux peuvent proposer ou modifier une répartition dans les limites des règles métier; les modalités de confirmation mutuelle des modifications restent à préciser.
+- **Schéma à concevoir :** représentation versionnée des allocations par enveloppe et par membre, avec contraintes de somme, bornes, références au duo et prévention des modifications concurrentes; ne pas déduire les contributions attendues des seules contributions réalisées.
+- **Points encore ouverts :** période de calcul (mensuelle ou autre), montants fixes vs pourcentages en cas de changement d'objectif, confirmation d'un changement, gestion des arrondis, contribution d'un seul membre avant acceptation de l'invitation, éventuelles avances et remboursements.
+
+**Tests à prévoir :** 50/50 par défaut; 60/40 pour une enveloppe sans affecter les autres; 100/0 autorisé ou non selon décision ultérieure; sommes de parts égales à l'objectif; montants XAF entiers; versement partiel sans altérer l'objectif; changement de répartition sans réécriture de l'historique; conflits de mises à jour simultanées.
+
+**État technique :** décision documentée uniquement. Le schéma SQL actuel ne contient pas encore les allocations versionnées par enveloppe et membre, ni les contrôles transactionnels correspondants.
