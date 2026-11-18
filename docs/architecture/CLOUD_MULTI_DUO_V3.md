@@ -77,3 +77,17 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation ajoutés :** création du premier membre autorisée; deuxième membre autorisé; troisième refusé; deux acceptations concurrentes pour le dernier siège ne peuvent pas produire trois membres; invitation expirée refusée; même utilisateur ne peut pas rejoindre deux fois le même duo; accès aux données révoqué après départ.
 
 **État technique :** cette décision est documentée, mais la contrainte transactionnelle et les invitations ne sont pas encore implémentées dans le brouillon SQL.
+
+
+## 9. Décision produit D-002 — Deux méthodes d'invitation (validée le 18/11/2026)
+
+- **Lien sécurisé** : un membre autorisé génère un lien à transmettre via WhatsApp, SMS ou un autre canal. Le destinataire doit s'authentifier avant d'accepter.
+- **Email** : un membre autorisé renseigne l'adresse du partenaire; le système envoie une invitation nominative à cette adresse. À l'acceptation, l'identité email vérifiée doit correspondre au destinataire ciblé.
+- Les deux parcours convergent vers **un mécanisme commun d'invitation** : jeton aléatoire non prédictible, seul son condensat conservé côté serveur, durée de validité limitée, révocation, consommation unique et validation transactionnelle de la capacité du duo (maximum deux comptes).
+- Les invitations par lien sont des jetons porteurs : leur détenteur peut demander à rejoindre le duo, mais n'obtient jamais l'accès financier sans authentification, vérification du quota et acceptation explicite. Ne pas inscrire de données financières dans le lien.
+- Les invitations expirées, révoquées ou déjà utilisées sont refusées. Prévoir limitation de débit, absence de divulgation d'existence de comptes, journalisation sans jeton brut, et protection contre la réutilisation concurrente.
+- **Décisions d'implémentation restantes :** durée d'expiration (proposition 48 h), nombre d'invitations actives, éventuel contrôle d'adresse email pour les liens génériques, fournisseur d'email, deep links iOS/Android et règles d'annulation.
+
+**Scénarios d'acceptation :** acceptation par lien et par email; création de compte avant acceptation; email ciblé différent refusé; lien expiré ou révoqué refusé; deuxième consommation refusée; acceptations concurrentes pour la dernière place : une seule réussit; un troisième membre n'accède jamais au duo.
+
+**État technique :** décision documentée seulement. Aucune table d'invitations, API d'envoi, service d'email ou mécanisme de jeton n'a encore été créé.
