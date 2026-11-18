@@ -105,3 +105,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Scénarios de recette** : email non vérifié; mauvais mot de passe; mot de passe réinitialisé; session expirée; PIN erroné répété; biométrie indisponible; téléphone perdu; changement d'appareil; membre révoqué du duo; fermeture et réouverture de l'app; absence de réseau.
 
 **État technique :** décision produit documentée, aucune intégration Auth V3, biométrie ou PIN local V3 encore implémentée.
+
+
+## 11. Décision produit D-004 — Égalité financière et administration encadrée (validée le 18/11/2026)
+
+**Principe validé :** les deux partenaires disposent des mêmes permissions sur les fonctionnalités financières ordinaires (lecture des soldes et opérations, création et gestion des enveloppes, dépenses, versements et consultation du journal). Aucun membre ne peut modifier seul les règles d'accès pour s'octroyer des pouvoirs financiers supérieurs.
+
+**Actions sensibles à encadrer :** suppression du duo, retrait forcé d'un partenaire, transfert de propriété, modifications des permissions et restauration globale de données. Ces actions nécessitent une procédure spécifique avec authentification récente, journalisation et protections contre les abus; le consentement mutuel, les délais et les recours restent à définir.
+
+**Conséquence sur le schéma :** la colonne `role = owner/member` du brouillon SQL est un marqueur de responsabilité administrative provisoire, **pas** une hiérarchie de droits financiers. Les politiques RLS de lecture/écriture financière doivent vérifier l'appartenance au duo et les règles métier, sans privilège financier automatique pour `owner`. Aucun rôle `admin` codé en dur issu de la V2 ne doit être repris.
+
+**Tests à prévoir :** chaque partenaire peut créer une opération financière valide; un partenaire ne peut pas accéder à un autre duo; un membre ne peut pas s'attribuer des droits supplémentaires; une opération sensible sans autorisation renforcée est refusée; un départ ou une révocation invalide les accès financiers concernés.
+
+**Non tranché :** suppression consensuelle ou délai d'opposition, règles de départ volontaire, traitement des données après séparation, transfert de propriété, export des données personnelles, possibilité de modification d'une opération créée par l'autre membre.
+
+**État technique :** décision documentée uniquement, aucune politique RLS ni workflow d'administration sensible implémenté.
