@@ -347,3 +347,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** -500 EUR + 400 EUR => -100 EUR; maintien du négatif en début de période; aucune écriture de dépense supplémentaire; aucune consommation automatique de réserve; conservation des reports sur plusieurs périodes; alerte visible; calcul exact pour devises à zéro ou deux décimales.
 
 **État technique :** décision documentée uniquement; aucune migration, calcul automatisé, alerte ni test d'intégration implémenté.
+
+
+## 26. Décision produit D-019 — Modification des dépenses communes par les deux partenaires avec historique complet (validée le 19/11/2026)
+
+- Chaque membre actif du duo peut **modifier toute dépense commune**, même si elle a été créée par l'autre partenaire, sans approbation préalable de l'auteur initial.
+- Toute modification conserve un **historique complet et immuable des corrections** : identifiant de dépense, auteur de la correction, horodatage, champs modifiés, anciennes et nouvelles valeurs, et référence de version.
+- Les corrections de montant, date, enveloppe, statut (planifiée/réalisée) ou description mettent à jour les soldes et projections concernés **sans double comptabilisation**. Les modifications doivent être atomiques, idempotentes et protégées contre les mises à jour concurrentes perdues (contrôle de version).
+- L'autre partenaire reçoit une **notification de correction** liée à la version effectivement enregistrée; une notification échouée ne doit ni annuler la correction ni créer un doublon.
+- Les dépenses **personnelles** et leurs journaux de correction restent privés au propriétaire (D-007). Les règles RLS du backend doivent isoler les duos et les données privées, y compris dans les notifications, agrégats, exports et historiques.
+- Une correction rétroactive touchant une période clôturée ne doit pas altérer silencieusement les clôtures ou reports historiques : prévoir un mécanisme explicite de rectification et de recalcul contrôlé, à spécifier avant implémentation.
+- La modification partagée ne vaut pas autorisation de suppression définitive sans garde-fou; la politique de suppression/annulation des dépenses reste à définir.
+
+**Tests d'acceptation :** membre A modifie une dépense commune créée par B; anciennes et nouvelles valeurs consultables; auteur et date identifiables; ajustement exact des soldes sans double débit; notification à B; modification concurrente détectée; accès refusé à un non-membre ou à une dépense personnelle de B; correction rétroactive sans mutation silencieuse des périodes clôturées.
+
+**État technique :** décision documentée uniquement; aucune migration, politique RLS, API de correction, notification ni test implémenté.
