@@ -220,10 +220,25 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 - Une fois approuvée, elle est **programmée pour le début de la prochaine période budgétaire**, et non appliquée aux contributions attendues de la période en cours.
 - La répartition active de la période en cours reste inchangée; les versements et dépenses historiques ne sont jamais réécrits.
 - Exemple illustratif : enveloppe mensuelle de 400 EUR, 50/50 en novembre (200 EUR chacun), proposition 60/40 approuvée le 19 novembre => 240/160 EUR à partir du 1er décembre **si** les périodes commencent le premier jour du mois.
-- Les périodes budgétaires doivent être explicitement modélisées : fuseau horaire de référence, date de début et de fin, moment de bascule et règles de calcul en cas de changements d'objectif. Ne pas supposer une période mensuelle calendaire pour tous les duos tant que ce choix n'est pas validé.
+- Les périodes budgétaires doivent être explicitement modélisées : fuseau horaire de référence, date de début et de fin, moment de bascule et règles de calcul en cas de changements d'objectif. La période mensuelle avec jour de début personnalisable par duo est validée (D-011); préciser les règles des jours 29 à 31 et le fuseau horaire.
 - Prévoir une activation idempotente et atomique des répartitions approuvées à la transition de période, y compris après interruption ou reprise du service.
 - Si plusieurs modifications sont proposées pour la même enveloppe et la même période future, définir une règle de conflit explicite (proposition remplacée, refusée ou versionnée) avant implémentation.
 
 **Tests d'acceptation :** accord au milieu de période sans effet immédiat; nouvelle répartition à la période suivante; rejet sans effet; activation unique après redémarrage; historique inchangé; conflit de propositions géré; aucune activation pour duo archivé.
 
 **État technique :** décision documentée uniquement; aucune gestion de périodes ni activation planifiée des répartitions implémentée.
+
+
+## 18. Décision produit D-011 — Périodes mensuelles avec jour de début personnalisable (validée le 19/11/2026)
+
+- Chaque duo définit **un jour de début de période budgétaire mensuelle**. Toutes les enveloppes communes du duo suivent ce même calendrier.
+- Exemple : jour de début 5 => période du 5 novembre 2026 au 4 décembre 2026 inclus, puis du 5 décembre 2026 au 4 janvier 2027 inclus.
+- Les périodes sont contiguës, sans chevauchement ni jour non couvert. Une date/heure d'opération doit être rattachée à une seule période selon le fuseau horaire de référence du duo.
+- Les nouvelles répartitions approuvées (D-009) prennent effet au début de la **prochaine période du duo** (D-010), qui peut différer du premier jour du mois civil.
+- Le choix exact du jour autorisé reste à cadrer : pour les jours 29, 30 et 31, prévoir une règle explicite pour les mois courts avant d'implémenter le calcul. Proposition technique à valider : si le jour n'existe pas, utiliser le dernier jour du mois concerné.
+- Un changement du jour de début après création d'historique doit passer par un workflow explicite; ne pas reclasser rétroactivement les écritures et périodes clôturées.
+- Prévoir un stockage des bornes temporelles non ambigu (début inclus, fin exclue), une référence au fuseau horaire du duo et des tests de changement d'heure.
+
+**Tests d'acceptation :** jour 1 => mois calendaire; jour 5 => 5 novembre–4 décembre; périodes sans trou ni chevauchement; nouvelle répartition activée à la prochaine frontière; transitions décembre–janvier; février et année bissextile; changement de fuseau et d'heure; modification du jour de début sans altération de l'historique.
+
+**État technique :** décision documentée uniquement; calcul des périodes, migrations et tests non implémentés.
