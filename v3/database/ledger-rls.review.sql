@@ -85,6 +85,22 @@ after insert on duo_v3_private.ledger_postings
 deferrable initially deferred for each row
 execute function duo_v3_private.check_ledger_entry();
 
+-- An entry without postings must also be rejected at commit.
+create function duo_v3_private.check_new_entry_postings() returns trigger
+language plpgsql security invoker set search_path = ''
+as $
+begin
+ if (select count(*) from duo_v3_private.ledger_postings
+     where duo_id=new.duo_id and entry_id=new.id) < 2 then
+   raise exception 'Ledger entry has no balanced postings';
+ end if;
+ return null;
+end $;
+create constraint trigger ledger_entry_has_postings
+after insert on duo_v3_private.ledger_entries
+deferrable initially deferred for each row
+execute function duo_v3_private.check_new_entry_postings();
+
 -- Append-only. Corrections use new compensating entries, never UPDATE/DELETE.
 create function duo_v3_private.reject_ledger_mutation() returns trigger
 language plpgsql security invoker set search_path = ''
