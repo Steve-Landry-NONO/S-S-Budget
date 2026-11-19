@@ -318,3 +318,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** dépense de 110 EUR sur enveloppe à 80 EUR autorisée après avertissement; solde enveloppe -30 EUR; dépense planifiée sans impact sur réel; solde global calculé sans confusion avec solde enveloppe; aucun transfert automatique de réserve; refus d'une opération inter-duos, d'une devise non autorisée ou d'un montant invalide; absence de double débit après requête rejouée.
 
 **État technique :** décision documentée uniquement; avertissement UI, règles de déficit et tests non implémentés.
+
+
+## 24. Décision produit D-017 — Report automatique des déficits (validée le 19/11/2026)
+
+- Un **solde d'enveloppe négatif** à la clôture d'une période est automatiquement reporté sur la période suivante, **indépendamment** de l'option de report des soldes positifs (D-013).
+- Exemple illustratif : déficit de 30 EUR, nouvelle allocation budgétaire de 400 EUR => disponible budgétaire de départ de 370 EUR, sous réserve que les 400 EUR correspondent bien à l'allocation de la nouvelle période. Cette illustration n'implique aucun nouveau versement réel.
+- Le déficit reporté est un **ajustement de disponibilité budgétaire**, pas une nouvelle dépense, un transfert automatique depuis la réserve commune ou une contribution réelle. Les dépenses déjà comptabilisées ne doivent pas être débitées une seconde fois.
+- La règle D-014 de transfert vers la réserve ne s'applique qu'aux **reliquats positifs** des enveloppes sans report; aucun déficit ne doit être transféré comme montant disponible.
+- Enregistrer explicitement la provenance (enveloppe, période précédente, montant, période cible) et assurer une transition atomique et idempotente. Préserver l'historique des périodes clôturées.
+- En présence de déficits consécutifs, le calcul doit conserver les reports successifs sans les dupliquer. Les dépenses planifiées ne créent pas de déficit réel avant réalisation.
+- **À spécifier avant implémentation :** définition exacte d'« allocation » dans le modèle de financement, distinction entre solde comptable et disponible budgétaire, déficit supérieur à l'allocation suivante, opérations antidatées et éventuelle correction de période clôturée.
+
+**Tests d'acceptation :** déficit -30 EUR reporté une fois; nouvelle allocation 400 EUR => disponible budgétaire 370 EUR; report malgré désactivation des reports positifs; aucune sortie de réserve; aucun nouveau débit réel; répétition de clôture sans doublon; déficit sur plusieurs périodes; respect de la devise et des frontières calendaires D-011/D-012.
+
+**État technique :** décision documentée uniquement; calcul de déficit reporté, schéma, migrations et tests non implémentés.
