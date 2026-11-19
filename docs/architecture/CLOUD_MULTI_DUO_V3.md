@@ -271,3 +271,20 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** report activé avec reliquat positif; report désactivé sans perte de fonds; total commun inchangé par un simple mouvement d'affectation; absence de double comptage après reprise; dépenses planifiées sans sortie réelle; changement de règle sans modification rétroactive; transition aux frontières des cycles personnalisés.
 
 **État technique :** décision documentée uniquement; aucune migration, fonction de report ni test automatisé implémenté.
+
+
+## 21. Décision produit D-014 — Réserve commune non affectée (validée le 19/11/2026)
+
+- Lorsqu'une enveloppe a son **report désactivé** (D-013), son reliquat positif en fin de période est transféré vers une **réserve commune non affectée**.
+- Cette réserve appartient au budget commun et reste visible aux deux partenaires; elle ne constitue pas une enveloppe de dépense ni un revenu nouveau.
+- Le mouvement est un **transfert interne d'affectation** : il ne modifie pas le solde global du duo, n'ajoute aucune contribution et ne crée aucune dépense.
+- Les fonds de la réserve peuvent ensuite être réaffectés explicitement à des enveloppes communes, selon des règles de validation à définir. Aucune destination d'épargne automatique dans le MVP.
+- Prévoir un journal de mouvements entre enveloppes et réserve, avec montant, période, source, destination, auteur ou origine système, et clé d'idempotence pour éviter les doubles transferts à la clôture.
+- Préserver la distinction entre solde réellement disponible et dépenses planifiées; ne pas déplacer des montants déjà engagés sans règle explicite.
+- Les montants négatifs/déficits et le cas d'une enveloppe clôturée avec opérations rétroactives restent à spécifier.
+
+**Invariant comptable :** solde commun total avant transfert = solde commun total après transfert; la somme des fonds affectés et non affectés est conservée (hors véritables opérations externes).
+
+**Tests d'acceptation :** reliquat 80 EUR transféré une seule fois; total commun inchangé; pas de nouvelle contribution; réexécution de clôture sans doublon; visibilité des deux partenaires; impossibilité de lire cette réserve depuis un autre duo; conservation de la devise du duo.
+
+**État technique :** décision documentée uniquement; aucune réserve, écriture de transfert ni logique de clôture implémentée.
