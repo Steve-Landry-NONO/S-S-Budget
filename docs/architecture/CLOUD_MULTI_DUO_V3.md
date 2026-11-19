@@ -278,7 +278,7 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 - Lorsqu'une enveloppe a son **report désactivé** (D-013), son reliquat positif en fin de période est transféré vers une **réserve commune non affectée**.
 - Cette réserve appartient au budget commun et reste visible aux deux partenaires; elle ne constitue pas une enveloppe de dépense ni un revenu nouveau.
 - Le mouvement est un **transfert interne d'affectation** : il ne modifie pas le solde global du duo, n'ajoute aucune contribution et ne crée aucune dépense.
-- Les fonds de la réserve peuvent ensuite être réaffectés explicitement à des enveloppes communes, selon des règles de validation à définir. Aucune destination d'épargne automatique dans le MVP.
+- Les fonds de la réserve peuvent ensuite être réaffectés librement par chacun des deux partenaires à des enveloppes communes, avec notification et historique (D-015). Aucune destination d'épargne automatique dans le MVP.
 - Prévoir un journal de mouvements entre enveloppes et réserve, avec montant, période, source, destination, auteur ou origine système, et clé d'idempotence pour éviter les doubles transferts à la clôture.
 - Préserver la distinction entre solde réellement disponible et dépenses planifiées; ne pas déplacer des montants déjà engagés sans règle explicite.
 - Les montants négatifs/déficits et le cas d'une enveloppe clôturée avec opérations rétroactives restent à spécifier.
@@ -288,3 +288,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** reliquat 80 EUR transféré une seule fois; total commun inchangé; pas de nouvelle contribution; réexécution de clôture sans doublon; visibilité des deux partenaires; impossibilité de lire cette réserve depuis un autre duo; conservation de la devise du duo.
 
 **État technique :** décision documentée uniquement; aucune réserve, écriture de transfert ni logique de clôture implémentée.
+
+
+## 22. Décision produit D-015 — Réaffectation libre de la réserve avec notification et historique (validée le 19/11/2026)
+
+- Chaque partenaire membre actif du duo peut **transférer librement** des fonds disponibles de la réserve commune non affectée vers une enveloppe commune active, sans approbation préalable de l'autre partenaire.
+- Chaque transfert est **tracé** : montant, devise, duo, enveloppe de destination, auteur, date, identifiant d'opération et soldes résultants ou référence de mouvement. L'autre partenaire reçoit une notification, sans exposer de données personnelles privées.
+- Le transfert est une **réaffectation interne**, pas une dépense, un revenu, une contribution réelle ou une modification des contributions attendues. L'invariant de conservation du solde commun s'applique.
+- La transaction doit vérifier les droits du membre, la disponibilité effective des fonds, le statut actif du duo et de l'enveloppe, la devise et l'absence de solde négatif non autorisé; elle doit être atomique et idempotente.
+- Les transferts concurrents ne doivent jamais pouvoir consommer deux fois les mêmes fonds. Prévoir verrouillage transactionnel ou mécanisme équivalent.
+- La notification peut être asynchrone mais doit être liée à un mouvement validé; un échec de notification ne doit pas annuler le mouvement ni créer un doublon à la reprise.
+- Cette liberté de transfert ne permet pas de contourner la règle D-009 : modifier la répartition des contributions exige toujours l'accord des deux partenaires.
+
+**Tests d'acceptation :** transfert de 60 EUR depuis une réserve de 150 EUR => réserve 90 EUR, enveloppe +60 EUR, solde total inchangé; action autorisée pour chacun des deux membres; notification à l'autre membre; refus si fonds insuffisants, duo archivé, enveloppe étrangère ou utilisateur non membre; concurrence et répétition sans double débit; journalisation sans fuite de données privées.
+
+**État technique :** décision documentée uniquement; aucun transfert transactionnel, historique spécifique ni système de notification implémenté.
