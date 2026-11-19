@@ -1,0 +1,25 @@
+name: V3 financial core tests
+on:
+  pull_request:
+    paths:
+      - 'v3/core/**'
+      - '.github/workflows/v3-financial-core.yml'
+  push:
+    branches:
+      - 'feat/v3-financial-core-foundation'
+    paths:
+      - 'v3/core/**'
+      - '.github/workflows/v3-financial-core.yml'
+permissions:
+  contents: read
+jobs:
+  financial-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run V3 finance unit tests
+        run: node --test v3/core/finance.test.js
