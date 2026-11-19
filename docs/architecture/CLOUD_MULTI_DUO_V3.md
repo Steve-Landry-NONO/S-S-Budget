@@ -207,8 +207,23 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 - Une proposition refusée, annulée ou expirée n'a aucun effet financier. Le proposant ne peut pas approuver à la place du second membre.
 - À l'acceptation, vérifier de nouveau en transaction les deux appartenances, le statut actif du duo, la version de la répartition de départ et la validité de la proposition. Empêcher la double application et les conflits entre propositions concurrentes.
 - Appliquer la nouvelle répartition à compter d'une date d'effet explicitement enregistrée; ne jamais réécrire les versements ou dépenses passés. Historiser proposition, décisions, auteur, dates et versions sans exposer les dépenses personnelles privées.
-- Les modalités exactes de notification, expiration, retrait d'une proposition et date d'effet (immédiate ou période suivante) restent à spécifier.
+- Les modalités exactes de notification, expiration et retrait d'une proposition restent à spécifier. La date d'effet est fixée au début de la prochaine période budgétaire (D-010).
 
 **Tests d'acceptation :** proposition 50/50 vers 60/40 sans effet avant accord; accord du second membre applique une seule fois; refus et annulation sans effet; même membre ne peut pas approuver deux fois; proposition devenue obsolète refusée; approbations concurrentes sans double écriture; duo archivé interdit toute nouvelle modification; montants conformes à la devise du duo.
 
 **État technique :** décision documentée seulement; aucune table de propositions, fonction transactionnelle ou notification implémentée.
+
+
+## 17. Décision produit D-010 — Application à la prochaine période budgétaire (validée le 19/11/2026)
+
+- Une proposition de modification de répartition ne devient applicable **qu'après l'accord explicite des deux partenaires** (D-009).
+- Une fois approuvée, elle est **programmée pour le début de la prochaine période budgétaire**, et non appliquée aux contributions attendues de la période en cours.
+- La répartition active de la période en cours reste inchangée; les versements et dépenses historiques ne sont jamais réécrits.
+- Exemple illustratif : enveloppe mensuelle de 400 EUR, 50/50 en novembre (200 EUR chacun), proposition 60/40 approuvée le 19 novembre => 240/160 EUR à partir du 1er décembre **si** les périodes commencent le premier jour du mois.
+- Les périodes budgétaires doivent être explicitement modélisées : fuseau horaire de référence, date de début et de fin, moment de bascule et règles de calcul en cas de changements d'objectif. Ne pas supposer une période mensuelle calendaire pour tous les duos tant que ce choix n'est pas validé.
+- Prévoir une activation idempotente et atomique des répartitions approuvées à la transition de période, y compris après interruption ou reprise du service.
+- Si plusieurs modifications sont proposées pour la même enveloppe et la même période future, définir une règle de conflit explicite (proposition remplacée, refusée ou versionnée) avant implémentation.
+
+**Tests d'acceptation :** accord au milieu de période sans effet immédiat; nouvelle répartition à la période suivante; rejet sans effet; activation unique après redémarrage; historique inchangé; conflit de propositions géré; aucune activation pour duo archivé.
+
+**État technique :** décision documentée uniquement; aucune gestion de périodes ni activation planifiée des répartitions implémentée.
