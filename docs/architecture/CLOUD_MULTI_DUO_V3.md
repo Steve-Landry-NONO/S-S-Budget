@@ -235,10 +235,24 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 - Exemple : jour de début 5 => période du 5 novembre 2026 au 4 décembre 2026 inclus, puis du 5 décembre 2026 au 4 janvier 2027 inclus.
 - Les périodes sont contiguës, sans chevauchement ni jour non couvert. Une date/heure d'opération doit être rattachée à une seule période selon le fuseau horaire de référence du duo.
 - Les nouvelles répartitions approuvées (D-009) prennent effet au début de la **prochaine période du duo** (D-010), qui peut différer du premier jour du mois civil.
-- Le choix exact du jour autorisé reste à cadrer : pour les jours 29, 30 et 31, prévoir une règle explicite pour les mois courts avant d'implémenter le calcul. Proposition technique à valider : si le jour n'existe pas, utiliser le dernier jour du mois concerné.
+- Les jours 1 à 31 sont autorisés. Pour les jours 29, 30 et 31 absents d'un mois, la frontière du cycle est ramenée au dernier jour de ce mois (D-012). Le jour nominal choisi est conservé dans les paramètres du duo.
 - Un changement du jour de début après création d'historique doit passer par un workflow explicite; ne pas reclasser rétroactivement les écritures et périodes clôturées.
 - Prévoir un stockage des bornes temporelles non ambigu (début inclus, fin exclue), une référence au fuseau horaire du duo et des tests de changement d'heure.
 
 **Tests d'acceptation :** jour 1 => mois calendaire; jour 5 => 5 novembre–4 décembre; périodes sans trou ni chevauchement; nouvelle répartition activée à la prochaine frontière; transitions décembre–janvier; février et année bissextile; changement de fuseau et d'heure; modification du jour de début sans altération de l'historique.
 
 **État technique :** décision documentée uniquement; calcul des périodes, migrations et tests non implémentés.
+
+
+## 19. Décision produit D-012 — Dernier jour disponible dans les mois courts (validée le 19/11/2026)
+
+- Le duo choisit un jour nominal de début de cycle compris entre **1 et 31**.
+- Pour chaque mois, le début effectif de période est le jour **min(jour nominal, dernier jour du mois)**. Le jour nominal n'est jamais remplacé définitivement par le jour ajusté.
+- Exemple avec un jour nominal de 31 en 2027 : 31 janvier, 28 février, 31 mars, 30 avril, 31 mai. En année bissextile, février utilise le 29.
+- Les périodes sont définies par deux frontières successives : début inclus, fin exclue, dans le fuseau horaire du duo. Cette règle garantit continuité et absence de chevauchement.
+- Les répartitions approuvées s'activent à la prochaine frontière effective du cycle, y compris lorsque cette frontière est avancée au dernier jour du mois court.
+- Implémenter le calcul sur des dates calendaires et le fuseau de référence, sans approximation de durée fixe en jours ou secondes.
+
+**Tests d'acceptation :** jour 29 en février non bissextile et bissextile; jour 30 en février; jour 31 en février, avril et mai; retour au jour nominal lorsque disponible; enchaînement sans trou ni chevauchement; activation de la nouvelle répartition à la bonne frontière; changement d'année et de fuseau horaire.
+
+**État technique :** décision documentée uniquement; calcul de cycles, tests automatisés et migration SQL non implémentés.
