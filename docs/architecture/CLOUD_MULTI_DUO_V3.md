@@ -362,3 +362,19 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** membre A modifie une dépense commune créée par B; anciennes et nouvelles valeurs consultables; auteur et date identifiables; ajustement exact des soldes sans double débit; notification à B; modification concurrente détectée; accès refusé à un non-membre ou à une dépense personnelle de B; correction rétroactive sans mutation silencieuse des périodes clôturées.
 
 **État technique :** décision documentée uniquement; aucune migration, politique RLS, API de correction, notification ni test implémenté.
+
+
+## 27. Décision produit D-020 — Annulation réversible des dépenses communes (validée le 19/11/2026)
+
+- Chacun des deux membres actifs du duo peut **annuler** une dépense commune, y compris celle créée par l'autre, sans approbation préalable. L'annulation est **réversible** et la dépense peut être restaurée.
+- L'annulation est une opération logique (statut annulé / tombstone), **pas une suppression physique** : la dépense et son historique de versions et d'actions sont conservés.
+- Une dépense annulée n'est plus prise en compte dans les dépenses actives et dans les agrégats correspondants. La restauration rétablit sa contribution **une seule fois** selon son statut antérieur (réalisée ou planifiée) et les règles comptables applicables.
+- Journal d'audit immuable pour annulation/restauration : identifiant, auteur, horodatage, action, statut avant/après, version, motif facultatif. L'autre partenaire est notifié après validation de l'action; les notifications doivent être idempotentes et ne pas révéler de données privées.
+- Opérations atomiques, contrôle de version contre la concurrence et idempotence contre les actions répétées. Ne pas permettre une restauration qui contournerait l'isolation des duos, les règles d'accès ou les contraintes de devise.
+- Les dépenses personnelles restent privées selon D-007; cette décision ne donne aucun droit de consultation, d'annulation ou de restauration des dépenses personnelles du partenaire.
+- Les annulations/restaurations qui touchent une période clôturée requièrent un mécanisme explicite de rectification/recalcul contrôlé, encore à définir, sans mutation silencieuse des clôtures ou reports.
+- Les règles de rétention légale et de purge définitive restent distinctes de l'annulation réversible.
+
+**Tests d'acceptation :** A annule une dépense commune de B; dépense masquée des listes actives mais visible dans l'historique; soldes recalculés une fois; B notifié; restauration remet la dépense et les soldes une fois; répétition et concurrence sans double impact; refus d'accès à une dépense privée ou d'un autre duo; restauration de dépense planifiée sans impact sur solde réel; périodes clôturées protégées.
+
+**État technique :** décision documentée uniquement; statut, audit, notifications, RLS et logique d'annulation/restauration non implémentés.
