@@ -303,3 +303,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** transfert de 60 EUR depuis une réserve de 150 EUR => réserve 90 EUR, enveloppe +60 EUR, solde total inchangé; action autorisée pour chacun des deux membres; notification à l'autre membre; refus si fonds insuffisants, duo archivé, enveloppe étrangère ou utilisateur non membre; concurrence et répétition sans double débit; journalisation sans fuite de données privées.
 
 **État technique :** décision documentée uniquement; aucun transfert transactionnel, historique spécifique ni système de notification implémenté.
+
+
+## 23. Décision produit D-016 — Dépassement d'enveloppe avec avertissement non bloquant (validée le 19/11/2026)
+
+- Une dépense peut être enregistrée même si elle dépasse le solde disponible de son enveloppe. L'interface affiche **un avertissement explicite**, puis permet la confirmation.
+- Le solde d'une enveloppe peut devenir **négatif**. Exemple : 80 EUR disponibles, dépense réalisée de 110 EUR => solde d'enveloppe -30 EUR.
+- Une dépense `done` affecte les soldes réels; une dépense `planned` affecte seulement les prévisions. Une alerte prévisionnelle ne doit pas être assimilée à un débit déjà réalisé.
+- Le solde d'enveloppe négatif et le solde commun global sont deux indicateurs distincts. Ne pas réaffecter automatiquement les fonds de la réserve commune et ne pas inventer de contribution pour masquer le déficit.
+- Les contrôles d'identité, d'appartenance au duo, de devise, de validité du montant et d'intégrité transactionnelle restent obligatoires : **avertissement non bloquant ne signifie pas absence de contrôles**.
+- En cas de déficit en fin de période, le traitement du solde négatif lors du report ou de la clôture reste à définir. Ne pas transférer un montant négatif comme s'il s'agissait d'un reliquat positif vers la réserve (D-013/D-014).
+- La présentation doit différencier clairement dépassement de budget, disponibilité financière réelle du duo et prévisions futures.
+
+**Tests d'acceptation :** dépense de 110 EUR sur enveloppe à 80 EUR autorisée après avertissement; solde enveloppe -30 EUR; dépense planifiée sans impact sur réel; solde global calculé sans confusion avec solde enveloppe; aucun transfert automatique de réserve; refus d'une opération inter-duos, d'une devise non autorisée ou d'un montant invalide; absence de double débit après requête rejouée.
+
+**État technique :** décision documentée uniquement; avertissement UI, règles de déficit et tests non implémentés.
