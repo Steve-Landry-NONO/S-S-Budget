@@ -333,3 +333,17 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** déficit -30 EUR reporté une fois; nouvelle allocation 400 EUR => disponible budgétaire 370 EUR; report malgré désactivation des reports positifs; aucune sortie de réserve; aucun nouveau débit réel; répétition de clôture sans doublon; déficit sur plusieurs périodes; respect de la devise et des frontières calendaires D-011/D-012.
 
 **État technique :** décision documentée uniquement; calcul de déficit reporté, schéma, migrations et tests non implémentés.
+
+
+## 25. Décision produit D-018 — Maintien du déficit supérieur à l'allocation suivante (validée le 19/11/2026)
+
+- Si le déficit reporté d'une enveloppe excède l'allocation budgétaire de la période suivante, le **disponible budgétaire reste négatif**. Ne pas le ramener artificiellement à zéro.
+- Exemple : déficit reporté de -500 EUR et nouvelle allocation budgétaire de +400 EUR => disponible budgétaire initial de -100 EUR. Ce résultat ne présume pas de l'existence de 400 EUR de versements réels.
+- Le déficit restant peut être résorbé progressivement par les allocations budgétaires des périodes ultérieures, sans écriture fictive ni double débit des dépenses historiques.
+- Ne jamais prélever automatiquement la réserve commune pour compenser ce déficit (D-014/D-015). Une réaffectation explicite reste possible selon les règles de transfert applicables.
+- Afficher une alerte intelligible et distinguer le disponible budgétaire négatif du solde commun réel. Les dépenses effectivement réalisées restent enregistrables conformément à D-016.
+- Conserver la provenance des reports et une logique de clôture idempotente; une succession de périodes déficitaires ne doit pas dupliquer les reports.
+
+**Tests d'acceptation :** -500 EUR + 400 EUR => -100 EUR; maintien du négatif en début de période; aucune écriture de dépense supplémentaire; aucune consommation automatique de réserve; conservation des reports sur plusieurs périodes; alerte visible; calcul exact pour devises à zéro ou deux décimales.
+
+**État technique :** décision documentée uniquement; aucune migration, calcul automatisé, alerte ni test d'intégration implémenté.
