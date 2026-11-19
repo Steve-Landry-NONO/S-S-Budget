@@ -256,3 +256,18 @@ Le fichier `docs/architecture/cloud-multi-duo-schema.draft.sql` est un **schéma
 **Tests d'acceptation :** jour 29 en février non bissextile et bissextile; jour 30 en février; jour 31 en février, avril et mai; retour au jour nominal lorsque disponible; enchaînement sans trou ni chevauchement; activation de la nouvelle répartition à la bonne frontière; changement d'année et de fuseau horaire.
 
 **État technique :** décision documentée uniquement; calcul de cycles, tests automatisés et migration SQL non implémentés.
+
+
+## 20. Décision produit D-013 — Report configurable par enveloppe (validée le 19/11/2026)
+
+- Chaque enveloppe commune dispose d'une **règle de report configurable**, applicable lors de la transition entre deux périodes budgétaires du duo (D-011 et D-012).
+- **Report activé :** le solde disponible de fin de période est réaffecté à la même enveloppe pour la période suivante, sans être compté comme une nouvelle contribution réelle.
+- **Report désactivé :** le reliquat n'est pas réaffecté automatiquement à cette enveloppe. Les fonds demeurent dans le solde commun global et doivent être représentés explicitement comme non affectés ou via une autre destination validée ultérieurement. Ne jamais créer une dépense fictive ou effacer un montant pour simuler une remise à zéro.
+- Séparer les notions d'objectif budgétaire, contribution réelle, dépense réalisée, solde disponible et report; ne jamais compter deux fois un report dans le total des fonds.
+- Historiser la règle applicable à chaque période et les écritures de report; préserver les périodes clôturées lors de changements ultérieurs de configuration.
+- Les transitions doivent être atomiques et idempotentes, y compris après une interruption, et respecter les unités mineures de la devise du duo (D-005).
+- **Points à définir avant implémentation :** définition exacte du solde reportable en présence de dépenses planifiées, déficit d'enveloppe, avances, opérations antidatées, fonds non affectés et changement de règle pendant une période.
+
+**Tests d'acceptation :** report activé avec reliquat positif; report désactivé sans perte de fonds; total commun inchangé par un simple mouvement d'affectation; absence de double comptage après reprise; dépenses planifiées sans sortie réelle; changement de règle sans modification rétroactive; transition aux frontières des cycles personnalisés.
+
+**État technique :** décision documentée uniquement; aucune migration, fonction de report ni test automatisé implémenté.
