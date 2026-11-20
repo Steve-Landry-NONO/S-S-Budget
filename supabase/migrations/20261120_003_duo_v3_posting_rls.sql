@@ -54,7 +54,7 @@ declare
   v_transaction uuid;
   v_existing record;
 begin
-  if v_user is null or auth.role() <> 'authenticated'
+  if v_user is null
      or not duo_v3_private.is_member(p_household, v_user) then
     raise exception 'Not authorized for this household' using errcode = '42501';
   end if;
