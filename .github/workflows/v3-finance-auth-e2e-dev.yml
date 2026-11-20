@@ -1,0 +1,36 @@
+name: V3 Finance Real Auth E2E (DEV only)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: duo-v3-dev-auth-e2e
+  cancel-in-progress: false
+jobs:
+  auth-concurrency:
+    runs-on: ubuntu-latest
+    environment: duo-budget-v3-dev
+    timeout-minutes: 10
+    env:
+      DUO_V3_SUPABASE_URL: ${{ vars.DUO_V3_SUPABASE_URL }}
+      DUO_V3_PUBLISHABLE_KEY: ${{ secrets.DUO_V3_PUBLISHABLE_KEY }}
+      DUO_V3_TEST_A_EMAIL: ${{ secrets.DUO_V3_TEST_A_EMAIL }}
+      DUO_V3_TEST_A_PASSWORD: ${{ secrets.DUO_V3_TEST_A_PASSWORD }}
+      DUO_V3_TEST_B_EMAIL: ${{ secrets.DUO_V3_TEST_B_EMAIL }}
+      DUO_V3_TEST_B_PASSWORD: ${{ secrets.DUO_V3_TEST_B_PASSWORD }}
+      DUO_V3_TEST_HOUSEHOLD: ${{ vars.DUO_V3_TEST_HOUSEHOLD }}
+      DUO_V3_TEST_FROM_ACCOUNT: ${{ vars.DUO_V3_TEST_FROM_ACCOUNT }}
+      DUO_V3_TEST_TO_ACCOUNT: ${{ vars.DUO_V3_TEST_TO_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify DEV endpoint and required configuration
+        run: |
+          test "$DUO_V3_SUPABASE_URL" = "https://eetnzdvjfzexgvqbtyrj.supabase.co"
+          for name in DUO_V3_PUBLISHABLE_KEY DUO_V3_TEST_A_EMAIL DUO_V3_TEST_A_PASSWORD DUO_V3_TEST_B_EMAIL DUO_V3_TEST_B_PASSWORD DUO_V3_TEST_HOUSEHOLD DUO_V3_TEST_FROM_ACCOUNT DUO_V3_TEST_TO_ACCOUNT; do
+            test -n "${!name}" || { echo "::error::Missing $name"; exit 1; }
+          done
+      - name: Execute real Auth and concurrent transfers
+        run: node scripts/v3-finance-e2e-dev.cjs
