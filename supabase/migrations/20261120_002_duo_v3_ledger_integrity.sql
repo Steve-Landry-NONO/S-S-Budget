@@ -30,9 +30,10 @@ declare
   v_count bigint;
   v_total numeric;
 begin
-  v_transaction_id := new.transaction_id;
   if tg_table_name = 'duo_v3_transactions' then
     v_transaction_id := new.id;
+  else
+    v_transaction_id := new.transaction_id;
   end if;
 
   select t.household_id, t.currency, t.kind, t.reverses_transaction_id
