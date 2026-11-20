@@ -1,0 +1,25 @@
+name: V3 Finance Service
+on:
+  push:
+    branches: ['feat/v3-ledger-schema-dev']
+    paths:
+      - 'v3/services/**'
+      - '.github/workflows/v3-finance-service.yml'
+  pull_request:
+    paths:
+      - 'v3/services/**'
+      - '.github/workflows/v3-finance-service.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  service-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test finance service
+        run: node --test v3/services/*.test.js
