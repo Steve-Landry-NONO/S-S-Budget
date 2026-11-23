@@ -1,0 +1,9 @@
+A clôture ->|8884ff13-3d74-426c-bf3d-d89c78723989
+A fin|2026-11-21 07:08:55.978924+01
+B début|2026-11-21 07:08:53.460457+01
+B dépense ->|78947a9f-ba81-4801-9c58-e4fe45bf8392
+B fin|2026-11-21 07:08:55.993704+01
+C clôture concurrente ->|8884ff13-3d74-426c-bf3d-d89c78723989
+--- état final (base locale jetable duo_conc)
+2026-10-01|closed|1|0|1|
+2026-11-01|open|0|1|1|expense:late=true
