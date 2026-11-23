@@ -1,0 +1,31 @@
+# 2026-11-21T04:50:43Z · branche test/v3-finance-edge-cases @ 22aee4a · v22.23.5
+# Subtest: currency scale policy and exact round trips
+ok 1 - currency scale policy and exact round trips
+# Subtest: amount input rejects rounding, notation and noncanonical representations
+ok 2 - amount input rejects rounding, notation and noncanonical representations
+# Subtest: closure preserves sign and routes positive balances exactly once
+ok 3 - closure preserves sign and routes positive balances exactly once
+# Subtest: reserve transfer is conservative and rejects invalid inputs
+ok 4 - reserve transfer is conservative and rejects invalid inputs
+# Subtest: budget deficits and expense warning boundaries
+ok 5 - budget deficits and expense warning boundaries
+# Subtest: currency precision EUR and XAF, no floating point
+ok 6 - currency precision EUR and XAF, no floating point
+# Subtest: D-013/D-014 positive balance without carry becomes reserve
+ok 7 - D-013/D-014 positive balance without carry becomes reserve
+# Subtest: D-017 negative balance always carries even with positive carry disabled
+ok 8 - D-017 negative balance always carries even with positive carry disabled
+# Subtest: D-018 deficit larger than allocation remains negative
+ok 9 - D-018 deficit larger than allocation remains negative
+# Subtest: D-015 reserve transfers preserve totals and reject overdraft
+ok 10 - D-015 reserve transfers preserve totals and reject overdraft
+# Subtest: D-016 expense overspending is warned but calculable
+ok 11 - D-016 expense overspending is warned but calculable
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.208467
