@@ -1,0 +1,192 @@
+name: Technical hardening — release readiness gates
+
+# Reproducible gates for Sprints 1-2. Security jobs fail on findings; they are
+# never relaxed to obtain a green run. Residual risks accepted for decision are
+# visible as node:test "todo" entries in the test logs.
+on:
+  push:
+    branches: [fix/v3-technical-hardening, feat/v3-sprint2-dashboard]
+  pull_request:
+    branches: [feat/v3-sprint2-dashboard, feature/duo-budget-v3-glance-first-screen, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_NO_TELEMETRY: '1'
+
+jobs:
+  frontend:
+    name: Frontend — npm ci, tests, Expo Doctor, web exports
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-fund
+      - name: Expo SDK must stay on 58
+        run: node -e "const v=require('expo/package.json').version;console.log('expo',v);if(!v.startsWith('58.'))process.exit(1)"
+      - name: Unit, financial parity and static tests
+        run: node --test scripts/navigation.test.cjs scripts/dashboard.test.cjs scripts/preview.test.cjs scripts/finance.test.cjs
+      - name: Duo Glance privacy assertions
+        run: node scripts/check-glance.js
+      - name: Android Preview configuration guards
+        run: node scripts/check-android-preview.js
+      - name: Parse JSX entry points
+        run: node -e "const b=require('@babel/core');for(const p of ['App.js','src/features/glance/DuoGlanceScreen.js','src/features/navigation/DuoNavigation.js','src/features/dashboard/DashboardOverview.js','src/features/preview/WebPreview.js'])b.transformFileSync(p,{presets:['babel-preset-expo']})"
+      - name: Expo Doctor
+        run: npx --yes expo-doctor@1.21.8
+      - name: Web export (normal)
+        run: npx expo export --platform web --output-dir dist
+      - name: Web export (QA Lab, fictional data)
+        run: npx expo export --platform web --output-dir dist-preview
+        env:
+          EXPO_PUBLIC_DUO_PREVIEW: '1'
+      - name: QA Lab bundle excludes the authenticated app
+        run: node scripts/check-bundle-isolation.cjs dist dist-preview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-exports
+          path: |
+            dist
+            dist-preview
+          retention-days: 7
+
+  web-qa:
+    name: Browser QA — QA Lab matrix and pre-auth privacy
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-exports
+      - name: Install pinned Playwright outside the project
+        run: |
+          mkdir -p "$RUNNER_TEMP/qa"
+          npm install --prefix "$RUNNER_TEMP/qa" --no-save --no-fund --no-audit playwright@1.56.1
+          "$RUNNER_TEMP/qa/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Run 40-cell QA Lab matrix, isolation and reduced-motion checks
+        env:
+          PLAYWRIGHT_CORE: ${{ runner.temp }}/qa/node_modules/playwright-core
+        run: node scripts/qa/web-qa.cjs --preview dist-preview --normal dist --out qa-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: web-qa-report-and-captures
+          path: qa-out
+          retention-days: 14
+
+  backend:
+    name: Backend — SQLite server on temporary databases
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci --no-fund
+      - name: sqlite3 native binding loads
+        run: npm run check:native
+      - name: Auth, sessions, persistence, migration, concurrency, security
+        run: npm test
+
+  android-preview:
+    name: Android Preview — config and prebuild manifest (no EAS build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-fund
+      - run: node scripts/check-android-preview.js
+      - name: Prebuild preview variant into a throw-away directory
+        env:
+          APP_VARIANT: preview
+          PREVIEW_ALLOW_CLEARTEXT: '1'
+          CI: '1'
+        run: npx expo prebuild --platform android --no-install --clean
+      - name: Assert preview manifest
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q "applicationId 'com.ss.budgetcouple.preview'" android/app/build.gradle
+          grep -q 'android:usesCleartextTraffic="true"' "$M"
+          grep -q 'android:allowBackup="false"' "$M"
+          for p in SYSTEM_ALERT_WINDOW READ_EXTERNAL_STORAGE WRITE_EXTERNAL_STORAGE; do
+            grep -q "android.permission.$p\" tools:node=\"remove\"" "$M"
+          done
+          if grep -rniE 'APP_SECRET|x-ss-budget-secret[^a-z-]*[:=]' android/app/src/main; then echo 'secret-like value in native project'; exit 1; fi
+          echo "Preview manifest OK"; grep -E 'uses-permission|<application' "$M"
+
+  dependency-audit:
+    name: Dependency audit (frontend and server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Frontend audit (all severities reported, fails on moderate+)
+        run: |
+          npm audit --json > audit-frontend.json || true
+          node -e "const a=require('./audit-frontend.json');console.log('frontend',JSON.stringify(a.metadata.vulnerabilities))"
+          npm audit --audit-level=moderate
+      - name: Server audit (all severities reported, fails on moderate+)
+        working-directory: server
+        run: |
+          npm audit --json > ../audit-server.json || true
+          node -e "const a=require('../audit-server.json');console.log('server',JSON.stringify(a.metadata.vulnerabilities))"
+          npm audit --audit-level=moderate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-audit
+          path: audit-*.json
+          retention-days: 14
+
+  secret-scan:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned gitleaks with checksum verification
+        run: |
+          V=8.30.1
+          curl -sSLo gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz gitleaks
+      - name: Scan git history
+        run: ./gitleaks git --redact --no-banner -v --report-path gitleaks-report.json .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          retention-days: 14
