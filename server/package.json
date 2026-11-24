@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "node src/index.js",
     "start": "NODE_ENV=production node src/index.js",
-    "init-db": "node src/initDb.js"
+    "init-db": "node src/initDb.js",
+    "test": "node --test 'test/*.test.cjs'"
   },
   "dependencies": {
     "cors": "^2.8.5",
