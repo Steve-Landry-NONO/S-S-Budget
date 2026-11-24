@@ -1,0 +1,5 @@
+# Web Preview — revue visuelle isolée
+Branche dédiée, hors chemin critique des merges mobiles. Aperçu illustratif avec fixtures fixes, composants de navigation et Duo Glance partagés. Les six destinations sont accessibles sans compte uniquement dans le composant de démonstration, qui ne monte jamais l'application authentifiée. Aucun réseau, stockage applicatif, secret ni écriture financière dans le composant. Les boutons de Glance mènent à la démonstration dans ce mode uniquement. Les écrans illustratifs ne sont pas des preuves de fidélité V2/V3 ni de recette fonctionnelle. Les dimensions sont celles du conteneur Web, pas une émulation native exacte.
+PowerShell : `$env:EXPO_PUBLIC_DUO_PREVIEW="1"; npx.cmd expo start --web -c`
+Bash : `EXPO_PUBLIC_DUO_PREVIEW=1 npx expo start --web -c`
+Pour la recette normale supprimer cette variable ou ouvrir un terminal neuf. CI export statique en artefact ; pas de déploiement public automatique. Avant hébergement : vérifier isolation et accès, absence de données privées, revue des dépendances et rendu navigateur. Tests natifs prévus sur Ubuntu, avec serveur QA distinct.

@@ -1,0 +1,26 @@
+name: Duo Budget — isolated web preview
+on:
+  push:
+    branches: [feat/v3-web-preview]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: node --test scripts/navigation.test.cjs scripts/preview.test.cjs
+      - run: node scripts/check-glance.js
+      - run: npx expo export --platform web --output-dir dist
+        env:
+          EXPO_PUBLIC_DUO_PREVIEW: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duo-budget-web-preview
+          path: dist
+          retention-days: 7

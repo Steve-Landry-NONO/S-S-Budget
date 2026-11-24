@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
   Modal,
   ScrollView,
   StyleSheet,
@@ -15,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
 import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
 import { palette } from './src/theme/tokens';
+import WebPreview from './src/features/preview/WebPreview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -175,6 +177,11 @@ const initialState = {
 };
 
 export default function App() {
+  if (Platform.OS === 'web' && process.env.EXPO_PUBLIC_DUO_PREVIEW === '1') return <WebPreview />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
