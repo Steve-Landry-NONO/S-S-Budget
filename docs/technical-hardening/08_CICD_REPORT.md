@@ -35,3 +35,7 @@ Extraits du run 45472502146 : `expo 58.0.26` · `# tests 37 / # pass 36 / # todo
 - `ubuntu-latest` = 26.04 : les jobs autres que `web-qa` y passent (sqlite3 précompilé OK grâce à glibc récente) ; **ce n'est pas représentatif d'un serveur Ubuntu 22.04** (voir 03 §8).
 - Actions en `@v4` (tags majeurs) comme les workflows existants ; épinglage par SHA recommandé P2.
 - Le workflow `sprint2-dashboard.yml` ne se déclenche pas sur une PR vers Sprint 2 ; le nouveau workflow couvre ce cas.
+
+## Mise à jour lot 2 — scan de secrets
+
+Runs 45480021617 (push) et 45480036277 (PR) sur `108bc7e` : 5 jobs verts, **gitleaks ❌ 2 constats** `generic-api-key` dans `server/test/config.test.cjs:58-59` (commit `543381d`) — la valeur volontairement invalide (trop courte) servant à prouver le refus de démarrage. Faux positif vérifié ; le contrôle a fonctionné. Traitement sans désactiver la règle : littéral remplacé par une construction à l'exécution, et `.gitleaksignore` limité aux **2 empreintes exactes** (l'historique publié n'est jamais réécrit). Résultats CI de la tête finale : description de la PR #15.

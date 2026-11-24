@@ -45,6 +45,8 @@ Totaux locaux : frontend **39/39, 0 todo** (était 36 + 1 todo) ; serveur **30 r
 
 Les six jobs ont été relancés sur la tête de branche (le commit de documentation est lui-même la tête) ; numéros de run, SHA exact et résultats sont consignés dans la **description de la PR #15** (section « Lot 2 — CI ») afin de ne pas créer un nouveau commit après la CI.
 
+Premier passage sur `108bc7e` : gitleaks a signalé 2 constats sur la valeur de test volontairement invalide de `config.test.cjs` (faux positif) ; traité par suppression du littéral et `.gitleaksignore` limité à 2 empreintes exactes (voir 08). Aucune règle désactivée.
+
 ### 0.4 Risques résiduels
 
 | Id | Statut |

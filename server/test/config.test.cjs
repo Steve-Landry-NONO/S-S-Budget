@@ -51,12 +51,15 @@ function startRaw(env) {
 }
 
 test('server refuses to start with an unsafe secret, whatever NODE_ENV, without logging it', async () => {
+  // Deliberately invalid (too short) value, built at runtime so that it is not a
+  // secret-looking literal in the source (gitleaks generic-api-key).
+  const SHORT = ['Zq8', 'short', 'value', 'XY'].join('-');
   const cases = [
     { name: 'absent', env: {} },
     { name: 'example', env: { APP_SECRET: 'change-moi-avec-une-phrase-longue' } },
     { name: 'old dev key', env: { APP_SECRET: OLD_DEV_KEY } },
-    { name: 'short', env: { APP_SECRET: 'Zq8-short-secret-XY' } },
-    { name: 'short in development', env: { APP_SECRET: 'Zq8-short-secret-XY', NODE_ENV: 'development' } },
+    { name: 'short', env: { APP_SECRET: SHORT } },
+    { name: 'short in development', env: { APP_SECRET: SHORT, NODE_ENV: 'development' } },
     { name: 'absent in production', env: { NODE_ENV: 'production' } },
   ];
   for (const c of cases) {
