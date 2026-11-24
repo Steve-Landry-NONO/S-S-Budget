@@ -4,11 +4,9 @@
 // each one needs an owner decision because it changes security behaviour.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 const { startServer } = require('./helpers.cjs');
 
 const PIN = '4821';
-const b64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 test('PIN, PIN hash and session token never appear in server logs', async (t) => {
   const s = await startServer();
@@ -38,14 +36,8 @@ test('activity log records security events without secrets', async (t) => {
   assert.ok(!JSON.stringify(logs).includes(token));
 });
 
-test('R-01: without APP_SECRET, a token forged with the public development key is rejected', { todo: 'R-01 owner decision: refuse to start (or refuse auth) when APP_SECRET is missing' }, async (t) => {
-  const s = await startServer({ secret: '' });
-  t.after(() => s.stop());
-  const payload = b64url(JSON.stringify({ memberId: 'steve', role: 'admin', iat: Date.now(), exp: Date.now() + 3600e3 }));
-  const sig = b64url(crypto.createHmac('sha256', 'ss-budget-dev-insecure-secret-changez-moi').update(payload).digest());
-  const res = await s.request('GET', '/api/state', { token: `${payload}.${sig}`, noSecret: true });
-  assert.equal(res.status, 401);
-});
+// R-01 (forged token with the public development key, missing secret) is now enforced:
+// see config.test.cjs — startup refusal and forged-token rejection.
 
 test('R-02: changing a PIN revokes the sessions issued with the previous PIN', { todo: 'R-02 owner decision: stateless tokens stay valid until expiry (default 12 h)' }, async (t) => {
   const s = await startServer();

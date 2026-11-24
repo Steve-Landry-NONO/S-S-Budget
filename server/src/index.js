@@ -6,10 +6,19 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { openDb, absoluteDbPath } = require('./db');
+const { validateAppSecret, secretsEqual, GENERATE_HINT } = require('./config');
+
+// R-01 : démarrage sécurisé par défaut, sans clé de secours ni dépendance à NODE_ENV.
+const secretCheck = validateAppSecret(process.env.APP_SECRET);
+if (!secretCheck.ok) {
+  // Ne jamais journaliser la valeur du secret.
+  console.error(`[S&S Budget] Démarrage refusé : APP_SECRET ${secretCheck.reason}. Définissez dans server/.env un secret aléatoire d'au moins 32 caractères, par exemple : ${GENERATE_HINT}`);
+  process.exit(1);
+}
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
-const appSecret = process.env.APP_SECRET || '';
+const appSecret = process.env.APP_SECRET;
 const DELETE_WINDOW_DAYS = Number(process.env.DELETE_WINDOW_DAYS || 5);
 const serverRoot = path.join(__dirname, '..');
 const backupsDir = path.join(serverRoot, 'backups');
@@ -18,13 +27,8 @@ const backupsDir = path.join(serverRoot, 'backups');
 const PIN_MAX_ATTEMPTS = Number(process.env.PIN_MAX_ATTEMPTS || 5);
 const PIN_LOCK_MINUTES = Number(process.env.PIN_LOCK_MINUTES || 15);
 const AUTH_TOKEN_TTL_HOURS = Number(process.env.AUTH_TOKEN_TTL_HOURS || 12);
-const DEV_FALLBACK_AUTH_SECRET = 'ss-budget-dev-insecure-secret-changez-moi';
-const authSigningSecret = appSecret && appSecret !== 'change-moi-avec-une-phrase-longue' ? appSecret : DEV_FALLBACK_AUTH_SECRET;
-if (authSigningSecret === DEV_FALLBACK_AUTH_SECRET) {
-  console.warn(
-    "[S&S Budget] APP_SECRET non défini (ou laissé à sa valeur d'exemple) : les jetons de connexion sont signés avec une clé de développement non sécurisée et prévisible. Définissez APP_SECRET dans server/.env avant tout usage réel."
-  );
-}
+// Plus aucune clé de secours : les jetons sont toujours signés avec APP_SECRET validé.
+const authSigningSecret = appSecret;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '2mb' }));
@@ -274,10 +278,10 @@ async function buildExportPayload() {
   };
 }
 
+// Le secret API est toujours exigé (plus de contournement si APP_SECRET est absent).
 function requireSecret(req, res, next) {
-  if (!appSecret || appSecret === 'change-moi-avec-une-phrase-longue') return next();
   const provided = req.headers['x-ss-budget-secret'];
-  if (provided !== appSecret) return res.status(401).json({ error: 'Secret API invalide.' });
+  if (typeof provided !== 'string' || !secretsEqual(provided, appSecret)) return res.status(401).json({ error: 'Secret API invalide.' });
   next();
 }
 
