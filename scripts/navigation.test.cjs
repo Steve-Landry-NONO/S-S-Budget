@@ -21,7 +21,12 @@ test('expense and contribution routes belong to home and provide return', () => 
 });
 test('navigation remains behind session gate and outside content scroll', () => {
   const app=fs.readFileSync('App.js','utf8').replace(/\r\n/g, '\n');
-  assert.ok(app.indexOf('if (!isSessionValid())') < app.indexOf('<NavigationActions'));
+  const gate = app.indexOf('if (!isSessionValid())');
+  assert.ok(gate >= 0);
+  assert.ok(app.indexOf('{!largeText && renderMainControls()}') > gate);
+  assert.ok(app.indexOf('{largeText && renderMainControls()}') > gate);
+  assert.equal((app.match(/renderMainControls\(\)/g) || []).length, 2);
+  assert.ok(app.slice(app.indexOf('const renderMainControls ='), gate).includes('<NavigationActions'));
   assert.ok(app.indexOf('<NavigationActions') < app.indexOf('<BottomNavigation'));
   assert.ok(app.includes('</ScrollView>\n      <BottomNavigation'));
   assert.ok(!app.includes('<View style={styles.tabsOuter}>'));
