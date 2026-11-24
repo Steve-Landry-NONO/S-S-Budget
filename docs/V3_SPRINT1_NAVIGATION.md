@@ -49,3 +49,6 @@ Appareil / OS / largeur logique / police / commit / date : à renseigner.
 | QA-09 | Perte réseau puis retour | Pas de confirmation trompeuse, état cohérent | Non exécuté |
 | QA-10 | Expiration de session | Accès protégé refusé, retour connexion | Non exécuté |
 Capturer Glance, Accueil, Enveloppes, Activité, Mon duo, Dépense, Versement. Ne pas publier de données personnelles. Archiver les preuves et anomalies P0/P1 avant intégration. Les tests d'expiration peuvent utiliser AUTH_TOKEN_TTL_HOURS réduit uniquement sur le serveur QA après vérification de son format accepté.
+
+## 24 novembre — recette iOS et accessibilité
+Recette utilisateur : navigation, authentification et scénario financier 200 - 35 = 165 EUR observés. Grande police : débordements signalés. Correctif candidat : commandes principales dans le scroll à grande taille, empilement des en-têtes et actions, métriques pleine largeur, contraste de barre de statut. Refaire recette native avec police agrandie et normale ; vérifier aussi Glance, modales et clavier. Aucun changement de règles financières ou d'authentification. Les assertions statiques ne constituent pas une validation native.

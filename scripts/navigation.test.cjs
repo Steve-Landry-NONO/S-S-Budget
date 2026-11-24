@@ -41,3 +41,5 @@ test('icons are decorative and navigation labels remain available', () => {
  require('node:assert/strict').match(source,/Modifier la configuration du serveur/);
  require('node:assert/strict').match(source,/apiUrl && !editingServer && !isSessionValid\(\)/);
  });
+
+test('large text keeps main controls in scroll and navigation outside',()=>{const app=fs.readFileSync('App.js','utf8');assert.match(app,/fontScale >= 1\.3/);assert.match(app,/\{largeText && renderMainControls\(\)\}/);assert.match(app,/\{!largeText && renderMainControls\(\)\}/);assert.match(app,/largeText && styles\.stacked/);assert.match(app,/StatusBar style="dark"/);assert.doesNotMatch(app,/allowFontScaling=\{false\}/);});

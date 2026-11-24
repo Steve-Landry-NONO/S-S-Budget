@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -175,6 +176,8 @@ const initialState = {
 };
 
 export default function App() {
+  const {fontScale, width} = useWindowDimensions();
+  const largeText = fontScale >= 1.3 || width < 340;
   const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
@@ -794,7 +797,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       {authLoading && !authMembers.length ? <Text style={styles.muted}>Chargement…</Text> : null}
       {authMembers.map((member) => (
         <View key={member.id} style={styles.card}>
-          <View style={styles.rowBetween}>
+          <View style={[styles.rowBetween, largeText && styles.stacked]}>
             <Text style={styles.cardTitle}>{member.name}</Text>
             <Text style={member.locked ? styles.badgeWarn : (member.pinSet ? styles.badgeOk : styles.badge)}>
               {member.locked ? 'Verrouillé' : member.pinSet ? 'PIN défini' : 'PIN à créer'}
@@ -815,9 +818,9 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
   const renderAuthGate = () => (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
+      <StatusBar style="dark" />
+      <View style={[styles.header, largeText && styles.stacked]}>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>Duo Budget</Text>
           <Text style={styles.subtitle}>Connexion sécurisée</Text>
         </View>
@@ -884,10 +887,40 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     return lines;
   };
 
+  const renderMainControls = () => (<>
+      <View style={[styles.header, largeText && styles.stacked]}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>Duo Budget</Text>
+          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
+          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
+        </View>
+        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
+      </View>
+
+      <View style={[styles.monthRow, largeText && styles.stacked]}>
+        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois précédent" onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
+        <TextInput
+          style={[styles.monthLabel, largeText && styles.fullWidth]}
+          value={monthDraft}
+          onChangeText={setMonthDraft}
+          onSubmitEditing={applyMonthDraft}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="numbers-and-punctuation"
+          placeholder="AAAA-MM"
+        />
+        <TouchableOpacity style={[styles.monthOkButton, largeText && styles.fullWidth]} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois suivant" onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
+      </View>
+
+      <NavigationActions route={tab} onNavigate={setTab} />
+
+  </>);
+
   if (bootLoading) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView style={styles.safe}><StatusBar style="light" /></SafeAreaView>
+        <SafeAreaView style={styles.safe}><StatusBar style="dark" /></SafeAreaView>
       </SafeAreaProvider>
     );
   }
@@ -908,35 +941,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Duo Budget</Text>
-          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
-          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
-        </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
-      </View>
+      <StatusBar style="dark" />
+      {!largeText && renderMainControls()}
 
-      <View style={styles.monthRow}>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
-        <TextInput
-          style={styles.monthLabel}
-          value={monthDraft}
-          onChangeText={setMonthDraft}
-          onSubmitEditing={applyMonthDraft}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
-          placeholder="AAAA-MM"
-        />
-        <TouchableOpacity style={styles.monthOkButton} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
-      </View>
-
-      <NavigationActions route={tab} onNavigate={setTab} />
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        {largeText && renderMainControls()}
         {tab === 'dashboard' && (
           <>
             <View style={styles.hero}>
@@ -980,11 +989,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Dépenses du mois</Text>
             {monthExpenseRows.map((expense) => (
               <View key={expense.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
                 <Text style={styles.muted}>{expense.date}</Text>
                 {canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditExpense(expense)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1022,10 +1031,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Versements du mois</Text>
             {monthContributionRows.map((contribution) => (
               <View key={contribution.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
                 {canEditRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditContribution(contribution)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1043,13 +1052,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             {isAdmin && <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>}
             {summary.map((category) => (
               <View key={category.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
                 <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
                 <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)} · Disponible budget : {formatEuro(category.availableBudget)}</Text>
                 <Text style={styles.muted}>Versé ce mois : {formatEuro(category.paidIn)} · Dépensé : {formatEuro(category.spent)}</Text>
                 <Text style={styles.muted}>Solde caisse réel : {formatEuro(category.cashBalance)}</Text>
-                {isAdmin && <View style={styles.rowGap}>
+                {isAdmin && <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                 </View>}
@@ -1067,14 +1076,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>}
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
               <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
             </View>
             <Text style={styles.help}>Le changement de profil demande le PIN du profil cible. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
-            {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
+            {members.map((member) => <View key={member.id} style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
 
@@ -1086,7 +1095,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
               <Text style={styles.muted}>{unreadActivityCount > 0 ? `${unreadActivityCount} activité${unreadActivityCount > 1 ? 's' : ''} non lue${unreadActivityCount > 1 ? 's' : ''} pour vous.` : 'Tout est à jour pour vous.'}</Text>
               {unreadActivityCount > 0 && (
-                <View style={styles.rowGap}>
+                <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={markAllActivityRead}><Text style={styles.smallButtonText}>Tout marquer comme lu</Text></TouchableOpacity>
                 </View>
               )}
@@ -1098,7 +1107,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               const unread = isLogUnread(log, currentUserId);
               return (
                 <View key={log.id} style={styles.card}>
-                  <View style={styles.rowBetween}>
+                  <View style={[styles.rowBetween, largeText && styles.stacked]}>
                     <Text style={styles.cardTitle}>{activityLabel(log.action)}</Text>
                     <View style={styles.badgeRow}>
                       {unread && <Text style={styles.badgeWarn}>Nouveau</Text>}
@@ -1111,7 +1120,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                   {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
                   <Text style={styles.lockedText}>Action réalisée par : {log.actorName || 'Système'} · {formatActivityDate(log.createdAt)}</Text>
                   {unread && (
-                    <View style={styles.rowGap}>
+                    <View style={[styles.rowGap, largeText && styles.stacked]}>
                       <TouchableOpacity style={styles.smallButton} onPress={() => markActivityRead(log.id)}><Text style={styles.smallButtonText}>Marquer comme lu</Text></TouchableOpacity>
                     </View>
                   )}
@@ -1125,7 +1134,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={!!editingExpense} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingExpense(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier dépense</Text>
             <TouchableOpacity onPress={saveExpenseEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1143,7 +1152,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={!!editingContribution} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingContribution(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier versement</Text>
             <TouchableOpacity onPress={saveContributionEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1160,7 +1169,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <TextInput style={styles.input} placeholder="Nom" value={editingCategory?.name || ''} onChangeText={(name) => setEditingCategory((c) => ({ ...c, name }))} />
             <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String(editingCategory?.monthlyPerPerson || '')} onChangeText={(monthlyPerPerson) => setEditingCategory((c) => ({ ...c, monthlyPerPerson }))} />
@@ -1177,7 +1186,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={settingsModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.label}>URL API maison</Text>
             <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
@@ -1185,11 +1194,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
-              <View style={styles.rowGap}>
+              <View style={[styles.rowGap, largeText && styles.stacked]}>
                 <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.smallButton} onPress={() => setPinManageModal(true)}><Text style={styles.smallButtonText}>Modifier mon PIN</Text></TouchableOpacity>
               </View>
@@ -1214,7 +1223,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={profileModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setProfileModal(false); setPinStage(null); }}><Text style={styles.modalAction}>Fermer</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Changer de profil</Text>
             <Text style={styles.modalAction}> </Text>
@@ -1227,7 +1236,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={pinManageModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setPinManageModal(false); setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' }); }}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier mon PIN</Text>
             <TouchableOpacity onPress={submitPinManage}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1248,14 +1257,15 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   );
 }
 
-function Metric({ label, value }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
-function PersonCard({ state }) { return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
+function Metric({ label, value }) { const {fontScale,width}=useWindowDimensions(); return <View style={[styles.metric, (fontScale >= 1.3 || width < 340) && styles.fullWidth]}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
+function PersonCard({ state }) { const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340; return <View style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
 function CategorySummary({ category }) {
+  const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340;
   const pct = category.availableBudget ? Math.min(100, Math.max(0, (category.spent / category.availableBudget) * 100)) : 0;
   const badgeStyle = category.needsFunding ? styles.badgeWarn : category.overBudget ? styles.badgeWarn : styles.badgeOk;
   const badgeText = category.needsFunding ? 'À alimenter' : category.overBudget ? 'Dépassement' : 'OK';
   return <View style={styles.card}>
-    <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
+    <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
     <View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
     <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
     <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)}</Text>
@@ -1266,13 +1276,16 @@ function CategorySummary({ category }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.background },
+  stacked: { flexDirection: 'column', alignItems: 'stretch' },
+  fullWidth: { width: '100%', flex: 0 },
+  headerCopy: { flexShrink: 1, minWidth: 0 },
   header: { backgroundColor: '#0F172A', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: 'white', fontSize: 31, fontWeight: '900' }, subtitle: { color: '#CBD5E1', fontSize: 16, marginTop: 2 }, syncText: { fontSize: 12, marginTop: 6, fontWeight: '700' }, online: { color: '#86EFAC' }, offline: { color: '#FCA5A5' },
-  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { color: 'white', fontWeight: '900' },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', width: 48, height: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', height: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
+  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { textAlign: 'center', color: 'white', fontWeight: '900' },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', minWidth: 48, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', minHeight: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
-  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
-  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
+  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flexShrink: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { textAlign: 'center', color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { textAlign: 'center', color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
+  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { flexWrap: 'wrap', gap: 8, backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });
