@@ -13,6 +13,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
+import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
+import { palette } from './src/theme/tokens';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -906,7 +908,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       <StatusBar style="light" />
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>S&S Budget</Text>
+          <Text style={styles.title}>Duo Budget</Text>
           <Text style={styles.subtitle}>Gestion de budget de couple</Text>
           <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
         </View>
@@ -929,18 +931,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
         <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
       </View>
 
-      <View style={styles.tabsOuter}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-          {[
-            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
-            ['activity', unreadActivityCount > 0 ? `Journal • ${unreadActivityCount}` : 'Journal'],
-          ].map(([key, label]) => (
-            <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
-              <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+      <NavigationActions route={tab} onNavigate={setTab} />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
         {tab === 'dashboard' && (
@@ -1127,7 +1118,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
           </>
         )}
       </ScrollView>
-
+      <BottomNavigation route={tab} onNavigate={setTab} unreadCount={unreadActivityCount} />
 
       <Modal visible={!!editingExpense} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
@@ -1271,7 +1262,7 @@ function CategorySummary({ category }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F3F4F6' },
+  safe: { flex: 1, backgroundColor: palette.background },
   header: { backgroundColor: '#0F172A', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: 'white', fontSize: 31, fontWeight: '900' }, subtitle: { color: '#CBD5E1', fontSize: 16, marginTop: 2 }, syncText: { fontSize: 12, marginTop: 6, fontWeight: '700' }, online: { color: '#86EFAC' }, offline: { color: '#FCA5A5' },
   headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { color: 'white', fontWeight: '900' },
