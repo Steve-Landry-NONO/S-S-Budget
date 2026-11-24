@@ -16,6 +16,8 @@ import { StatusBar } from 'expo-status-bar';
 import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
 import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
 import { palette } from './src/theme/tokens';
+import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
+import DashboardOverview from './src/features/dashboard/DashboardOverview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -464,49 +466,11 @@ export default function App() {
   const previousExpenses = useMemo(() => expenses.filter((e) => !isPlannedAction(e) && isBeforeMonth(e.date, selectedMonth)), [expenses, selectedMonth]);
   const previousContributions = useMemo(() => contributions.filter((c) => !isPlannedAction(c) && isBeforeMonth(c.date, selectedMonth)), [contributions, selectedMonth]);
 
-  const summary = useMemo(() => categories.map((category) => {
-    const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const previousSpent = previousExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const previousPaidIn = previousContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-    const carryOver = previousPaidIn - previousSpent;
-    const availableBudget = carryOver + monthlyBudget;
-    const remainingBudget = availableBudget - spent;
-    const cashBalance = carryOver + paidIn - spent;
-    return {
-      ...category,
-      spent,
-      paidIn,
-      previousSpent,
-      previousPaidIn,
-      carryOver,
-      monthlyBudget,
-      availableBudget,
-      remainingBudget,
-      cashBalance,
-      overBudget: spent > availableBudget,
-      needsFunding: cashBalance < 0,
-    };
-  }), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
-
-  const totals = useMemo(() => summary.reduce((acc, c) => ({
-    monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
-    availableBudget: acc.availableBudget + c.availableBudget,
-    carryOver: acc.carryOver + c.carryOver,
-    spent: acc.spent + c.spent,
-    paidIn: acc.paidIn + c.paidIn,
-    cashBalance: acc.cashBalance + c.cashBalance,
-  }), { monthlyBudget: 0, availableBudget: 0, carryOver: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
-
-
-  const plannedTotals = useMemo(() => ({
-    spent: plannedMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
-    paidIn: plannedMonthContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-  }), [plannedMonthExpenses, plannedMonthContributions]);
-
+  const summary = useMemo(() => dashboardModel.summarizeCategories(categories, members.length, monthExpenses, monthContributions, previousExpenses, previousContributions), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
+  const totals = useMemo(() => dashboardModel.summarizeTotals(summary), [summary]);
+  const plannedTotals = useMemo(() => dashboardModel.summarizePlanned(plannedMonthExpenses, plannedMonthContributions), [plannedMonthExpenses, plannedMonthContributions]);
   const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
-  const forecastCashBalance = totals.cashBalance + plannedTotals.paidIn - plannedTotals.spent;
+  const forecastCashBalance = dashboardModel.forecastBalance(totals, plannedTotals);
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -948,17 +912,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
         {largeText && renderMainControls()}
         {tab === 'dashboard' && (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
-              <View style={styles.metricGrid}>
-                <Metric label="Report précédent" value={formatEuro(totals.carryOver)} dark />
-                <Metric label="Budget du mois" value={formatEuro(totals.monthlyBudget)} dark />
-                <Metric label="Versé ce mois" value={formatEuro(totals.paidIn)} dark />
-                <Metric label="Dépensé ce mois" value={formatEuro(totals.spent)} dark />
-                <Metric label="Solde réel" value={formatEuro(totals.cashBalance)} dark />
-                <Metric label="Solde prévisionnel" value={formatEuro(forecastCashBalance)} dark />
-              </View>
-            </View>
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
