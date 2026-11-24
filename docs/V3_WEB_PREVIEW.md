@@ -3,3 +3,6 @@ Branche dédiée, hors chemin critique des merges mobiles. Aperçu illustratif a
 PowerShell : `$env:EXPO_PUBLIC_DUO_PREVIEW="1"; npx.cmd expo start --web -c`
 Bash : `EXPO_PUBLIC_DUO_PREVIEW=1 npx expo start --web -c`
 Pour la recette normale supprimer cette variable ou ouvrir un terminal neuf. CI export statique en artefact ; pas de déploiement public automatique. Avant hébergement : vérifier isolation et accès, absence de données privées, revue des dépendances et rendu navigateur. Tests natifs prévus sur Ubuntu, avec serveur QA distinct.
+
+## QA Lab — évolution
+Accès direct aux sept écrans, quatre scénarios déterministes (normal, négatif, vide, futur), largeur du conteneur transmise aux composants Glance/navigation, CTA de démonstration explicites. Glance conserve ses chiffres fixes ; les scénarios internes ne sont pas une simulation du grand livre. Aucun résultat de recette authentifiée ou native déduit de ces contrôles. Les pictogrammes de marque officiels et la fidélité Figma restent à traiter.

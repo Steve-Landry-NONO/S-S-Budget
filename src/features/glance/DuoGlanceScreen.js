@@ -28,9 +28,9 @@ const clamp = (v) => Math.max(0, Math.min(1, v));
  * never passed in from a cache or API. No real balance can leak here.
  * A future real-balance shortcut requires a separate security review.
  */
-export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
+export default function DuoGlanceScreen({ onSignIn, onCreateAccount, previewWidth, previewMode = false }) {
   const { width, height } = useWindowDimensions();
-  const fieldWidth = Math.max(280, Math.min(width - 32, 390));
+  const fieldWidth = Math.max(280, Math.min((previewWidth || width) - 32, 390));
   const compact = height < 740;
   const progress = useRef(new Animated.Value(0)).current;
   const float = useRef(new Animated.Value(0)).current;
@@ -182,11 +182,11 @@ export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onSignIn} accessibilityRole="button" accessibilityLabel="Se connecter à son espace">
-          <Text style={styles.primaryButtonText}>Se connecter</Text>
+        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onSignIn} accessibilityRole="button" accessibilityLabel={previewMode ? "Explorer la démo" : "Se connecter à son espace"}>
+          <Text style={styles.primaryButtonText}>{previewMode ? 'Explorer la démo' : 'Se connecter'}</Text>
         </Pressable>
-        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onCreateAccount || onSignIn} accessibilityRole="button" accessibilityLabel="Découvrir la configuration de Duo Budget">
-          <Text style={styles.secondaryButtonText}>Découvrir la configuration</Text>
+        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onCreateAccount || onSignIn} accessibilityRole="button" accessibilityLabel={previewMode ? "Découvrir les écrans" : "Découvrir la configuration de Duo Budget"}>
+          <Text style={styles.secondaryButtonText}>{previewMode ? 'Découvrir les écrans' : 'Découvrir la configuration'}</Text>
         </Pressable>
         <Text style={styles.privacyNote}>Aucun solde personnel n'est accessible avant authentification.</Text>
       </View>

@@ -14,3 +14,6 @@ test('preview does not access storage, network or auth tokens',()=>{
  assert.match(src,/aucune écriture/);
  assert.match(src,/BottomNavigation/);
 });
+
+test('scenario forecast preserves cash and future separation',()=>{const {SCENARIOS,forecast}=require('../src/features/preview/fixtures.cjs');assert.equal(forecast(SCENARIOS.normal),106860);assert.equal(forecast(SCENARIOS.negative),-17500);assert.equal(forecast(SCENARIOS.empty),0);assert.equal(forecast(SCENARIOS.future),38000);});
+test('fixture module contains no storage or network access',()=>{assert.doesNotMatch(fs.readFileSync('src/features/preview/fixtures.cjs','utf8'),/AsyncStorage|fetch\(|\/api\//);});
