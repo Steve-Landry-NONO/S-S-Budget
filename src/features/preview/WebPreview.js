@@ -10,13 +10,13 @@ const {SCENARIOS,buildScenario,format}=fixtures;
 export default function WebPreview(){
  const {width}=useWindowDimensions();
  const [size,setSize]=useState(390),[route,setRoute]=useState('dashboard'),[scenario,setScenario]=useState('normal'),[large,setLarge]=useState(false);
- const viewport=Math.min(size||width,width),data=buildScenario(scenario);
+ const viewport=Math.min(size||760,width),data=buildScenario(scenario);
  const choice=(key,label,selected,onPress)=><TouchableOpacity key={key} accessibilityRole="button" accessibilityState={{selected}} onPress={onPress} style={[styles.choice,selected&&styles.selected]}><Text style={styles.text}>{label}</Text></TouchableOpacity>;
  return <SafeAreaProvider><View style={styles.root}>
   <View style={styles.toolbar}>
    <Text style={styles.title}>DUO BUDGET · QA LAB · DONNÉES FICTIVES</Text>
    <Text style={styles.text}>Aucun compte, aucune écriture, aucune connexion serveur.</Text>
-   <View style={styles.row}>{[360,390,430,0].map(w=>choice(w,w?w+' px':'Plein écran',size===w,()=>setSize(w)))}</View>
+   <View style={styles.row}>{[360,390,430,0].map(w=>choice(w,w?w+' px':'Large (760 px max)',size===w,()=>setSize(w)))}</View>
    <View style={styles.row}>{Object.entries(SCENARIOS).map(([k,s])=>choice(k,s.label,scenario===k,()=>{setScenario(k);setRoute('dashboard');}))}</View>
    <View style={styles.row}>{choice('large','Disposition grande police',large,()=>setLarge(v=>!v))}{choice('glance','Glance',route==='glance',()=>setRoute('glance'))}{choice('home','Accueil',route==='dashboard',()=>setRoute('dashboard'))}</View>
    <Text style={styles.text}>Largeur : {Math.round(viewport)} px · simulation de disposition, pas de taille de police système</Text>
@@ -40,4 +40,4 @@ export default function WebPreview(){
   </View>
  </View></SafeAreaProvider>;
 }
-const styles=StyleSheet.create({root:{flex:1,alignItems:'center',backgroundColor:palette.border},toolbar:{width:'100%',alignItems:'center',padding:spacing.xs,gap:spacing.xxs,backgroundColor:palette.surface},row:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'center',gap:spacing.xxs},choice:{padding:spacing.xs,borderRadius:radius.sm,backgroundColor:palette.background},selected:{backgroundColor:palette.lightBlue},title:{fontSize:16,fontWeight:'700',color:palette.midnight},text:{fontSize:13,color:palette.muted},device:{flex:1,backgroundColor:palette.background,overflow:'hidden'},scroll:{flex:1},content:{padding:spacing.md,gap:spacing.sm}});
+const styles=StyleSheet.create({root:{flex:1,alignItems:'center',backgroundColor:palette.border},toolbar:{width:'100%',alignItems:'center',padding:spacing.xs,gap:spacing.xxs,backgroundColor:palette.surface},row:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'center',gap:spacing.xxs},choice:{padding:spacing.xs,borderRadius:radius.sm,backgroundColor:palette.background},selected:{backgroundColor:palette.lightBlue},title:{fontSize:16,fontWeight:'700',color:palette.midnight},text:{fontSize:13,color:palette.muted},device:{flex:1,minHeight:0,backgroundColor:palette.background,overflow:'hidden'},scroll:{flex:1,minHeight:0},content:{padding:spacing.md,gap:spacing.sm}});

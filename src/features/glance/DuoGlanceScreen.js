@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Image,
   Animated,
   PanResponder,
   Pressable,
@@ -111,7 +112,7 @@ export default function DuoGlanceScreen({ onSignIn, onCreateAccount, previewWidt
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <View style={styles.brandIcon}><Text style={styles.brandHeart}>♡</Text></View>
+          <Image source={require('../../../assets/duo-mark-blue.png')} style={styles.brandMark} accessible={false} />
           <Text style={styles.brandText}>Duo Budget</Text>
         </View>
         <View style={styles.demoPill}><Text style={styles.demoPillText}>DÉMO</Text></View>
@@ -198,8 +199,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F7F9FF' },
   header: { paddingHorizontal: 22, paddingTop: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: palette.signature, justifyContent: 'center', alignItems: 'center' },
-  brandHeart: { color: '#FFFFFF', fontSize: 27, fontWeight: '600' },
+  brandMark: { width: 34, height: 34 },
   brandText: { color: palette.midnight, fontSize: 18, fontWeight: '800' },
   demoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: '#FFFFFF' },
   demoPillText: { color: '#596A81', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
