@@ -18,5 +18,5 @@ function buildScenario(key){
  const personState=members.map(member=>{const expected=s.categories.reduce((n,c)=>n+c.monthlyPerPerson,0),paid=s.contributions.filter(c=>c.memberId===member.id).reduce((n,c)=>n+c.amount,0),personallyPaidExpenses=s.expenses.filter(e=>e.paidByMemberId===member.id).reduce((n,e)=>n+e.amount,0);return {member,expected,paid,missing:expected-paid,personallyPaidExpenses};});
  return {summary,totals,plannedTotals,forecastCashBalance:model.forecastBalance(totals,plannedTotals),recent:model.recentOperations(s.expenses,s.contributions,s.categories,members),personState,connected:s.connected,syncMessage:'Synchronisation simulée',selectedMonth:'2026-11'};
 }
-const format=value=>Number(value).toFixed(2).replace('.',',')+' €';
+const format=model.formatEuro;
 module.exports={SCENARIOS,buildScenario,format};

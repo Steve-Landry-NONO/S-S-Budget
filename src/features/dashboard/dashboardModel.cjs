@@ -36,20 +36,32 @@ function recentOperations(expenses,contributions,categories,members,limit=4) {
   ];
   return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))||a.key.localeCompare(b.key)).slice(0,limit);
 }
-// Presentation only: usage is spending / available budget, never cash / target.
+// --- Presentation only (F-01). Raw totals, persistence and V2 aggregation untouched. ---
+// The amount exactly as displayed: same toFixed(2) rounding as the historical display,
+// without negative zero. Alerts compare this value, never the raw floating total.
+function presentedAmount(value) {
+  const n=Number(Number(value||0).toFixed(2));
+  return n===0?0:n;
+}
+function formatEuro(value) {return presentedAmount(value).toFixed(2).replace('.',',')+' €';}
+// Usage is spending / available budget, never cash / target.
+// Status follows the displayed cents; falls back to V2 flags when amounts are absent.
 function envelopePresentation(category) {
   const available=Number(category.availableBudget);
   const spent=Number(category.spent);
+  const cash=Number(category.cashBalance);
   const usage=Number.isFinite(available)&&available>0&&Number.isFinite(spent)
     ? Math.min(100,Math.max(0,spent/available*100)) : null;
-  return {usage, status:category.needsFunding?'À alimenter':category.overBudget?'Dépassement':null};
+  const needsFunding=Number.isFinite(cash)?presentedAmount(cash)<0:Boolean(category.needsFunding);
+  const overBudget=Number.isFinite(available)&&Number.isFinite(spent)?presentedAmount(spent)>presentedAmount(available):Boolean(category.overBudget);
+  return {usage, status:needsFunding?'À alimenter':overBudget?'Dépassement':null};
 }
 function dashboardNotices({totals,forecast,summary,connected}) {
   const notices=[];
   if(!connected) notices.push({key:'offline',text:'Hors ligne : les données locales peuvent ne pas être à jour.'});
   if(!summary.length) notices.push({key:'empty',text:'Aucune enveloppe configurée. Commencez par créer une enveloppe.'});
-  if(totals.cashBalance<0) notices.push({key:'negative',text:'Le solde réel enregistré est négatif.'});
-  if(forecast<0) notices.push({key:'forecast',text:'Le solde prévisionnel est négatif.'});
+  if(presentedAmount(totals.cashBalance)<0) notices.push({key:'negative',text:'Le solde réel enregistré est négatif.'});
+  if(presentedAmount(forecast)<0) notices.push({key:'forecast',text:'Le solde prévisionnel est négatif.'});
   return notices;
 }
-module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance,recentOperations,envelopePresentation,dashboardNotices};
+module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance,recentOperations,envelopePresentation,dashboardNotices,presentedAmount,formatEuro};

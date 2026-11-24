@@ -15,21 +15,22 @@ export default function DashboardOverview({totals,plannedTotals,forecastCashBala
     return ()=>{alive=false;subscription.remove();stop();};
   },[disableMotion,opacity]);
   const metrics=[['Report',totals.carryOver],['Versements',totals.paidIn],['Dépenses',-totals.spent]];
+  const shown=dashboardModel.presentedAmount; // F-01: compare what is displayed
   const notices=dashboardModel.dashboardNotices({totals,forecast:forecastCashBalance,summary,connected});
   return <View style={styles.root}>
     
     <Text style={styles.meta}>{connected ? syncMessage : 'Hors ligne · données locales'}</Text>
     <Animated.View style={[styles.hero,{opacity}]}>
       <Text style={styles.heroLabel}>Solde réel enregistré</Text>
-      <Text style={[styles.real,totals.cashBalance<0&&styles.negative]}>{formatEuro(totals.cashBalance)}</Text>
+      <Text style={[styles.real,shown(totals.cashBalance)<0&&styles.negative]}>{formatEuro(totals.cashBalance)}</Text>
       <View style={styles.divider}/>
       <Text style={styles.heroLabel}>Solde prévisionnel</Text>
-      <Text style={[styles.forecast,forecastCashBalance<0&&styles.negative]}>{formatEuro(forecastCashBalance)}</Text>
+      <Text style={[styles.forecast,shown(forecastCashBalance)<0&&styles.negative]}>{formatEuro(forecastCashBalance)}</Text>
       <Text style={styles.heroNote}>{plannedTotals.paidIn===0&&plannedTotals.spent===0 ? 'Aucune opération prévue' : 'Solde net des opérations prévues : '+formatEuro(plannedTotals.paidIn-plannedTotals.spent)}</Text>
     </Animated.View>
     {notices.map(n=><View key={n.key} style={styles.notice}><Text style={styles.noticeText}>{n.text}</Text></View>)}
     <Text style={styles.heading}>Bilan mensuel</Text>
-    <View style={[styles.breakdown,stacked&&styles.column]}>{metrics.map(([label,value])=><View key={label} style={[styles.breakdownItem,stacked&&styles.stackedItem]}><Text style={styles.meta}>{label}</Text><Text style={[styles.flowValue,label==="Versements"&&styles.income]}>{value>0?"+":""}{formatEuro(value)}</Text></View>)}</View><Text style={styles.meta}>Budget objectif (distinct du solde) : {formatEuro(totals.monthlyBudget)}</Text>
+    <View style={[styles.breakdown,stacked&&styles.column]}>{metrics.map(([label,value])=><View key={label} style={[styles.breakdownItem,stacked&&styles.stackedItem]}><Text style={styles.meta}>{label}</Text><Text style={[styles.flowValue,label==="Versements"&&styles.income]}>{shown(value)>0?"+":""}{formatEuro(value)}</Text></View>)}</View><Text style={styles.meta}>Budget objectif (distinct du solde) : {formatEuro(totals.monthlyBudget)}</Text>
     <Text style={styles.heading}>Actions rapides</Text>
     <View style={styles.grid}>{[['expenses','Dépenser','↗'],['contributions','Verser','↙']].map(([route,label,icon])=><TouchableOpacity key={route} accessibilityRole="button" onPress={()=>onNavigate(route)} style={[styles.metric,styles.action,route==='contributions'&&styles.incomeAction,stacked&&styles.full]}><Text accessible={false} accessibilityElementsHidden style={[styles.actionIcon,route==='contributions'&&styles.income]}>{icon}</Text><Text style={[styles.actionLabel,route==='contributions'&&styles.income]}>{label}</Text></TouchableOpacity>)}</View>
     <View style={styles.grid}><Text style={styles.heading}>Enveloppes</Text><TouchableOpacity accessibilityRole="button" onPress={()=>onNavigate('categories')} style={styles.link}><Text style={styles.actionLabel}>Tout voir ›</Text></TouchableOpacity></View>
@@ -37,7 +38,7 @@ export default function DashboardOverview({totals,plannedTotals,forecastCashBala
       const info=dashboardModel.envelopePresentation(c);
       return <View key={c.id} style={[styles.metric,stacked&&styles.full]}>
         <Text style={styles.operationLabel}>{c.name}</Text>
-        <Text style={[styles.value,c.cashBalance<0&&styles.negativeInk]}>{formatEuro(c.cashBalance)}</Text>
+        <Text style={[styles.value,shown(c.cashBalance)<0&&styles.negativeInk]}>{formatEuro(c.cashBalance)}</Text>
         <Text style={styles.meta}>Solde réel</Text>
         <Text style={styles.meta}>Budget restant : {formatEuro(c.remainingBudget)}</Text>
         {info.usage!==null && <><View accessibilityRole="progressbar" accessibilityLabel={'Budget consommé : '+c.name} accessibilityValue={{min:0,max:100,now:Math.round(info.usage)}} style={styles.track}><View style={[styles.fill,{width:info.usage+'%'},c.overBudget&&styles.warningFill]}/></View><Text style={styles.meta}>Budget consommé : {Math.round(info.usage)} %</Text></>}
@@ -45,15 +46,15 @@ export default function DashboardOverview({totals,plannedTotals,forecastCashBala
       </View>;
     })}</View> : null}
     <Text style={styles.heading}>Dernières opérations réalisées</Text>
-    {recent.length ? recent.map(row=><View key={row.key} style={[styles.operation,stacked&&styles.column]}><View style={[styles.operationCopy,stacked&&styles.stackedItem]}><Text style={styles.operationLabel}>{row.label}</Text><Text style={styles.meta}>{row.category} · {row.date}</Text></View><Text style={[styles.flowValue,row.amount>0&&styles.income]}>{row.amount>0?'+':''}{formatEuro(row.amount)}</Text></View>) : <Text style={styles.meta}>Aucune opération réalisée ce mois-ci.</Text>}
+    {recent.length ? recent.map(row=><View key={row.key} style={[styles.operation,stacked&&styles.column]}><View style={[styles.operationCopy,stacked&&styles.stackedItem]}><Text style={styles.operationLabel}>{row.label}</Text><Text style={styles.meta}>{row.category} · {row.date}</Text></View><Text style={[styles.flowValue,shown(row.amount)>0&&styles.income]}>{shown(row.amount)>0?'+':''}{formatEuro(row.amount)}</Text></View>) : <Text style={styles.meta}>Aucune opération réalisée ce mois-ci.</Text>}
     <TouchableOpacity accessibilityRole="button" onPress={()=>onNavigate('activity')} style={styles.link}><Text style={styles.actionLabel}>Voir le journal ›</Text></TouchableOpacity>
     <View style={styles.grid}><Text style={styles.heading}>Votre duo</Text><TouchableOpacity accessibilityRole="button" onPress={()=>onNavigate('members')} style={styles.link}><Text style={styles.actionLabel}>Mon duo ›</Text></TouchableOpacity></View>
-    {personState.length ? personState.map(state=><View key={state.member.id} style={styles.metric}>
+    {personState.length ? personState.map(state=><View key={state.member.id} style={[styles.metric,styles.full]}>
       <Text style={styles.operationLabel}>{state.member.name}</Text>
       <Text style={styles.meta}>Objectif de versement : {formatEuro(state.expected)}</Text>
       <Text style={styles.meta}>Déjà versé : {formatEuro(state.paid)}</Text>
       <Text style={styles.meta}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text>
-      <Text style={state.missing>0?styles.noticeText:styles.income}>{state.missing>0?'Reste à verser selon objectif : '+formatEuro(state.missing):'Objectif de versement atteint'}</Text>
+      <Text style={shown(state.missing)>0?styles.noticeText:styles.income}>{shown(state.missing)>0?'Reste à verser selon objectif : '+formatEuro(state.missing):'Objectif de versement atteint'}</Text>
     </View>) : <Text style={styles.meta}>Aucun membre à afficher.</Text>}
   </View>;
 }

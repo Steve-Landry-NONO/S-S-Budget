@@ -36,7 +36,8 @@ const currentMonthKey = () => todayKey().slice(0, 7);
 const isValidPinFormat = (pin) => /^\d{4,8}$/.test(String(pin || ''));
 
 const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
-const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
+// F-01: shared presentation (same cent rounding as before, never "-0,00 €").
+const formatEuro = (value) => dashboardModel.formatEuro(value);
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
 const monthDefaultDate = (month) => {
   const normalized = /^\d{4}-\d{2}$/.test(String(month || '')) ? month : currentMonthKey();
@@ -1214,12 +1215,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 }
 
 function Metric({ label, value }) { const {fontScale,width}=useWindowDimensions(); return <View style={[styles.metric, (fontScale >= 1.3 || width < 340) && styles.fullWidth]}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
-function PersonCard({ state }) { const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340; return <View style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
+function PersonCard({ state }) { const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340; return <View style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={dashboardModel.presentedAmount(state.missing) <= 0 ? styles.badgeOk : styles.badgeWarn}>{dashboardModel.presentedAmount(state.missing) <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
 function CategorySummary({ category }) {
   const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340;
   const pct = category.availableBudget ? Math.min(100, Math.max(0, (category.spent / category.availableBudget) * 100)) : 0;
-  const badgeStyle = category.needsFunding ? styles.badgeWarn : category.overBudget ? styles.badgeWarn : styles.badgeOk;
-  const badgeText = category.needsFunding ? 'À alimenter' : category.overBudget ? 'Dépassement' : 'OK';
+  // F-01: badge follows the displayed cents (same labels and priority as before).
+  const envelopeStatus = dashboardModel.envelopePresentation(category).status;
+  const badgeStyle = envelopeStatus ? styles.badgeWarn : styles.badgeOk;
+  const badgeText = envelopeStatus || 'OK';
   return <View style={styles.card}>
     <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
     <View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
