@@ -7,7 +7,7 @@ test('four primary destinations in approved order', () => {
 });
 test('all six legacy destinations remain reachable', () => {
   assert.equal(new Set([...TABS,...ACTIONS].map(x=>x.key)).size,6);
-  const app=fs.readFileSync('App.js','utf8');
+  const app=fs.readFileSync('App.js','utf8').replace(/\r\n/g, '\n');
   for(const {key} of [...TABS,...ACTIONS]) assert.ok(app.includes("tab === '"+key+"'"),key);
 });
 test('expense and contribution routes belong to home and provide return', () => {
@@ -20,7 +20,7 @@ test('expense and contribution routes belong to home and provide return', () => 
   for(const key of ['categories','activity','members']) assert.deepEqual(actionsFor(key),[]);
 });
 test('navigation remains behind session gate and outside content scroll', () => {
-  const app=fs.readFileSync('App.js','utf8');
+  const app=fs.readFileSync('App.js','utf8').replace(/\r\n/g, '\n');
   assert.ok(app.indexOf('if (!isSessionValid())') < app.indexOf('<NavigationActions'));
   assert.ok(app.indexOf('<NavigationActions') < app.indexOf('<BottomNavigation'));
   assert.ok(app.includes('</ScrollView>\n      <BottomNavigation'));
