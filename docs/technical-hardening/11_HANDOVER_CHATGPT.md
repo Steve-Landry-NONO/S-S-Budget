@@ -90,6 +90,7 @@ git push -u origin fix/v3-technical-hardening; gh pr create --draft …
 
 ## 7. Liens CI
 
+- ✅ https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45474001441 (push, `7aee64e`, 6/6) et https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45474016808 (PR #15, 6/6)
 - ✅ https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45472502146 (6/6)
 - ❌ https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45472278433 (web-qa, corrigé par `7cc587f`)
 - Références PR existantes : PR #3 45452731604 / 45452748037 ; PR #14 45461389533 / 45461431485 ; PR #4 45360201391 (ancienne base)

@@ -22,6 +22,7 @@ Visibilité des risques : les 6 `todo` (F-01, R-01…R-05) apparaissent dans les
 |---|---|---|---|
 | [45472278433](https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45472278433) | `3b9af4c` | ❌ | 5 jobs verts ; `web-qa` : « Playwright does not support chromium on ubuntu26.04-x64 » (`ubuntu-latest` = Ubuntu 26.04) |
 | [45472502146](https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45472502146) | `7cc587f` | ✅ **6/6** | `web-qa` épinglé sur `ubuntu-24.04` |
+| [45474001441](https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45474001441) (push) / [45474016808](https://github.com/Steve-Landry-NONO/S-S-Budget/actions/runs/45474016808) (PR #15) | `7aee64e` | ✅ **6/6** et ✅ **6/6** | tête de branche avec documentation |
 
 Extraits du run 45472502146 : `expo 58.0.26` · `# tests 37 / # pass 36 / # todo 1` · `13 checks` · `32 assertions` · `16 checks` · `20/20 checks passed` · `web QA: 40 QA Lab cells, 0 failure(s)` · `sqlite3 native binding OK, SQLite 3.52.0` · `# tests 22 / # pass 17 / # todo 5` · `frontend {"total":0}` · `server {"total":0}` · gitleaks `130 commits scanned. no leaks found` · `Preview manifest OK`.
 
