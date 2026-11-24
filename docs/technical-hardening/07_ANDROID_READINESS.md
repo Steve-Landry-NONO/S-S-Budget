@@ -71,3 +71,7 @@ Puis : installer l'APK via le lien EAS, vérifier qu'elle cohabite avec l'app hi
 ## 7. Décision D-04 (propriétaire)
 
 Garder le trafic clair pour la Preview (tunnel Tailscale chiffré, mais autorise HTTP vers tout hôte) **ou** passer le serveur en HTTPS (`tailscale serve` / `tailscale cert`, URL `https://<machine>.<tailnet>.ts.net`) puis supprimer le plugin et `PREVIEW_ALLOW_CLEARTEXT`. Recommandation : HTTPS avant toute bêta ; cleartext acceptable pour la recette interne.
+
+## Mise à jour lot 2
+
+Inchangé : HTTP clair seulement pour la Preview explicitement activée. Parcours HTTPS bêta (`tailscale serve`) : `12_LOT2_REVIEW_FIXES.md` §5.

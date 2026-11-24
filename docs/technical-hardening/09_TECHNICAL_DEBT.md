@@ -47,3 +47,7 @@ Audit sans refonte : aucune refactorisation n'a été faite (les seules modifica
 ## Réutilisation du Dashboard
 
 Bonne : `DashboardOverview` et `dashboardModel` sont réellement partagés par l'app et le QA Lab (prouvé par l'isolation des bundles et la matrice). Les seules divergences sont dans les **données d'entrée** (D-P2-1) : un test de parité `personState` app/fixtures serait utile lors de l'extraction D-P1-1.
+
+## Mise à jour lot 2
+
+D-P0-2 (R-01) corrigé ; D-P1-5 (F-01) corrigé ; D-P1-6 : plan de migration du pilote dans `12_LOT2_REVIEW_FIXES.md` §5 ; D-P3-4 (B-07) : outil d'audit livré.

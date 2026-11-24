@@ -5,7 +5,85 @@ Dépôt : https://github.com/Steve-Landry-NONO/S-S-Budget · Branche : `fix/v3-t
 Base vérifiée : `376c7190dd76cdad5351336515662277114ba0b3` (= tête PR #14 sur le remote le 24/11/2026).
 **Aucune fusion, aucun force-push, aucune modification de `main`, Figma, Supabase/RLS/migrations, ni des branches backend. Aucun déploiement. Aucune donnée réelle utilisée. Aucun build EAS.**
 
-## 1. Liste exacte des commits (ordre chronologique)
+---
+
+## 0. MISE À JOUR — LOT 2 (corrections après votre revue) — à lire en premier
+
+Tête distante vérifiée avant intervention : `cc4dba2` (= PR #15). Détail complet : `12_LOT2_REVIEW_FIXES.md`. Les sections 1 à 12 ci-dessous décrivent le lot 1 ; les statuts qu'elles donnent pour le verrou, R-01, R-04, R-05 et F-01 sont **remplacés** par ce §0.
+
+### 0.1 Nouveaux commits
+
+| SHA | Message | Statut |
+|---|---|---|
+| `fd772ba6cb4a7420f6a0966214644606bd22cb6e` | fix(server): tie the write lock to the real end of the handler, not the HTTP response | Implémenté, testé ✅ |
+| `543381df0b01fb75644d61f4923dd17b20ad14e3` | fix(server)!: refuse to start without a safe APP_SECRET and drop the public fallback key (R-01) | Implémenté, testé ✅ — **rupture de déploiement** |
+| `29fc002442989bf6a557488ce2d0e46ba769e6a3` | fix(server): generic client errors, 400 for invalid JSON, no DB path in health (R-04, R-05) | Implémenté, testé ✅ |
+| `2b464ac027d25580129424b67e7ee2d22285978c` | fix(dashboard): never display -0,00 € and align financial alerts on displayed cents (F-01) | Implémenté, testé ✅ (Web) ; natif non testé |
+| `27790fa13007f119128830aa6311669aad7051e8` | feat(server): read-only B-07 audit and financial impact simulation | Implémenté, testé ✅ (base temporaire) |
+| tête de branche | docs(hardening): lot 2 review fixes and updated handover | Documentation |
+
+Fichiers (14, +549/−66 hors documentation) : `server/src/index.js`, `server/src/config.js` (nouveau), `server/.env.example`, `server/package.json` (`audit:b07`), `server/scripts/audit-b07.cjs` (nouveau), `server/test/{write-lock,config,audit-b07}.test.cjs` (nouveaux), `server/test/security.test.cjs`, `src/features/dashboard/dashboardModel.cjs`, `src/features/dashboard/DashboardOverview.js`, `src/features/preview/fixtures.cjs`, `App.js` (`formatEuro` + 2 badges hérités), `scripts/finance.test.cjs`.
+
+### 0.2 Tests en échec avant, réussis après (exécutés contre le code précédent puis le nouveau)
+
+| Sujet | Tests | Avant | Après |
+|---|---|---|---|
+| Verrou : déconnexion pendant une transaction | write-lock #1 | ❌ 500 `cannot start a transaction within a transaction` | ✅ (3/3 exécutions) |
+| Verrou : déconnexion pendant l'attente | write-lock #2 | ❌ même erreur | ✅ (3/3) |
+| Verrou : chemins d'erreur/rollback sans blocage | write-lock #3 | ✅ | ✅ |
+| R-01 refus de démarrage (absent, exemple, ancienne clé, court, `NODE_ENV` dev/prod), secret jamais journalisé | config #3 | ❌ le serveur démarrait | ✅ |
+| R-01 validation, comparaison, jeton forgé (ancienne clé), rotation | config #1, #2, #4, #5 | ✅ (jeton forgé accepté **seulement** sans secret : ancien todo R-01 en échec) | ✅ |
+| R-04 santé sans chemin | security | ❌ | ✅ |
+| R-05 erreurs génériques + 400 JSON invalide | security | ❌ | ✅ |
+| R-05 PIN d'un JSON malformé absent des journaux (**nouveau constat**) | security | ❌ PIN journalisé | ✅ |
+| F-01 zéro négatif, bornes 0/demi-centime, propriété 20 000 valeurs | finance (3) | ❌ 0/3 | ✅ 3/3 |
+| B-07 audit lecture seule | audit-b07 (2) | — (nouveau) | ✅ |
+
+Totaux locaux : frontend **39/39, 0 todo** (était 36 + 1 todo) ; serveur **30 réussis + 2 todo** (R-02, R-03) sur 32 (était 17 + 5) ; Glance 13 ; Android 32 ; isolation 16 ; matrice navigateur **40/40** ; audits 0/0 ; Doctor 20/20.
+
+### 0.3 CI sur la tête exacte
+
+Les six jobs ont été relancés sur la tête de branche (le commit de documentation est lui-même la tête) ; numéros de run, SHA exact et résultats sont consignés dans la **description de la PR #15** (section « Lot 2 — CI ») afin de ne pas créer un nouveau commit après la CI.
+
+### 0.4 Risques résiduels
+
+| Id | Statut |
+|---|---|
+| Verrou d'écriture | Corrigé. Limite : les GET peuvent lire l'état intermédiaire d'une transaction (inchangé) |
+| R-01 | Corrigé. **Un `.env` réel non conforme (secret < 32 caractères ou d'exemple) empêchera le démarrage** → contrôle préalable (12 §7) |
+| R-04, R-05, F-01 | Corrigés |
+| R-02, R-03, R-06, R-07 | Ouverts — propositions techniques 12 §6 |
+| B-07 | Ouvert — outil d'audit lecture seule livré, décision métier ligne par ligne |
+| sqlite3 6.0.1 | Conservé ; amont non maintenu, glibc ≥ 2.38 ou compilation ; plan de migration 12 §5 |
+| HTTP clair | Preview explicitement activée uniquement ; parcours HTTPS bêta 12 §5 |
+| Recheck natif (`5746c73`, `2b464ac`), APK | Non réalisés (pas d'appareil) |
+
+### 0.5 Déploiement et retour arrière
+
+Procédure complète : `12_LOT2_REVIEW_FIXES.md` §7 (sauvegarde base + `.env`, contrôle du secret **sans l'afficher**, `npm ci` selon glibc, `check:native`, `npm test`, démarrage). Rotation des secrets : 12 §2. Retour arrière : `git checkout cc4dba2 -- server/`, `npm ci`, restauration du `.env` ; aucune migration de base dans ce lot.
+
+### 0.6 Décisions soumises à revue
+
+| Id | Question | Recommandation |
+|---|---|---|
+| L2-1 | Le verrou enveloppant automatiquement toute route mutante (surcharge de `app.post/put/patch/delete`) est-il acceptable, ou préférez-vous un enveloppement explicite route par route ? | Accepter (couvre les routes futures) ; documenté dans le code |
+| L2-2 | Ne pas exécuter une requête dont le client est parti avant son tour (au lieu de l'exécuter sans acquittement) ? | Oui : évite une écriture que l'app a pu rejouer localement (repli « mode local ») |
+| L2-3 | Seuils R-01 (32 caractères, 10 distincts, fragments publics) ? | Accepter |
+| L2-4 | F-01 : badges hérités de `App.js` alignés aussi (hors Dashboard Sprint 2) ? | Accepter (mêmes libellés et priorité) |
+| L2-5 | R-02 `session_version`, R-03 enrôlement par code admin : à planifier en Sprint 3 ? | Oui, avant bêta |
+
+### 0.7 GO / NO GO actualisés
+
+| Fusion | Recommandation |
+|---|---|
+| PR #15 → `feat/v3-sprint2-dashboard` | **GO conditionnel** : CI 6/6 sur la tête, revue de ce lot, contrôle du `.env` réel **avant** tout redéploiement serveur, recheck natif rapide (cartes « Votre duo », affichage 0,00 €) |
+| PR #3 → `main` | **GO conditionnel** (inchangé) |
+| PR #14 (avec #15) → `main` après re-ciblage | **GO conditionnel** (inchangé) |
+| PR #4 | **NO GO** (remplacée) |
+
+---
+
+## 1. Liste exacte des commits du lot 1 (ordre chronologique)
 
 | # | SHA | Message | Statut |
 |---|---|---|---|

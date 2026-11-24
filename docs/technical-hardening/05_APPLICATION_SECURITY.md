@@ -62,3 +62,7 @@ Note : le bundle **normal** contient le code du QA Lab (inaccessible, données f
 | R-05 | Erreurs 500 génériques + 400 pour JSON invalide | Mineur ; messages utilisateur à revoir |
 | R-06 | `expo-secure-store` pour jeton et secret | Nouveau module natif, rebuild |
 | R-07 | Déconnexion : purge du cache financier (et option d'oubli du secret) | UX hors ligne modifiée |
+
+## Mise à jour lot 2
+
+R-01 **corrigé** (`543381d`) ; R-04, R-05 **corrigés** (`29fc002`), plus un constat nouveau : PIN journalisé via un JSON malformé, corrigé. Comparaison du secret API à temps constant. R-02, R-03, R-06, R-07 : propositions dans `12_LOT2_REVIEW_FIXES.md` §6.

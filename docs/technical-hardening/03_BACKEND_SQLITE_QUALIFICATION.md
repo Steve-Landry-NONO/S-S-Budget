@@ -105,3 +105,7 @@ npm test                  # bases temporaires uniquement
 
 **Retour arrière** : arrêter, `git checkout <commit précédent> -- server/package.json server/package-lock.json`, `npm ci`, redémarrer ; la base reste lisible (vérifié).
 Windows 32 bits : non supporté par 6.0.1 → rester en 5.1.7 sur cet hôte.
+
+## Mise à jour lot 2
+
+§5 : le correctif `d3d766f` libérait le verrou à la fermeture de la réponse HTTP ; remplacé par `fd772ba` (libération à la fin réelle du gestionnaire, requêtes abandonnées non exécutées). §6 B-07 : outil `npm run audit:b07` (lecture seule). §8 : ajouter le contrôle d'`APP_SECRET` avant démarrage — procédure complète `12_LOT2_REVIEW_FIXES.md` §7.

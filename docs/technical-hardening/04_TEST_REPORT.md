@@ -77,3 +77,7 @@ npm ci && node --test scripts/navigation.test.cjs scripts/dashboard.test.cjs scr
 node scripts/check-glance.js && node scripts/check-android-preview.js
 cd server && npm ci && npm run check:native && npm test
 ```
+
+## Mise à jour lot 2
+
+Frontend 39/39 sans todo (F-01 corrigé, 3 tests) ; serveur 32 tests : 30 réussis + 2 todo (R-02, R-03) ; nouveaux fichiers `write-lock`, `config`, `audit-b07`. Tableau avant/après : `11_HANDOVER_CHATGPT.md` §0.2.

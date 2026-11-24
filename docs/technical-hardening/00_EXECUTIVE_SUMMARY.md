@@ -33,3 +33,7 @@
 ## Limites de l'environnement
 
 Pas de SDK Android ni d'appareil (et disque local à 99 %) → aucune APK ; pas d'iPhone → aucune revalidation native ; exécution locale du binaire gitleaks refusée par la politique de l'agent → scan exécuté en CI ; navigateur : Chrome/Chromium uniquement.
+
+## Mise à jour lot 2 (après revue indépendante)
+
+Corrigés et testés (échec avant / succès après) : verrou d'écriture lié à la fin réelle du traitement (déconnexions pendant transaction et pendant l'attente) ; **R-01** démarrage refusé sans secret sûr, clé publique supprimée ; **R-04/R-05** (et un PIN qui fuyait dans les journaux via un JSON malformé) ; **F-01** « -0,00 € ». Livré : audit B-07 en lecture seule. Planifiés : R-02, R-03, R-06, R-07. Détail : `12_LOT2_REVIEW_FIXES.md` ; passation : `11` §0.
