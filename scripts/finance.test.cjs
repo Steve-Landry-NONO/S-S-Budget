@@ -187,12 +187,49 @@ test('QA Lab scenarios reproduce the five approved balances', () => {
   }
 });
 
-// Known defect, reported (F-01) and NOT fixed: rounding/presentation rules are frozen
-// for this slice and need an explicit owner decision. Kept as `todo` so it is visible
-// in every run without breaking the pipeline.
-test('F-01: a balance that is zero in cents is neither shown nor flagged as negative', { todo: 'owner decision required: display rounding rule (docs/technical-hardening/04_TEST_REPORT.md F-01)' }, () => {
+// F-01 (fixed in presentation only): a balance that is zero in cents is neither shown
+// nor flagged as negative. Raw totals stay exactly the V2 floating values.
+const legacyFormat = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
+
+test('F-01: a balance that is zero in cents is neither shown nor flagged as negative', () => {
   const d = dashboard({ expenses: [exp(0.1), exp(0.2, '2026-11-11')], contributions: [con(0.3)] });
-  assert.equal(format(d.totals.cashBalance), '0,00 €');
+  assert.ok(d.totals.cashBalance < 0, 'raw V2 total keeps its floating residue (aggregation untouched)');
+  assert.equal(legacyFormat(d.totals.cashBalance), '-0,00 €', 'defect reproduced with the former formatter');
+  assert.equal(model.formatEuro(d.totals.cashBalance), '0,00 €');
+  assert.equal(format(d.totals.cashBalance), '0,00 €', 'QA Lab uses the same formatter');
   const notices = model.dashboardNotices({ totals: d.totals, forecast: d.forecast, summary: d.summary, connected: true });
-  assert.ok(!notices.some((n) => n.key === 'negative'));
+  assert.ok(!notices.some((n) => n.key === 'negative' || n.key === 'forecast'));
+  assert.equal(model.envelopePresentation(d.summary.find((c) => c.id === 'weekends')).status, null);
+  assert.equal(d.summary.find((c) => c.id === 'weekends').needsFunding, true, 'V2 flag itself unchanged');
+});
+
+test('F-01: boundaries around zero and the half cent follow the displayed value', () => {
+  const cases = [
+    [-5.551115123125783e-17, '0,00 €', 0], [-0.004, '0,00 €', 0], [0.004, '0,00 €', 0], [-0, '0,00 €', 0],
+    [-0.005, '-0,01 €', -0.01], [0.005, '0,01 €', 0.01], [-0.006, '-0,01 €', -0.01], [-0.01, '-0,01 €', -0.01],
+    [1.005, '1,00 €', 1], [-35, '-35,00 €', -35], [165, '165,00 €', 165], [undefined, '0,00 €', 0], [null, '0,00 €', 0],
+  ];
+  for (const [value, text, shown] of cases) {
+    assert.equal(model.formatEuro(value), text, String(value));
+    assert.ok(Object.is(model.presentedAmount(value), shown), `${value} -> ${shown}`);
+    const flagged = model.dashboardNotices({ totals: { cashBalance: value }, forecast: value, summary: [{}], connected: true }).map((n) => n.key);
+    assert.equal(flagged.includes('negative'), text.startsWith('-'), `alert matches display for ${value}`);
+    assert.equal(flagged.includes('forecast'), text.startsWith('-'));
+  }
+  // Over-budget compared in displayed cents: residue does not create a false overrun.
+  assert.equal(model.envelopePresentation({ availableBudget: 0.3, spent: 0.1 + 0.2, cashBalance: 0 }).status, null);
+  assert.equal(model.envelopePresentation({ availableBudget: 0.3, spent: 0.31, cashBalance: 0 }).status, 'Dépassement');
+  assert.equal(model.envelopePresentation({ availableBudget: 10, spent: 1, cashBalance: -0.004 }).status, null);
+  assert.equal(model.envelopePresentation({ availableBudget: 10, spent: 1, cashBalance: -0.01 }).status, 'À alimenter');
+});
+
+test('F-01: display text is identical to the historical formatter except negative zero', () => {
+  const rand = prng(424242);
+  for (let i = 0; i < 20000; i++) {
+    const magnitude = [1e-3, 1, 100, 1e5][i % 4];
+    const value = (rand() - 0.5) * 2 * magnitude;
+    const before = legacyFormat(value);
+    const after = model.formatEuro(value);
+    assert.equal(after, before === '-0,00 €' ? '0,00 €' : before, String(value));
+  }
 });
