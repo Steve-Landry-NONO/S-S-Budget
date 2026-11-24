@@ -178,6 +178,7 @@ export default function App() {
   const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [editingServer, setEditingServer] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('steve');
   const [connected, setConnected] = useState(false);
   const [syncMessage, setSyncMessage] = useState('Mode local');
@@ -238,8 +239,8 @@ export default function App() {
   }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
 
   useEffect(() => {
-    if (apiUrl && !isSessionValid()) fetchAuthStatus();
-  }, [apiUrl, authToken, authTokenExpiresAt]);
+    if (apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
+  }, [apiUrl, authToken, authTokenExpiresAt, editingServer]);
 
   const request = async (path, options = {}) => {
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
@@ -320,6 +321,7 @@ export default function App() {
       const data = await request('/api/auth/status');
       setAuthMembers(data.members || []);
     } catch (error) {
+      setAuthMembers([]);
       setAuthError(error.message || 'Impossible de contacter le serveur.');
     } finally {
       setAuthLoading(false);
@@ -824,17 +826,18 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {!apiUrl ? (
+        {(!apiUrl || editingServer) ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Configurer le serveur</Text>
-            <Text style={styles.muted}>Renseigne l’URL Tailscale du serveur avant de te connecter.</Text>
+            <Text style={styles.muted}>Renseigne l’adresse du serveur de confiance (réseau local ou Tailscale).</Text>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value) => { setEditingServer(true); setApiUrl(value); }} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
-            <TouchableOpacity style={styles.primaryButton} onPress={fetchAuthStatus}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} autoCorrect={false} onChangeText={setApiSecret} />
+            <TouchableOpacity style={styles.primaryButton} disabled={authLoading || !apiUrl.trim()} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(false); }}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
           </View>
         ) : pinStage ? renderPinStageForm() : renderAuthMemberList()}
+        {apiUrl && !editingServer ? <TouchableOpacity accessibilityRole="button" disabled={authLoading} style={styles.secondaryButton} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(true); }}><Text style={styles.secondaryButtonText}>Modifier la configuration du serveur</Text></TouchableOpacity> : null}
       </ScrollView>
     </SafeAreaView>
   );

@@ -34,3 +34,10 @@ test('icons are decorative and navigation labels remain available', () => {
   assert.ok(nav.includes('accessibilityState={{ selected: active }}'));
   assert.ok(nav.includes('fontScale >= 1.3'));
 });
+
+ test('server configuration remains editable before authentication', () => {
+ const source = require('node:fs').readFileSync('App.js','utf8');
+ require('node:assert/strict').match(source,/\(!apiUrl \|\| editingServer\)/);
+ require('node:assert/strict').match(source,/Modifier la configuration du serveur/);
+ require('node:assert/strict').match(source,/apiUrl && !editingServer && !isSessionValid\(\)/);
+ });
