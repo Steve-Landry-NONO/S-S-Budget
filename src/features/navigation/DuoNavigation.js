@@ -35,12 +35,12 @@ function NavigationIcon({ route, color }) {
   );
 }
 
-export function BottomNavigation({ route, onNavigate, unreadCount = 0 }) {
+export function BottomNavigation({ route, onNavigate, unreadCount = 0, previewWidth, previewFontScale }) {
   const { fontScale, width } = useWindowDimensions();
   const selected = routes.parentRoute(route);
-  const large = fontScale >= 1.3 || width < 340;
+  const large = (previewFontScale === undefined ? fontScale >= 1.3 : previewFontScale >= 1.3) || (previewWidth ?? width) < 340;
   return (
-    <View style={[styles.bar, large && styles.wrap]} accessibilityRole="tablist">
+    <View style={[styles.bar, large && styles.wrap, large && previewWidth !== undefined && styles.previewWrap]} accessibilityRole="tablist">
       {routes.TABS.map(({ key, label }) => {
         const active = selected === key;
         const unread = key === 'activity' && unreadCount > 0;
@@ -48,10 +48,10 @@ export function BottomNavigation({ route, onNavigate, unreadCount = 0 }) {
           <TouchableOpacity key={key} testID={'nav-' + key} accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={unread ? label + ', ' + unreadCount + ' activités non lues' : label}
-            onPress={() => onNavigate(key)} style={[styles.tab, large && styles.largeTab, active && styles.active]}>
-            <NavigationIcon route={key} color={active ? palette.midnight : palette.muted} />
-            <View style={[styles.indicator, active && styles.activeIndicator]} />
-            <Text style={[styles.label, active && styles.activeLabel]}>{label}{unread ? ' •' : ''}</Text>
+            onPress={() => onNavigate(key)} style={[styles.tab, large && styles.largeTab, large && previewWidth !== undefined && styles.previewLargeTab, active && styles.active]}>
+            {!large && <NavigationIcon route={key} color={active ? palette.midnight : palette.muted} />}
+            {!large && <View style={[styles.indicator, active && styles.activeIndicator]} />}
+            <Text style={[styles.label, large && styles.largeLabel, active && styles.activeLabel]}>{label}{unread ? ' •' : ''}</Text>
           </TouchableOpacity>
         );
       })}
@@ -77,8 +77,11 @@ export function NavigationActions({ route, onNavigate }) {
 const styles = StyleSheet.create({
   bar: { flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.border, paddingHorizontal: spacing.xxs, paddingVertical: spacing.xxs },
   wrap: { flexWrap: 'wrap' },
+  previewWrap: { alignItems: 'stretch', flexShrink: 0 },
+  previewLargeTab: { flexBasis: '50%', flexGrow: 0, flexShrink: 0, width: '50%', maxWidth: '50%', minHeight: 48 },
   tab: { flex: 1, minWidth: 0, minHeight: 64, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xs, paddingHorizontal: 2, borderRadius: radius.md },
-  largeTab: { flexBasis: '50%', flexGrow: 0, minHeight: 56 },
+  largeTab: { flex: 0, width: '50%', minHeight: 48, paddingVertical: 4, paddingHorizontal: 4 },
+  largeLabel: { flexShrink: 0, fontSize: 12, alignSelf: 'stretch' },
   active: { backgroundColor: palette.lightBlue },
   icon: { width: 24, height: 24, position: 'relative', marginBottom: 3 },
   roof: { position: 'absolute', width: 13, height: 13, left: 5.5, top: 2, transform: [{rotate: '45deg'}], borderTopWidth: 1.8, borderLeftWidth: 1.8 },

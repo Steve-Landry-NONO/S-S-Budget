@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Image,
   Animated,
   PanResponder,
   Pressable,
@@ -28,9 +29,9 @@ const clamp = (v) => Math.max(0, Math.min(1, v));
  * never passed in from a cache or API. No real balance can leak here.
  * A future real-balance shortcut requires a separate security review.
  */
-export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
+export default function DuoGlanceScreen({ onSignIn, onCreateAccount, previewWidth, previewMode = false }) {
   const { width, height } = useWindowDimensions();
-  const fieldWidth = Math.max(280, Math.min(width - 32, 390));
+  const fieldWidth = Math.max(280, Math.min((previewWidth || width) - 32, 390));
   const compact = height < 740;
   const progress = useRef(new Animated.Value(0)).current;
   const float = useRef(new Animated.Value(0)).current;
@@ -111,7 +112,7 @@ export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <View style={styles.brandIcon}><Text style={styles.brandHeart}>♡</Text></View>
+          <Image source={require('../../../assets/duo-mark-blue.png')} style={styles.brandMark} accessible={false} />
           <Text style={styles.brandText}>Duo Budget</Text>
         </View>
         <View style={styles.demoPill}><Text style={styles.demoPillText}>DÉMO</Text></View>
@@ -182,11 +183,11 @@ export default function DuoGlanceScreen({ onSignIn, onCreateAccount }) {
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onSignIn} accessibilityRole="button" accessibilityLabel="Se connecter à son espace">
-          <Text style={styles.primaryButtonText}>Se connecter</Text>
+        <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]} onPress={onSignIn} accessibilityRole="button" accessibilityLabel={previewMode ? "Explorer la démo" : "Se connecter à son espace"}>
+          <Text style={styles.primaryButtonText}>{previewMode ? 'Explorer la démo' : 'Se connecter'}</Text>
         </Pressable>
-        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onCreateAccount || onSignIn} accessibilityRole="button" accessibilityLabel="Découvrir la configuration de Duo Budget">
-          <Text style={styles.secondaryButtonText}>Découvrir la configuration</Text>
+        <Pressable style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]} onPress={onCreateAccount || onSignIn} accessibilityRole="button" accessibilityLabel={previewMode ? "Découvrir les écrans" : "Découvrir la configuration de Duo Budget"}>
+          <Text style={styles.secondaryButtonText}>{previewMode ? 'Découvrir les écrans' : 'Découvrir la configuration'}</Text>
         </Pressable>
         <Text style={styles.privacyNote}>Aucun solde personnel n'est accessible avant authentification.</Text>
       </View>
@@ -198,8 +199,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F7F9FF' },
   header: { paddingHorizontal: 22, paddingTop: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: palette.signature, justifyContent: 'center', alignItems: 'center' },
-  brandHeart: { color: '#FFFFFF', fontSize: 27, fontWeight: '600' },
+  brandMark: { width: 34, height: 34 },
   brandText: { color: palette.midnight, fontSize: 18, fontWeight: '800' },
   demoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 18, backgroundColor: '#FFFFFF' },
   demoPillText: { color: '#596A81', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },

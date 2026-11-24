@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -16,6 +18,9 @@ import { StatusBar } from 'expo-status-bar';
 import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
 import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
 import { palette } from './src/theme/tokens';
+import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
+import DashboardOverview from './src/features/dashboard/DashboardOverview';
+import WebPreview from './src/features/preview/WebPreview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -176,6 +181,11 @@ const initialState = {
 };
 
 export default function App() {
+  if (Platform.OS === 'web' && process.env.EXPO_PUBLIC_DUO_PREVIEW === '1') return <WebPreview />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const {fontScale, width} = useWindowDimensions();
   const largeText = fontScale >= 1.3 || width < 340;
   const [showGlance, setShowGlance] = useState(true);
@@ -192,6 +202,7 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [monthDraft, setMonthDraft] = useState(currentMonthKey());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
@@ -464,49 +475,11 @@ export default function App() {
   const previousExpenses = useMemo(() => expenses.filter((e) => !isPlannedAction(e) && isBeforeMonth(e.date, selectedMonth)), [expenses, selectedMonth]);
   const previousContributions = useMemo(() => contributions.filter((c) => !isPlannedAction(c) && isBeforeMonth(c.date, selectedMonth)), [contributions, selectedMonth]);
 
-  const summary = useMemo(() => categories.map((category) => {
-    const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const previousSpent = previousExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const previousPaidIn = previousContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-    const carryOver = previousPaidIn - previousSpent;
-    const availableBudget = carryOver + monthlyBudget;
-    const remainingBudget = availableBudget - spent;
-    const cashBalance = carryOver + paidIn - spent;
-    return {
-      ...category,
-      spent,
-      paidIn,
-      previousSpent,
-      previousPaidIn,
-      carryOver,
-      monthlyBudget,
-      availableBudget,
-      remainingBudget,
-      cashBalance,
-      overBudget: spent > availableBudget,
-      needsFunding: cashBalance < 0,
-    };
-  }), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
-
-  const totals = useMemo(() => summary.reduce((acc, c) => ({
-    monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
-    availableBudget: acc.availableBudget + c.availableBudget,
-    carryOver: acc.carryOver + c.carryOver,
-    spent: acc.spent + c.spent,
-    paidIn: acc.paidIn + c.paidIn,
-    cashBalance: acc.cashBalance + c.cashBalance,
-  }), { monthlyBudget: 0, availableBudget: 0, carryOver: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
-
-
-  const plannedTotals = useMemo(() => ({
-    spent: plannedMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
-    paidIn: plannedMonthContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-  }), [plannedMonthExpenses, plannedMonthContributions]);
-
+  const summary = useMemo(() => dashboardModel.summarizeCategories(categories, members.length, monthExpenses, monthContributions, previousExpenses, previousContributions), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
+  const totals = useMemo(() => dashboardModel.summarizeTotals(summary), [summary]);
+  const plannedTotals = useMemo(() => dashboardModel.summarizePlanned(plannedMonthExpenses, plannedMonthContributions), [plannedMonthExpenses, plannedMonthContributions]);
   const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
-  const forecastCashBalance = totals.cashBalance + plannedTotals.paidIn - plannedTotals.spent;
+  const forecastCashBalance = dashboardModel.forecastBalance(totals, plannedTotals);
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -532,6 +505,7 @@ export default function App() {
     const normalized = normalizeMonth(monthDraft);
     if (!normalized) return Alert.alert('Mois invalide', 'Utilise le format AAAA-MM, par exemple 2026-07.');
     setSelectedMonth(normalized);
+    setMonthPickerOpen(false);
   };
 
   const confirmFutureDateIfNeeded = (date, actionLabel, onConfirm) => {
@@ -888,33 +862,24 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   };
 
   const renderMainControls = () => (<>
-      <View style={[styles.header, largeText && styles.stacked]}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>Duo Budget</Text>
-          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
-          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
+      <View style={[styles.compactHeader, largeText && styles.stacked]}>
+        <View style={styles.brandRow}>
+          <Image source={require('./assets/duo-mark-blue.png')} style={styles.brandMark} accessibilityIgnoresInvertColors accessible={false} />
+          <Text style={styles.brandName}>Duo Budget</Text>
         </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configuration" style={styles.compactConfig} onPress={() => setSettingsModal(true)}><Text style={styles.compactConfigText}>Config</Text></TouchableOpacity>
       </View>
-
-      <View style={[styles.monthRow, largeText && styles.stacked]}>
-        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois précédent" onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
-        <TextInput
-          style={[styles.monthLabel, largeText && styles.fullWidth]}
-          value={monthDraft}
-          onChangeText={setMonthDraft}
-          onSubmitEditing={applyMonthDraft}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
-          placeholder="AAAA-MM"
-        />
-        <TouchableOpacity style={[styles.monthOkButton, largeText && styles.fullWidth]} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois suivant" onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
+      <View style={[styles.compactMonth, largeText && styles.monthWrap]}>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois précédent" accessibilityRole="button" onPress={() => updateMonth(-1)}><Text style={styles.compactArrowText}>‹</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choisir le mois" style={styles.monthCenter} onPress={() => setMonthPickerOpen(v => !v)}><Text style={styles.monthCaption}>{new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(selectedMonth+'-01T00:00:00Z'))} ▾</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois suivant" accessibilityRole="button" onPress={() => updateMonth(1)}><Text style={styles.compactArrowText}>›</Text></TouchableOpacity>
       </View>
-
-      <NavigationActions route={tab} onNavigate={setTab} />
-
+      {monthPickerOpen && <View style={styles.card}>
+        <Text style={styles.label}>Choisir un mois (AAAA-MM)</Text>
+        <TextInput style={styles.input} value={monthDraft} onChangeText={setMonthDraft} autoCorrect={false} keyboardType="numbers-and-punctuation" onSubmitEditing={applyMonthDraft} />
+        <TouchableOpacity style={styles.secondaryButton} onPress={applyMonthDraft}><Text style={styles.secondaryButtonText}>Appliquer</Text></TouchableOpacity>
+      </View>}
+      {tab !== 'dashboard' && <NavigationActions route={tab} onNavigate={setTab} />}
   </>);
 
   if (bootLoading) {
@@ -942,23 +907,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      {!largeText && renderMainControls()}
+      {!largeText && tab !== 'dashboard' && renderMainControls()}
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
-        {largeText && renderMainControls()}
+        {(largeText || tab === 'dashboard') && renderMainControls()}
         {tab === 'dashboard' && (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
-              <View style={styles.metricGrid}>
-                <Metric label="Report précédent" value={formatEuro(totals.carryOver)} dark />
-                <Metric label="Budget du mois" value={formatEuro(totals.monthlyBudget)} dark />
-                <Metric label="Versé ce mois" value={formatEuro(totals.paidIn)} dark />
-                <Metric label="Dépensé ce mois" value={formatEuro(totals.spent)} dark />
-                <Metric label="Solde réel" value={formatEuro(totals.cashBalance)} dark />
-                <Metric label="Solde prévisionnel" value={formatEuro(forecastCashBalance)} dark />
-              </View>
-            </View>
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} personState={personState} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
@@ -967,11 +922,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                 <Text style={styles.muted}>Solde après actions prévues : {formatEuro(forecastCashBalance)}</Text>
               </View>
             )}
-            <TouchableOpacity style={styles.primaryButton} onPress={() => updateMonth(1)}><Text style={styles.primaryButtonText}>Nouveau mois</Text></TouchableOpacity>
-            <Text style={styles.sectionTitle}>État par membre</Text>
-            {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
-            <Text style={styles.sectionTitle}>Situation des caisses</Text>
-            {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+            <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => updateMonth(1)}><Text style={styles.secondaryButtonText}>Mois suivant ›</Text></TouchableOpacity>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Détail des enveloppes</Text>
+              {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+              {!summary.length && <Text style={styles.muted}>Aucune enveloppe configurée.</Text>}
+            </View>
           </>
         )}
 
@@ -1276,6 +1232,8 @@ function CategorySummary({ category }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.background },
+  compactHeader: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:8, padding:8, backgroundColor:palette.background },
+  brandRow: { flexDirection:'row', alignItems:'center', flexShrink:1, gap:8 }, brandMark:{width:32,height:32}, brandName:{fontSize:19,fontWeight:'700',color:palette.midnight,flexShrink:1}, compactConfig:{minHeight:44,justifyContent:'center',paddingHorizontal:12,borderRadius:12,backgroundColor:palette.lightBlue}, compactConfigText:{color:'#304DB2',fontWeight:'600',textAlign:'center'}, compactMonth:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8,paddingHorizontal:8,paddingBottom:12}, compactArrow:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',backgroundColor:palette.surface,borderRadius:12}, compactArrowText:{fontSize:26,color:palette.midnight},monthWrap:{flexWrap:'wrap'},monthCenter:{flex:1,minWidth:0,flexShrink:1,padding:8,minHeight:44,justifyContent:'center'},monthCaption:{fontSize:16,fontWeight:'600',color:palette.midnight,textAlign:'center'},
   stacked: { flexDirection: 'column', alignItems: 'stretch' },
   fullWidth: { width: '100%', flex: 0 },
   headerCopy: { flexShrink: 1, minWidth: 0 },
