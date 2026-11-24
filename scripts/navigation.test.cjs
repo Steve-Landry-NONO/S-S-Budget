@@ -26,3 +26,11 @@ test('navigation remains behind session gate and outside content scroll', () => 
   assert.ok(app.includes('</ScrollView>\n      <BottomNavigation'));
   assert.ok(!app.includes('<View style={styles.tabsOuter}>'));
 });
+
+test('icons are decorative and navigation labels remain available', () => {
+  const nav = fs.readFileSync('src/features/navigation/DuoNavigation.js', 'utf8');
+  for (const {key} of TABS) assert.ok(nav.includes("route === '"+key+"'"));
+  assert.ok(nav.includes('accessibilityElementsHidden'));
+  assert.ok(nav.includes('accessibilityState={{ selected: active }}'));
+  assert.ok(nav.includes('fontScale >= 1.3'));
+});
