@@ -2,7 +2,7 @@
 **Date de départ : 5 novembre 2026**  
 **Référence visuelle : Figma V3.0.7 (gelée)**  
 **Repository :** Steve-Landry-NONO/S-S-Budget  
-**Stratégie :** sprints de 2 semaines, démos régulières, PR brouillon, tests, validation utilisateur avant fusion.
+**Stratégie :** sprints de 2 semaines, démos régulières, PR, tests et fusion autonome à faible risque selon les règles du 24/11/2026.
 
 ## Définition du produit et des livrables
 - **Prototype fonctionnel UI :** parcours Figma essentiels, gestes, données démo sûres.
@@ -41,7 +41,7 @@ Les dates sont des objectifs de planification et seront recalibrées selon les t
 6. **Tests :** Expo Go au début, builds EAS Preview pour recette réelle. iOS/TestFlight ou distribution interne signée sous réserve des comptes/droits Apple.
 
 ## Règles de collaboration
-- Pas de modification non approuvée de `main`, de la baseline Figma ni des données de production.
+- Pas de modification de la baseline Figma ni des données de production ; fusion dans `main` selon la gouvernance du 24/11.
 - PR brouillon tant que la recette n'est pas complète ; ne pas prétendre à une validation basée seulement sur un code existant.
 - Chaque tâche doit avoir : responsable, branche, PR, critère de réussite, preuves de test, décision.
 - Les tâches bloquées sont signalées ; aucune promesse de travail invisible ou non vérifié.
@@ -64,7 +64,7 @@ Les dates sont des objectifs de planification et seront recalibrées selon les t
 - Référence Figma V3.0.7 gelée ; V3.0.8 reste un laboratoire séparé.
 - Supabase **Duo Budget V3 — DEV**, région eu-west-3, projet `eetnzdvjfzexgvqbtyrj`, créé et déclaré ACTIVE_HEALTHY le 19/11. **Aucune migration exécutée** : la première requête SQL a renvoyé une erreur de permission.
 - Ne pas écrire de secrets dans GitHub, ne pas utiliser les autres projets Supabase et ne pas présenter le backend comme déployé.
-- Tâche automatisée « Duo Budget — Développement quotidien » active, tous les jours à 19 h Europe/Paris. Elle doit lire cette roadmap sur la branche où elle est présente, les PR et les preuves CI ; ne jamais fusionner sans approbation.
+- Tâche automatisée « Duo Budget — Développement quotidien » active, tous les jours à 19 h Europe/Paris. Elle doit lire cette roadmap sur la branche où elle est présente, les PR et les preuves CI ; appliquer la gouvernance du 24/11 et vérifier les protections avant fusion.
 
 ### Chaînes de travaux et dépendances
 - **UI/mobile** : PR #3 (Duo Glance), #4 (incrément UI) et #5 (Expo SDK 58) : revue des bases, compatibilité, tests appareil et validation avant fusion. Ne pas présumer qu'elles sont fusionnables.
@@ -74,7 +74,7 @@ Les dates sont des objectifs de planification et seront recalibrées selon les t
 - PR #9 : grand livre, fonction d'écriture privilégiée, RLS et fixture SQL ; scripts **non exécutés** en PostgreSQL ; dépenses privées, annulations et concurrence restent incomplètes.
 
 ### Priorités immédiates et critères de sortie
-1. **Gouvernance** : vérifier les PR réellement ouvertes, leurs bases, leurs conflits et leurs checks ; préserver l'historique et publier un état factuel. Aucun merge automatique.
+1. **Gouvernance** : vérifier les PR réellement ouvertes, leurs bases, leurs conflits et leurs checks ; préserver l'historique et publier un état factuel. Appliquer la gouvernance du 24/11.
 2. **Accès Supabase DEV** : résoudre la permission SQL sans changer les autres projets ni exposer de secret. Critère : requête de lecture SQL effectivement réussie.
 3. **Compatibilité du schéma** : confronter `schema.review.sql`, `ledger-rls.review.sql`, `ledger-writer.review.sql` et les fixtures, corriger sur branche. Critère : scripts applicables en base de développement isolée.
 4. **Sécurité transactionnelle** : tests du double équilibre cash/budget, isolation inter-duos, utilisateurs anonymes, clés d'idempotence, écritures invalides, concurrence et dépenses privées. Critère : résultats de tests conservés, échecs bloquants corrigés.
@@ -88,3 +88,32 @@ Les dates sont des objectifs de planification et seront recalibrées selon les t
 
 ### Prochain compte rendu automatisé
 Rapporter : preuves GitHub nouvelles, état des PR #3 à #9, tests effectivement exécutés, blocage SQL Supabase, progression du sprint 1 (12–25 novembre), prochaine tâche limitée, décisions requises. Ne pas déduire qu'une fonctionnalité fonctionne d'une PR créée.
+
+
+## Décisions validées — 24 novembre 2026
+
+### Gouvernance
+- Fusion autonome à faible risque (documentation, tests, maintenance, corrections mineures, CI) seulement après revue du diff, dépendances intégrées, checks pertinents verts, absence de conflit, régression et déploiement involontaire. Un check absent n'est pas un succès.
+- Pour une intégration majeure, un changement d'architecture ou des PR concurrentes, soumettre une recommandation motivée et une demande de validation ciblée.
+- Production, sécurité financière, migrations sensibles, promotion de V3.0.9 : validation explicite. V3.0.7 reste gelée. Les restrictions spécifiques aux lots backend 1/2 prévalent : audit complet avant push, aucune fusion, aucune application de 006, aucune PR de ces lots sans accord. Ne pas modifier la matrice de recette.
+
+### Smart Transaction Identity (STI)
+Source : dossier de revue passe 2 du 24/11 et [page 11 Figma](https://www.figma.com/design/ejg17Px9X7tsMsTAvVwwiT/?node-id=297-62). Les huit décisions sont validées par le propriétaire ; identifiants STI distincts du registre D-001 à D-029 jusqu'à réconciliation.
+- STI-01 : monogrammes et icônes autonomes ; logos autorisés optionnels, interrupteur et repli automatique.
+- STI-02 : direction C Duo Signature, forme déterminée par effet comptable réel, légende initiale ; ordre de priorité en six niveaux : système, logo autorisé, monogramme identifié, icône d'enveloppe, catégorie, générique.
+- STI-03 : icône et couleur d'enveloppe modifiables par un partenaire sans accord, parmi 26 catégories.
+- STI-04 : alias privés et communs isolés ; partage explicite par copie indépendante sans historique privé.
+- STI-05 : encres #177A61, #9A5B12, #3F5BD0 et rouge clair #FDECEE à ajouter lors de la promotion.
+- STI-06 : bibliothèque unique de 40 icônes dans la future version intégrée uniquement ; jamais de modification de V3.0.7.
+- STI-07 : suggestions locales, 3 occurrences et 60 %, seuils configurables à confirmer en recette ; aucune table d'habitudes serveur, aucune application automatique.
+- STI-08 : pastille = auteur de saisie uniquement ; payeur et affectation distincts.
+- Payeur informatif en V3.0 : aucune dette automatique entre partenaires. Ne pas déduire d'écriture financière supplémentaire.
+- Passe 2 : 8 corrections livrées, 12 tests maquette (9 réussis, 1 avec réserve, 2 partiels) ; 41 IDV dont 30 bloquants selon le rapport, volets app/backend non validés. Ne pas promouvoir V3.0.9 ou le design system sans porte de validation.
+
+### Rattrapage Sprint 1
+Échéance originale : 25/11/2026. Pré-bilan de rattrapage proposé le 29/11, pas de changement officiel de date ni clôture fictive. Critères originaux : navigation 4 onglets, tokens, safe areas, composants réutilisables, 360/390/430 px, accessibilité, aucun écran ancien perdu. STI et backend avancent en parallèle sans élargir silencieusement ces critères.
+- PR #3–#5 : vérifier bases, CI, appareils, PIN, accessibilité, navigation et coexistence V2.
+- PR #6–#9, #11–#12 : examiner graphe, redondances, tests et sécurité avant toute intégration ; ne pas fusionner en bloc.
+- PR #10 : consolider la roadmap et les décisions ; vérifier absence de déploiement involontaire avant fusion.
+- Lots backend transmis : 005 déclarée appliquée sur DEV (57 réussis, 0 échec, 4 constats selon rapport fourni), 006 testée en transaction annulée (72/72 selon rapport), non-régression locale 58 réussis et 4 constats. Pas de nouvelle exécution DEV. Base distante 4d41286 vérifiée le 24/11 ; publication des bundles conditionnée à audit complet. Aucun push constaté à ce stade.
+- Tâche quotidienne 19 h : consolidation prioritaire, état réel PR/branches/CI, preuves, registre des décisions, critères de sortie, actions à faible risque autonomes et demandes explicites pour arbitrages. Pas de nouvelle fonctionnalité hors chemin critique sans justification. Revenir au développement courant après clôture vérifiée.
