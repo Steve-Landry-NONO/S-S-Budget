@@ -27,4 +27,13 @@ function summarizePlanned(expenses,contributions) {
   return {spent:expenses.reduce((sum,e)=>sum+Number(e.amount||0),0),paidIn:contributions.reduce((sum,c)=>sum+Number(c.amount||0),0)};
 }
 function forecastBalance(totals,planned) {return totals.cashBalance+planned.paidIn-planned.spent;}
-module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance};
+// Read-only preview of already classified realized operations, scoped by caller to selected month.
+function recentOperations(expenses,contributions,categories,members,limit=4) {
+  const name=(items,id,fallback)=>items.find(x=>x.id===id)?.name||fallback;
+  const rows=[
+    ...expenses.map(e=>({key:'expense:'+e.id,date:e.date,label:e.label||'Dépense',category:name(categories,e.categoryId,'Enveloppe inconnue'),amount:-Number(e.amount||0)})),
+    ...contributions.map(c=>({key:'contribution:'+c.id,date:c.date,label:'Versement · '+name(members,c.memberId,'Membre'),category:name(categories,c.categoryId,'Enveloppe inconnue'),amount:Number(c.amount||0)})),
+  ];
+  return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))||a.key.localeCompare(b.key)).slice(0,limit);
+}
+module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance,recentOperations};

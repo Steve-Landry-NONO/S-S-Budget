@@ -49,9 +49,9 @@ export function BottomNavigation({ route, onNavigate, unreadCount = 0 }) {
             accessibilityState={{ selected: active }}
             accessibilityLabel={unread ? label + ', ' + unreadCount + ' activités non lues' : label}
             onPress={() => onNavigate(key)} style={[styles.tab, large && styles.largeTab, active && styles.active]}>
-            <NavigationIcon route={key} color={active ? palette.midnight : palette.muted} />
-            <View style={[styles.indicator, active && styles.activeIndicator]} />
-            <Text style={[styles.label, active && styles.activeLabel]}>{label}{unread ? ' •' : ''}</Text>
+            {!large && <NavigationIcon route={key} color={active ? palette.midnight : palette.muted} />}
+            {!large && <View style={[styles.indicator, active && styles.activeIndicator]} />}
+            <Text style={[styles.label, large && styles.largeLabel, active && styles.activeLabel]}>{label}{unread ? ' •' : ''}</Text>
           </TouchableOpacity>
         );
       })}
@@ -78,7 +78,8 @@ const styles = StyleSheet.create({
   bar: { flexDirection: 'row', backgroundColor: palette.surface, borderTopWidth: 1, borderColor: palette.border, paddingHorizontal: spacing.xxs, paddingVertical: spacing.xxs },
   wrap: { flexWrap: 'wrap' },
   tab: { flex: 1, minWidth: 0, minHeight: 64, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xs, paddingHorizontal: 2, borderRadius: radius.md },
-  largeTab: { flexBasis: '50%', flexGrow: 0, minHeight: 56 },
+  largeTab: { flex: 0, width: '50%', minHeight: 48, paddingVertical: 4, paddingHorizontal: 4 },
+  largeLabel: { flexShrink: 0, fontSize: 12, alignSelf: 'stretch' },
   active: { backgroundColor: palette.lightBlue },
   icon: { width: 24, height: 24, position: 'relative', marginBottom: 3 },
   roof: { position: 'absolute', width: 13, height: 13, left: 5.5, top: 2, transform: [{rotate: '45deg'}], borderTopWidth: 1.8, borderLeftWidth: 1.8 },
