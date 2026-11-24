@@ -1,0 +1,26 @@
+name: Sprint 1 — navigation checks
+on:
+  pull_request:
+    branches:
+      - chore/expo-sdk58-iphone-validation
+      - main
+  push:
+    branches:
+      - feat/v3-sprint1-navigation
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/navigation.test.cjs
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/check-glance.js
+      - run: node -e "const b=require('@babel/core'); for(const p of ['App.js','src/features/navigation/DuoNavigation.js']) b.transformFileSync(p,{presets:['babel-preset-expo']})"
+      - run: npx expo export --platform web --output-dir dist
