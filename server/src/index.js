@@ -286,21 +286,51 @@ app.use('/api', requireSecret);
 // Intégrité : le serveur partage UNE seule connexion SQLite. Sans sérialisation, un
 // BEGIN..COMMIT (versements automatiques, journal "tout lu") capture les écritures
 // d'autres requêtes concurrentes, puis peut les annuler par ROLLBACK alors qu'elles
-// ont déjà été acquittées (201). Les requêtes mutantes passent donc une par une ;
-// les lectures (GET) ne sont pas bloquées. Aucune règle métier n'est modifiée.
-let writeQueue = Promise.resolve();
-function serializeWrites(req, res, next) {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
-  const previous = writeQueue;
-  let release;
-  writeQueue = new Promise((resolve) => { release = resolve; });
-  let released = false;
-  const done = () => { if (!released) { released = true; release(); } };
-  res.once('finish', done);
-  res.once('close', done);
-  previous.then(() => next());
+// ont déjà été acquittées (201). Aucune règle métier n'est modifiée.
+//
+// Le verrou suit la fin RÉELLE du traitement applicatif (promesse du gestionnaire de
+// route, transaction et ROLLBACK compris), jamais la durée de vie de la réponse HTTP :
+// une déconnexion du client ne libère rien. Une requête dont le client s'est
+// déconnecté AVANT son tour n'est pas exécutée (aucune écriture non acquittée).
+// Toute issue (succès, erreur, exception) libère le verrou : pas de blocage permanent.
+let writeChain = Promise.resolve();
+function withWriteLock(task) {
+  const run = writeChain.then(task);
+  writeChain = run.catch(() => {});
+  return run;
 }
-app.use('/api', serializeWrites);
+
+// NB : req.destroyed n'est PAS un signal de déconnexion (le flux de requête est
+// auto-détruit dès que express.json a lu le corps). On observe la réponse et la socket.
+function trackClientDisconnect(res) {
+  const state = { gone: false };
+  res.once('close', () => { if (!res.writableEnded) state.gone = true; });
+  return state;
+}
+
+// Dernier gestionnaire d'une route mutante, exécuté sous le verrou d'écriture.
+function underWriteLock(handler) {
+  return (req, res, next) => {
+    const client = trackClientDisconnect(res);
+    withWriteLock(async () => {
+      if (client.gone || (req.socket && req.socket.destroyed)) {
+        console.warn(`[S&S Budget] ${req.method} ${req.path} abandonnée : client déconnecté avant exécution.`);
+        return;
+      }
+      await handler(req, res, next);
+    }).catch(next);
+  };
+}
+
+// Toutes les routes POST/PUT/PATCH/DELETE déclarées après ce point passent par le
+// verrou (y compris celles ajoutées plus tard) : on enveloppe leur dernier gestionnaire.
+for (const method of ['post', 'put', 'patch', 'delete']) {
+  const register = app[method].bind(app);
+  app[method] = (routePath, ...handlers) => {
+    const last = handlers.pop();
+    return register(routePath, ...handlers, underWriteLock(last));
+  };
+}
 
 let db;
 
