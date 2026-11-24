@@ -54,22 +54,38 @@ test('R-03: a member without PIN cannot be claimed by anyone holding the shared 
   assert.notEqual(res.status, 200);
 });
 
-test('R-04: unauthenticated health check does not disclose the absolute database path', { todo: 'R-04 low: /api/health returns dbPath' }, async (t) => {
+test('R-04: unauthenticated health check does not disclose the absolute database path', async (t) => {
   const s = await startServer();
   t.after(() => s.stop());
   const res = await s.request('GET', '/api/health');
   assert.equal(res.status, 200);
   assert.equal(res.body.dbPath, undefined);
+  assert.deepEqual(Object.keys(res.body).sort(), ['name', 'ok', 'time']);
+  assert.ok(!res.text.includes(s.dir), 'no filesystem path in the public response');
 });
 
-test('R-05: server errors do not expose SQLite internals and malformed JSON is a 400', { todo: 'R-05 low: generic error handler echoes error.message with status 500' }, async (t) => {
+test('R-05: server errors do not expose SQLite internals and malformed JSON is a 400', async (t) => {
   const s = await startServer();
   t.after(() => s.stop());
   const token = await s.setPinAndLogin('steve', PIN);
   const fk = await s.request('POST', '/api/expenses', { token, body: { label: 'x', amount: 5, categoryId: 'nope', paidByMemberId: 'steve', date: '2026-11-01' } });
   assert.doesNotMatch(fk.body.error, /SQLITE|constraint/i);
+  assert.equal(fk.status, 500);
+  assert.equal(fk.body.code, 'INTERNAL_ERROR');
+  assert.match(s.logs(), /Erreur interne POST \/api\/expenses \[SQLITE_CONSTRAINT\]/, 'server log stays useful');
   const malformed = await s.request('POST', '/api/expenses', { token, rawBody: '{"label":' });
   assert.equal(malformed.status, 400);
+  assert.equal(malformed.body.code, 'INVALID_JSON');
+});
+
+test('R-05: a PIN inside a malformed JSON body never reaches the logs', async (t) => {
+  const s = await startServer();
+  t.after(() => s.stop());
+  const res = await s.request('POST', '/api/auth/login', { rawBody: '{"memberId":"steve","pin":"9137" oops}' });
+  assert.equal(res.status, 400);
+  assert.ok(!res.text.includes('9137'), 'not echoed to the client');
+  assert.match(s.logs(), /corps JSON invalide \(contenu non journalisé\)/);
+  assert.ok(!s.logs().includes('9137'), 'not written to the server log');
 });
 
 test('API secret comparison rejects near-miss values', async (t) => {

@@ -365,7 +365,8 @@ async function getState() {
 }
 
 app.get('/api/health', async (req, res) => {
-  res.json({ ok: true, name: 'S&S Budget Server', dbPath: absoluteDbPath, time: new Date().toISOString() });
+  // R-04 : pas de chemin de fichier ni de détail d'infrastructure dans la réponse publique.
+  res.json({ ok: true, name: 'S&S Budget Server', time: new Date().toISOString() });
 });
 
 app.get('/api/state', requireAuth, async (req, res, next) => {
@@ -1039,9 +1040,24 @@ app.post('/api/reset', requireAuth, requireAdminRole, async (req, res, next) => 
   } catch (error) { next(error); }
 });
 
+// R-05 : réponses génériques au client, journaux utiles mais sans données sensibles.
+// Ne JAMAIS journaliser l'objet d'erreur entier : pour un JSON invalide, body-parser y
+// attache le corps brut (qui peut contenir un PIN) et le message de JSON.parse en cite
+// un extrait.
 app.use((error, req, res, next) => {
-  console.error(error);
-  res.status(500).json({ error: error.message || 'Erreur serveur.' });
+  if (res.headersSent) return next(error);
+  const where = `${req.method} ${req.path}`;
+  if (error && error.type === 'entity.parse.failed') {
+    console.warn(`[S&S Budget] ${where} : corps JSON invalide (contenu non journalisé).`);
+    return res.status(400).json({ error: 'Requête invalide : JSON mal formé.', code: 'INVALID_JSON' });
+  }
+  if (error && error.type === 'entity.too.large') {
+    console.warn(`[S&S Budget] ${where} : corps trop volumineux.`);
+    return res.status(413).json({ error: 'Requête trop volumineuse.', code: 'PAYLOAD_TOO_LARGE' });
+  }
+  const code = error && error.code ? ` [${error.code}]` : '';
+  console.error(`[S&S Budget] Erreur interne ${where}${code} : ${error && error.stack ? error.stack : String(error)}`);
+  res.status(500).json({ error: 'Erreur interne du serveur. Réessayez plus tard.', code: 'INTERNAL_ERROR' });
 });
 
 openDb()
