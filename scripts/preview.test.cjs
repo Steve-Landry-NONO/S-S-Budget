@@ -6,3 +6,5 @@ test('scenario balances are coherent with envelope totals and forecast',()=>{for
 test('preview does not add planned operations to recent realized list',()=>assert.equal(buildScenario('future').recent.length,2));
 
 test('preview layout guards and shared official brand',()=>{const nav=fs.readFileSync('src/features/navigation/DuoNavigation.js','utf8'),dash=fs.readFileSync('src/features/dashboard/DashboardOverview.js','utf8'),preview=fs.readFileSync('src/features/preview/WebPreview.js','utf8'),glance=fs.readFileSync('src/features/glance/DuoGlanceScreen.js','utf8');assert.match(nav,/previewLargeTab: \{ flexBasis: '50%'/);assert.match(dash,/full:\{flexBasis:'auto',flexGrow:0,width:'100%'/);assert.match(preview,/Math.min\(size\|\|760,width\)/);assert.match(glance,/assets\/duo-mark-blue\.png/);});
+
+test('member cards keep intrinsic height (no percentage flex-basis in the column root)',()=>{const dash=fs.readFileSync('src/features/dashboard/DashboardOverview.js','utf8');assert.match(dash,/personState\.map\(state=><View key=\{state\.member\.id\} style=\{\[styles\.metric,styles\.full\]\}>/);});

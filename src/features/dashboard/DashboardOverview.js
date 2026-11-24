@@ -48,7 +48,7 @@ export default function DashboardOverview({totals,plannedTotals,forecastCashBala
     {recent.length ? recent.map(row=><View key={row.key} style={[styles.operation,stacked&&styles.column]}><View style={[styles.operationCopy,stacked&&styles.stackedItem]}><Text style={styles.operationLabel}>{row.label}</Text><Text style={styles.meta}>{row.category} · {row.date}</Text></View><Text style={[styles.flowValue,row.amount>0&&styles.income]}>{row.amount>0?'+':''}{formatEuro(row.amount)}</Text></View>) : <Text style={styles.meta}>Aucune opération réalisée ce mois-ci.</Text>}
     <TouchableOpacity accessibilityRole="button" onPress={()=>onNavigate('activity')} style={styles.link}><Text style={styles.actionLabel}>Voir le journal ›</Text></TouchableOpacity>
     <View style={styles.grid}><Text style={styles.heading}>Votre duo</Text><TouchableOpacity accessibilityRole="button" onPress={()=>onNavigate('members')} style={styles.link}><Text style={styles.actionLabel}>Mon duo ›</Text></TouchableOpacity></View>
-    {personState.length ? personState.map(state=><View key={state.member.id} style={styles.metric}>
+    {personState.length ? personState.map(state=><View key={state.member.id} style={[styles.metric,styles.full]}>
       <Text style={styles.operationLabel}>{state.member.name}</Text>
       <Text style={styles.meta}>Objectif de versement : {formatEuro(state.expected)}</Text>
       <Text style={styles.meta}>Déjà versé : {formatEuro(state.paid)}</Text>
