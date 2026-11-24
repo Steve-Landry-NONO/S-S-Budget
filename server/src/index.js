@@ -283,6 +283,25 @@ function requireSecret(req, res, next) {
 
 app.use('/api', requireSecret);
 
+// Intégrité : le serveur partage UNE seule connexion SQLite. Sans sérialisation, un
+// BEGIN..COMMIT (versements automatiques, journal "tout lu") capture les écritures
+// d'autres requêtes concurrentes, puis peut les annuler par ROLLBACK alors qu'elles
+// ont déjà été acquittées (201). Les requêtes mutantes passent donc une par une ;
+// les lectures (GET) ne sont pas bloquées. Aucune règle métier n'est modifiée.
+let writeQueue = Promise.resolve();
+function serializeWrites(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const previous = writeQueue;
+  let release;
+  writeQueue = new Promise((resolve) => { release = resolve; });
+  let released = false;
+  const done = () => { if (!released) { released = true; release(); } };
+  res.once('finish', done);
+  res.once('close', done);
+  previous.then(() => next());
+}
+app.use('/api', serializeWrites);
+
 let db;
 
 async function getState() {
