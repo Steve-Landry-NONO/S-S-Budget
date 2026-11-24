@@ -10,3 +10,6 @@ Figma baseline screen 4:89 inspected structurally: scrolling header, balance, mo
 
 ## Third slice — 24 Nov
 User video confirms compact header and logo, balances 165 EUR; large-text navigation remains a defect. Candidate uses explicit half-width text tabs, no scaling cap, compact wrapping month controls and retains invalid month editor. Monthly breakdown separates objective, report and realized flows. Recent operations are read-only, selected-month realized rows; ties sorted by stable key (not creation time). Existing envelope/member details retained. Shared QA Lab integration deferred. Native re-test required.
+
+## Fourth slice — 24 Nov
+Compact envelope cards distinguish cash, remaining budget and spending usage; zero/negative available budget has no percentage bar. Member cards reuse V2 personState, label remaining amounts as contribution objectives (not debts), and retain personal payments. Offline, empty and negative notices are presentation only. Full envelope details remain accessible on dashboard. Native video on previous slice confirms normal layout and 165 EUR; recent operations and large text still need targeted review. QA Lab integration remains separate.

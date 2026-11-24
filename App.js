@@ -906,7 +906,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
         {(largeText || tab === 'dashboard') && renderMainControls()}
         {tab === 'dashboard' && (
           <>
-            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} personState={personState} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
@@ -916,10 +916,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               </View>
             )}
             <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => updateMonth(1)}><Text style={styles.secondaryButtonText}>Mois suivant ›</Text></TouchableOpacity>
-            <Text style={styles.sectionTitle}>État par membre</Text>
-            {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
-            <Text style={styles.sectionTitle}>Détail des enveloppes</Text>
-            {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Détail des enveloppes</Text>
+              {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+              {!summary.length && <Text style={styles.muted}>Aucune enveloppe configurée.</Text>}
+            </View>
           </>
         )}
 

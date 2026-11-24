@@ -36,4 +36,20 @@ function recentOperations(expenses,contributions,categories,members,limit=4) {
   ];
   return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date))||a.key.localeCompare(b.key)).slice(0,limit);
 }
-module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance,recentOperations};
+// Presentation only: usage is spending / available budget, never cash / target.
+function envelopePresentation(category) {
+  const available=Number(category.availableBudget);
+  const spent=Number(category.spent);
+  const usage=Number.isFinite(available)&&available>0&&Number.isFinite(spent)
+    ? Math.min(100,Math.max(0,spent/available*100)) : null;
+  return {usage, status:category.needsFunding?'À alimenter':category.overBudget?'Dépassement':null};
+}
+function dashboardNotices({totals,forecast,summary,connected}) {
+  const notices=[];
+  if(!connected) notices.push({key:'offline',text:'Hors ligne : les données locales peuvent ne pas être à jour.'});
+  if(!summary.length) notices.push({key:'empty',text:'Aucune enveloppe configurée. Commencez par créer une enveloppe.'});
+  if(totals.cashBalance<0) notices.push({key:'negative',text:'Le solde réel enregistré est négatif.'});
+  if(forecast<0) notices.push({key:'forecast',text:'Le solde prévisionnel est négatif.'});
+  return notices;
+}
+module.exports={summarizeCategories,summarizeTotals,summarizePlanned,forecastBalance,recentOperations,envelopePresentation,dashboardNotices};
