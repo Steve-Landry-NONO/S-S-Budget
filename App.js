@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
   Image,
   Modal,
   ScrollView,
@@ -19,6 +20,7 @@ import { BottomNavigation, NavigationActions } from './src/features/navigation/D
 import { palette } from './src/theme/tokens';
 import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
 import DashboardOverview from './src/features/dashboard/DashboardOverview';
+import WebPreview from './src/features/preview/WebPreview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -179,6 +181,11 @@ const initialState = {
 };
 
 export default function App() {
+  if (Platform.OS === 'web' && process.env.EXPO_PUBLIC_DUO_PREVIEW === '1') return <WebPreview />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
   const {fontScale, width} = useWindowDimensions();
   const largeText = fontScale >= 1.3 || width < 340;
   const [showGlance, setShowGlance] = useState(true);

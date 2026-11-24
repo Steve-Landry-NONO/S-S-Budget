@@ -13,3 +13,6 @@ User video confirms compact header and logo, balances 165 EUR; large-text naviga
 
 ## Fourth slice — 24 Nov
 Compact envelope cards distinguish cash, remaining budget and spending usage; zero/negative available budget has no percentage bar. Member cards reuse V2 personState, label remaining amounts as contribution objectives (not debts), and retain personal payments. Offline, empty and negative notices are presentation only. Full envelope details remain accessible on dashboard. Native video on previous slice confirms normal layout and 165 EUR; recent operations and large text still need targeted review. QA Lab integration remains separate.
+
+## Fifth slice — shared QA Lab
+Opt-in web-only preview on Sprint 2 branch, same DashboardOverview and model, coherent EUR fixtures (normal 165, negative -35, empty 0, future 165/125, offline 165). Other destinations illustrative. Width override and large-layout switch are not native font scaling. Native hero fade only when reduced motion query permits; no amount animation. CI exports normal and preview separately; preview artifact, no public deployment. Run EXPO_PUBLIC_DUO_PREVIEW=1 npx expo start --web -c; unset variable for native QA. Prior preview branch unchanged. Verify browser and iPhone before signoff.

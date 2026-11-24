@@ -35,10 +35,10 @@ function NavigationIcon({ route, color }) {
   );
 }
 
-export function BottomNavigation({ route, onNavigate, unreadCount = 0 }) {
+export function BottomNavigation({ route, onNavigate, unreadCount = 0, previewWidth, previewFontScale }) {
   const { fontScale, width } = useWindowDimensions();
   const selected = routes.parentRoute(route);
-  const large = fontScale >= 1.3 || width < 340;
+  const large = (previewFontScale === undefined ? fontScale >= 1.3 : previewFontScale >= 1.3) || (previewWidth ?? width) < 340;
   return (
     <View style={[styles.bar, large && styles.wrap]} accessibilityRole="tablist">
       {routes.TABS.map(({ key, label }) => {
