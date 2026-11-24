@@ -4,3 +4,6 @@ Start 24 Nov 2026 (early); official window 26 Nov–9 Dec. Candidate base b03af4
 Extract existing V2 category/totals/planned aggregation verbatim in behavior, preserving classification upstream and number arithmetic. No migration, no cloud integration. New summary card displays actual cash, forecast, planned net, budget target, realized flows and sync state. Existing detail/member/envelope sections and actions remain.
 ## Acceptance
 Automated parity scenarios including iOS QA 200 - 35 = 165, carryover, planned, empty, negative, decimal. Validate on iPhone with same QA data, normal and larger text, widths 360/390/430, online/offline. Check Figma reference V3.0.7 before visual signoff; first visual implementation is not pixel-perfect. Android pending. No production use. 
+
+## Second slice
+Figma baseline screen 4:89 inspected structurally: scrolling header, balance, monthly breakdown, quick actions, envelopes. Compact header and month picker, official mark rasterized from repository SVG, real envelope summary. Transfer and notifications not implemented; no fake controls. Existing detailed sections retained. User QA 15/15 and iOS 165 EUR on initial slice. Revalidate this slice on device.

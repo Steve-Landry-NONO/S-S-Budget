@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -194,6 +195,7 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [monthDraft, setMonthDraft] = useState(currentMonthKey());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
@@ -852,33 +854,24 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   };
 
   const renderMainControls = () => (<>
-      <View style={[styles.header, largeText && styles.stacked]}>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>Duo Budget</Text>
-          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
-          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
+      <View style={[styles.compactHeader, largeText && styles.stacked]}>
+        <View style={styles.brandRow}>
+          <Image source={require('./assets/duo-mark-blue.png')} style={styles.brandMark} accessibilityIgnoresInvertColors accessible={false} />
+          <Text style={styles.brandName}>Duo Budget</Text>
         </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configuration" style={styles.compactConfig} onPress={() => setSettingsModal(true)}><Text style={styles.compactConfigText}>Config</Text></TouchableOpacity>
       </View>
-
-      <View style={[styles.monthRow, largeText && styles.stacked]}>
-        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois précédent" onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
-        <TextInput
-          style={[styles.monthLabel, largeText && styles.fullWidth]}
-          value={monthDraft}
-          onChangeText={setMonthDraft}
-          onSubmitEditing={applyMonthDraft}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
-          placeholder="AAAA-MM"
-        />
-        <TouchableOpacity style={[styles.monthOkButton, largeText && styles.fullWidth]} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} accessibilityLabel="Mois suivant" onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
+      <View style={[styles.compactMonth, largeText && styles.stacked]}>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois précédent" accessibilityRole="button" onPress={() => updateMonth(-1)}><Text style={styles.compactArrowText}>‹</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choisir le mois" style={styles.monthCenter} onPress={() => setMonthPickerOpen(v => !v)}><Text style={styles.monthCaption}>{new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(selectedMonth+'-01T00:00:00Z'))} ▾</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois suivant" accessibilityRole="button" onPress={() => updateMonth(1)}><Text style={styles.compactArrowText}>›</Text></TouchableOpacity>
       </View>
-
-      <NavigationActions route={tab} onNavigate={setTab} />
-
+      {monthPickerOpen && <View style={styles.card}>
+        <Text style={styles.label}>Choisir un mois (AAAA-MM)</Text>
+        <TextInput style={styles.input} value={monthDraft} onChangeText={setMonthDraft} autoCorrect={false} keyboardType="numbers-and-punctuation" onSubmitEditing={() => {applyMonthDraft();setMonthPickerOpen(false);}} />
+        <TouchableOpacity style={styles.secondaryButton} onPress={() => {applyMonthDraft();setMonthPickerOpen(false);}}><Text style={styles.secondaryButtonText}>Appliquer</Text></TouchableOpacity>
+      </View>}
+      {tab !== 'dashboard' && <NavigationActions route={tab} onNavigate={setTab} />}
   </>);
 
   if (bootLoading) {
@@ -906,13 +899,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      {!largeText && renderMainControls()}
+      {!largeText && tab !== 'dashboard' && renderMainControls()}
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
-        {largeText && renderMainControls()}
+        {(largeText || tab === 'dashboard') && renderMainControls()}
         {tab === 'dashboard' && (
           <>
-            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} />
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} onNavigate={setTab} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
@@ -1230,6 +1223,8 @@ function CategorySummary({ category }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: palette.background },
+  compactHeader: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:8, padding:8, backgroundColor:palette.background },
+  brandRow: { flexDirection:'row', alignItems:'center', flexShrink:1, gap:8 }, brandMark:{width:32,height:32}, brandName:{fontSize:19,fontWeight:'700',color:palette.midnight,flexShrink:1}, compactConfig:{minHeight:44,justifyContent:'center',paddingHorizontal:12,borderRadius:12,backgroundColor:palette.lightBlue}, compactConfigText:{color:'#304DB2',fontWeight:'600',textAlign:'center'}, compactMonth:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8,paddingHorizontal:8,paddingBottom:12}, compactArrow:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',backgroundColor:palette.surface,borderRadius:12}, compactArrowText:{fontSize:26,color:palette.midnight},monthCenter:{flexShrink:1,padding:8,minHeight:44,justifyContent:'center'},monthCaption:{fontSize:16,fontWeight:'600',color:palette.midnight,textAlign:'center'},
   stacked: { flexDirection: 'column', alignItems: 'stretch' },
   fullWidth: { width: '100%', flex: 0 },
   headerCopy: { flexShrink: 1, minWidth: 0 },

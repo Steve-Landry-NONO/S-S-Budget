@@ -23,8 +23,8 @@ test('navigation remains behind session gate and outside content scroll', () => 
   const app=fs.readFileSync('App.js','utf8').replace(/\r\n/g, '\n');
   const gate = app.indexOf('if (!isSessionValid())');
   assert.ok(gate >= 0);
-  assert.ok(app.indexOf('{!largeText && renderMainControls()}') > gate);
-  assert.ok(app.indexOf('{largeText && renderMainControls()}') > gate);
+  assert.ok(app.indexOf("{!largeText && tab !== 'dashboard' && renderMainControls()}") > gate);
+  assert.ok(app.indexOf('{(largeText || tab === 'dashboard') && renderMainControls()}') > gate);
   assert.equal((app.match(/renderMainControls\(\)/g) || []).length, 2);
   assert.ok(app.slice(app.indexOf('const renderMainControls ='), gate).includes('<NavigationActions'));
   assert.ok(app.indexOf('<NavigationActions') < app.indexOf('<BottomNavigation'));
@@ -47,4 +47,4 @@ test('icons are decorative and navigation labels remain available', () => {
  require('node:assert/strict').match(source,/apiUrl && !editingServer && !isSessionValid\(\)/);
  });
 
-test('large text keeps main controls in scroll and navigation outside',()=>{const app=fs.readFileSync('App.js','utf8');assert.match(app,/fontScale >= 1\.3/);assert.match(app,/\{largeText && renderMainControls\(\)\}/);assert.match(app,/\{!largeText && renderMainControls\(\)\}/);assert.match(app,/largeText && styles\.stacked/);assert.match(app,/StatusBar style="dark"/);assert.doesNotMatch(app,/allowFontScaling=\{false\}/);});
+test('large text keeps main controls in scroll and navigation outside',()=>{const app=fs.readFileSync('App.js','utf8');assert.match(app,/fontScale >= 1\.3/);assert.match(app,/\{\(largeText \|\| tab === 'dashboard'\) && renderMainControls\(\)\}/);assert.match(app,/\{!largeText && tab !== 'dashboard' && renderMainControls\(\)\}/);assert.match(app,/largeText && styles\.stacked/);assert.match(app,/StatusBar style="dark"/);assert.doesNotMatch(app,/allowFontScaling=\{false\}/);});
