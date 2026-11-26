@@ -7,6 +7,8 @@
 3. le SQLSTATE.
 
 Le code n'est jamais déduit d'un montant ni d'un message traduit.
+Depuis la 3.2, le **message exposé** est toujours le message public stable du code (`PUBLIC_MESSAGES`) : le message brut du serveur
+(tables, contraintes, montants) n'est jamais recopié.
 
 | Indice / détail | SQLSTATE | Code | Action côté interface |
 |---|---|---|---|
@@ -22,5 +24,8 @@ Le code n'est jamais déduit d'un montant ni d'un message traduit.
 | — | 42501 | `FORBIDDEN` / `UNAUTHENTICATED` | Retour à l'accueil |
 | — | 23505 | `IDEMPOTENCY_MISMATCH` | Bug client : même clé, charge différente |
 | — | 22023 | `VALIDATION` | Afficher l'erreur de saisie |
+
+| — (adaptateur) | — | `CONTRACT_VIOLATION` | Réponse non conforme : incident, aucun affichage de montant |
+| — (adaptateur) | — | `SPACE_NOT_INITIALIZED` | Parcours d'activation de l'espace (lot G-A) |
 
 Seules les erreurs `NETWORK` et `RATE_LIMITED` sont rejouables automatiquement.

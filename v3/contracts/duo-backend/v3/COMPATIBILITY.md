@@ -6,4 +6,11 @@
 - **Correctif** : correction de mapper sans changement de forme.
 - Les **fixtures SQL** sont régénérées à chaque modification de migration. Toute différence de valeur fait échouer `sqlFixtures.test.ts`.
 - La **3.1.0-candidate** ajoute à la 3.0.0 : `expectedContributionsState`, `expectedByMember`, `ProtectionState.lift_pending` et sept codes d'erreur à indice.
-- **Clés de cache** préfixées `envelopes:v3:`, jamais partagées entre espaces ni entre utilisateurs.
+- La **3.2.0-candidate** (26/11, durcissement REV-01 à REV-07, G6, G7, G9) :
+  - **rupture** `DuoSnapshot.forecast`, `upcomingContributions`, `plannedExpenses` : `Money` → `Capability<Money>` (REV-07) ;
+  - **rupture** le mapper refuse les nombres JSON (`CONTRACT_VIOLATION`) : il exige les migrations corrigées (REV-01) ; les réponses publiées sont conservées dans `fixtures/legacy-published-df41563/` ;
+  - **rupture** `envelopeCacheKey` inclut toujours l'utilisateur et la période (REV-04) ; `EnvelopeCache` purge à la déconnexion, à la révocation et au départ ;
+  - **ajout** `Capability.partial`, `NotAvailableReason.integrity_incident`, `EnvelopeListSnapshot.integrity` et `viewerUserId`, codes `CONTRACT_VIOLATION` et `SPACE_NOT_INITIALIZED` ;
+  - **ajout** commandes `reallocateBudget`, `moveRealFunds`, `setEnvelopeProtection`, `getContributionReleasePlan`, `mySpaces`, `createPersonalSpace`, `signOut` ; `transfer` déprécié (alias de `reallocateBudget`) ;
+  - `fromSqlFundsSnapshot(raw, { viewerUserId, scope })` : l'ancienne forme `(raw, scope, owner)` reste acceptée ; l'espace annoncé par le serveur prime.
+- **Clés de cache** : `envelopes:v3:<utilisateur>:<duo>:<espace>:<période>`, jamais partagées entre espaces, utilisateurs ni périodes.
