@@ -1,0 +1,50 @@
+{
+ "label": "r2_rev_corrections_funds",
+ "publie": "pub_s3",
+ "corrige": "s3",
+ "resume": {
+  "Réussi": 4
+ },
+ "resultats": [
+  {
+   "id": "REV06-R",
+   "famille": "REV-06",
+   "regle": "Reproduction : levée demandée, la lecture publiée n'expose pas lift_pending",
+   "action": "B protège ; A demande la levée",
+   "attendu": "demande lift_pending mais protectionState = protected (état en attente invisible)",
+   "observe": "demande=lift_pending lecture A=protected B=protected",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "REV01-F-R",
+   "famille": "REV-01",
+   "regle": "Reproduction : nombres JSON dans les lectures publiées (fonds et enveloppes)",
+   "action": "lecture brute (texte JSON)",
+   "attendu": "au moins un nombre JSON (ledgerVersion, position)",
+   "observe": "fonds=['4'] enveloppes=['40000', '0', '0', '40000', '40000', '0']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "REV06-C",
+   "famille": "REV-06",
+   "regle": "Correction : protected → lift_pending (pour les deux membres, mouvement toujours refusé) → none après approbation",
+   "action": "B protège ; A demande ; A tente un transfert ; B approuve",
+   "attendu": "protected ; lift_pending ×2 ; 23514 ; none",
+   "observe": "protected ; A=lift_pending B=lift_pending ; transfert=23514 ; après=none",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "REV01-F-C",
+   "famille": "REV-01",
+   "regle": "Correction : aucun nombre JSON dans les lectures fonds et enveloppes (montants, compteurs en chaînes)",
+   "action": "lecture brute",
+   "attendu": "0 nombre JSON",
+   "observe": "fonds=[] enveloppes=[]",
+   "statut": "Réussi",
+   "note": ""
+  }
+ ]
+}
