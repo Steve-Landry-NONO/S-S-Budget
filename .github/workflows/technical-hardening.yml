@@ -36,7 +36,7 @@ jobs:
       - name: Expo SDK must stay on 58
         run: node -e "const v=require('expo/package.json').version;console.log('expo',v);if(!v.startsWith('58.'))process.exit(1)"
       - name: Unit, financial parity and static tests
-        run: node --test scripts/navigation.test.cjs scripts/dashboard.test.cjs scripts/preview.test.cjs scripts/finance.test.cjs
+        run: node --test scripts/navigation.test.cjs scripts/dashboard.test.cjs scripts/preview.test.cjs scripts/finance.test.cjs scripts/session-boundary.test.cjs
       - name: Duo Glance privacy assertions
         run: node scripts/check-glance.js
       - name: Android Preview configuration guards

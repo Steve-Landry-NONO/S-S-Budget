@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   Platform,
   Image,
   Modal,
@@ -21,6 +22,7 @@ import { palette } from './src/theme/tokens';
 import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
 import DashboardOverview from './src/features/dashboard/DashboardOverview';
 import WebPreview from './src/features/preview/WebPreview';
+import sessionStorage from './src/features/session/sessionBoundary.cjs';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -226,17 +228,54 @@ function AuthenticatedApp() {
   const [pinManageModal, setPinManageModal] = useState(false);
   const [pinManageDraft, setPinManageDraft] = useState({ currentPin: '', newPin: '', newPin2: '' });
 
-  const isSessionValid = () => Boolean(authToken) && Boolean(authTokenExpiresAt) && new Date(authTokenExpiresAt).getTime() > Date.now();
+  const boundaryRef=useRef(null);
+  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage);
+  const boundary=boundaryRef.current;
+  const epoch=boundary.current();
+  const session={api:apiUrl,secret:apiSecret,user:currentUserId,token:authToken,expires:authTokenExpiresAt};
+  const isSessionValid=()=>sessionStorage.valid(session);
+  const [dataReady,setDataReady]=useState(false);
+  const [storageError,setStorageError]=useState(false);
+  const reportStorageError=()=>setStorageError(true);
+  const resetSession=()=>{
+    const purge=boundary.purge();
+    setAuthToken('');setAuthTokenExpiresAt('');setCurrentUserId('');
+    setMembers([]);setCategories([]);setExpenses([]);setContributions([]);setActivityLogs([]);
+    setDataReady(false);setConnected(false);setSyncMessage('Session fermée');
+    setSelectedMonth(currentMonthKey());setMonthDraft(currentMonthKey());setMonthPickerOpen(false);setTab('dashboard');
+    setExpenseDraft({label:'',amount:'',categoryId:'',paidByMemberId:'',date:monthDefaultDate(currentMonthKey())});
+    setContributionDraft({amount:'',categoryId:'',memberId:'',date:monthDefaultDate(currentMonthKey())});
+    setAutoDraft({mode:'all',memberId:'',monthsCount:'1',date:monthDefaultDate(currentMonthKey())});
+    setEditingExpense(null);setEditingContribution(null);setEditingCategory(null);setCategoryModal(false);
+    setSettingsModal(false);setProfileModal(false);setPinManageModal(false);setMemberDraft('');
+    setPinManageDraft({currentPin:'',newPin:'',newPin2:''});setPinStage(null);setAuthMembers([]);setAuthError('');setAuthLoading(false);
+    purge.catch(reportStorageError);
+    return purge;
+  };
+  const changeServer=(value,secret=false)=>{
+    resetSession();setEditingServer(true);setShowGlance(false);
+    if(secret)setApiSecret(value);else setApiUrl(value);
+  };
+  const stale=()=>Object.assign(new Error('Session changée'),{code:'STALE_SESSION'});
+  const staleError=error=>error?.code==='STALE_SESSION'||!boundary.isCurrent(epoch);
+  useEffect(()=>{
+    if(!authToken)return;
+    const expire=()=>{if(boundary.isCurrent(epoch)&&!isSessionValid())resetSession();};
+    expire();const timer=setInterval(expire,1000);
+    const sub=AppState.addEventListener('change',state=>{if(state==='active')expire();});
+    return()=>{clearInterval(timer);sub.remove();};
+  },[authToken,authTokenExpiresAt,currentUserId,epoch]);
 
   useEffect(() => { loadLocal(); }, []);
 
   useEffect(() => {
+    if (bootLoading) return;
     saveLocal();
     if (!firstId(members) || !firstId(categories)) return;
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
+  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, bootLoading, dataReady, epoch]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -247,17 +286,19 @@ function AuthenticatedApp() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    if (!apiUrl || !isSessionValid()) return;
+    if (bootLoading || !apiUrl || !isSessionValid()) return;
     syncFromServer(false);
     const timer = setInterval(() => { if (isSessionValid()) syncFromServer(false); }, 15000);
     return () => clearInterval(timer);
-  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
+  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, bootLoading, epoch]);
 
   useEffect(() => {
-    if (apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
-  }, [apiUrl, authToken, authTokenExpiresAt, editingServer]);
+    if (!bootLoading && apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
+  }, [apiUrl, apiSecret, authToken, authTokenExpiresAt, editingServer, bootLoading, epoch]);
 
   const request = async (path, options = {}) => {
+    if (!boundary.isCurrent(epoch)) throw stale();
+    if (authToken && !isSessionValid()) { resetSession(); throw stale(); }
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
     const url = `${apiUrl.replace(/\/$/, '')}${path}`;
     const response = await fetch(url, {
@@ -271,13 +312,13 @@ function AuthenticatedApp() {
       },
     });
     const data = await response.json().catch(() => ({}));
+    if (!boundary.isCurrent(epoch)) throw stale();
+    if (authToken && !isSessionValid()) { resetSession(); throw stale(); }
     if (!response.ok) {
       const error = new Error(data.error || `Erreur serveur ${response.status}`);
       error.code = data.code;
       if (response.status === 401 && data.code === 'AUTH_REQUIRED') {
-        setAuthToken('');
-        setAuthTokenExpiresAt('');
-        setConnected(false);
+        resetSession();
         setSyncMessage('Session expirée');
       }
       throw error;
@@ -286,6 +327,8 @@ function AuthenticatedApp() {
   };
 
   const applyServerState = (data) => {
+    if (!boundary.isCurrent(epoch) || !isSessionValid()) return;
+    setDataReady(true);
     setMembers((data.members || []).map((m) => ({ ...m, role: currentMemberRole(m) })));
     setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
     setExpenses(data.expenses || []);
@@ -301,6 +344,7 @@ function AuthenticatedApp() {
       applyServerState(data);
       if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
     } catch (error) {
+      if (staleError(error)) return;
       setConnected(false);
       if (error.code === 'AUTH_REQUIRED') {
         setSyncMessage('Session expirée');
@@ -317,6 +361,7 @@ function AuthenticatedApp() {
       const data = await request(path, { method, body: JSON.stringify(body || {}) });
       applyServerState(data);
     } catch (error) {
+      if (staleError(error)) return;
       setConnected(false);
       if (error.code === 'AUTH_REQUIRED') {
         setSyncMessage('Session expirée');
@@ -334,12 +379,14 @@ function AuthenticatedApp() {
     setAuthLoading(true);
     try {
       const data = await request('/api/auth/status');
+      if (!boundary.isCurrent(epoch)) return;
       setAuthMembers(data.members || []);
     } catch (error) {
+      if (staleError(error)) return;
       setAuthMembers([]);
       setAuthError(error.message || 'Impossible de contacter le serveur.');
     } finally {
-      setAuthLoading(false);
+      if (boundary.isCurrent(epoch)) setAuthLoading(false);
     }
   };
 
@@ -351,6 +398,8 @@ function AuthenticatedApp() {
   const closePinStage = () => setPinStage(null);
 
   const applyLoginSuccess = (data) => {
+    if (!boundary.isCurrent(epoch)) return;
+    resetSession();
     setCurrentUserId(data.member.id);
     setAuthToken(data.authToken);
     setAuthTokenExpiresAt(data.expiresAt);
@@ -374,9 +423,10 @@ function AuthenticatedApp() {
         Alert.alert('PIN créé', `Le PIN de ${pinStage.memberName} a été créé.`);
         applyLoginSuccess(loginData);
       } catch (error) {
+        if (staleError(error)) return;
         Alert.alert('Création impossible', error.message);
       } finally {
-        setAuthLoading(false);
+        if (boundary.isCurrent(epoch)) setAuthLoading(false);
       }
     } else {
       setAuthLoading(true);
@@ -384,11 +434,12 @@ function AuthenticatedApp() {
         const loginData = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ memberId: pinStage.memberId, pin }) });
         applyLoginSuccess(loginData);
       } catch (error) {
+        if (staleError(error)) return;
         Alert.alert('Connexion refusée', error.message);
         setPinStage((stage) => (stage ? { ...stage, pin: '' } : stage));
         fetchAuthStatus();
       } finally {
-        setAuthLoading(false);
+        if (boundary.isCurrent(epoch)) setAuthLoading(false);
       }
     }
   };
@@ -398,11 +449,9 @@ function AuthenticatedApp() {
     fetchAuthStatus();
   };
 
-  const logout = () => {
-    setAuthToken('');
-    setAuthTokenExpiresAt('');
-    setSettingsModal(false);
-    Alert.alert('Déconnecté', 'Reconnecte-toi avec ton PIN pour continuer.');
+  const logout = async () => {
+    try { await resetSession(); Alert.alert('Déconnecté', 'Reconnecte-toi avec ton PIN pour continuer.'); }
+    catch { Alert.alert('Stockage local', 'Effacement incomplet. Ne partage pas cet appareil avant résolution.'); }
   };
 
   const submitPinManage = async () => {
@@ -432,38 +481,21 @@ function AuthenticatedApp() {
       if (storedApi) setApiUrl(storedApi);
       if (storedSecret) setApiSecret(storedSecret);
       if (storedUserId) setCurrentUserId(storedUserId);
-      const stillValid = storedToken && storedExpires && new Date(storedExpires).getTime() > Date.now();
-      if (stillValid) {
-        setAuthToken(storedToken);
-        setAuthTokenExpiresAt(storedExpires);
-      } else if (storedToken || storedExpires) {
-        await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_EXPIRES_KEY]);
-      }
-      if (cache) {
-        const data = JSON.parse(cache);
-        setMembers((data.members || initialState.members).map((m) => ({ ...m, role: currentMemberRole(m) })));
-        setCategories(data.categories || initialState.categories);
-        setExpenses(data.expenses || []);
-        setContributions(data.contributions || []);
-        setActivityLogs(data.activityLogs || []);
-        // Au lancement, l'app revient automatiquement sur le mois courant.
-        // L'historique reste accessible avec les flèches ou la saisie AAAA-MM.
-        setSelectedMonth(currentMonthKey());
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger le cache local.');
-    } finally {
-      setBootLoading(false);
-    }
+      const restored={api:storedApi||'',secret:storedSecret||'',user:storedUserId||'',token:storedToken||'',expires:storedExpires||''};
+      const data=sessionStorage.readCache(cache, restored);
+      if(sessionStorage.valid(restored)){
+        setAuthToken(storedToken);setAuthTokenExpiresAt(storedExpires);
+        if(data){
+          setMembers(data.members.map(m=>({...m,role:currentMemberRole(m)})));
+          setCategories(data.categories);setExpenses(data.expenses);setContributions(data.contributions);setActivityLogs(data.activityLogs);setDataReady(true);
+        }else await AsyncStorage.removeItem(CACHE_KEY);
+      }else await resetSession();
+    }catch(error){resetSession();reportStorageError();}
+    finally{setBootLoading(false);}
   };
-
-  const saveLocal = async () => {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, activityLogs, selectedMonth }));
-    await AsyncStorage.setItem(API_KEY, apiUrl || '');
-    await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
-    await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
-    await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken || '');
-    await AsyncStorage.setItem(AUTH_EXPIRES_KEY, authTokenExpiresAt || '');
+  const saveLocal=()=>{
+    if(bootLoading||!boundary.isCurrent(epoch))return Promise.resolve();
+    return boundary.save(epoch,session,dataReady?{members,categories,expenses,contributions,activityLogs,selectedMonth}:null).catch(reportStorageError);
   };
 
   const monthExpenseRows = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
@@ -683,7 +715,7 @@ function AuthenticatedApp() {
       const data = await request('/api/backups/create', { method: 'POST', body: JSON.stringify({ reason: 'mobile' }) });
       Alert.alert('Sauvegarde créée', `Fichier : ${data.backup?.file || 'sauvegarde SQLite'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Sauvegarde impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Sauvegarde impossible', error.message); }
   };
 
   const exportServerJson = async () => {
@@ -692,7 +724,7 @@ function AuthenticatedApp() {
       const data = await request('/api/export/json', { method: 'POST', body: JSON.stringify({}) });
       Alert.alert('Export JSON créé', `Fichier : ${data.export?.file || 'export JSON'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Export impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Export impossible', error.message); }
   };
 
   const exportServerCsv = async () => {
@@ -702,7 +734,7 @@ function AuthenticatedApp() {
       const files = (data.exports || []).map((item) => item.file).join('\n');
       Alert.alert('Exports CSV créés', `${files || 'exports CSV'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Export impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Export impossible', error.message); }
   };
 
   const showRestoreInfo = () => {
@@ -809,9 +841,9 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.cardTitle}>Configurer le serveur</Text>
             <Text style={styles.muted}>Renseigne l’adresse du serveur de confiance (réseau local ou Tailscale).</Text>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value) => { setEditingServer(true); setApiUrl(value); }} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value) => changeServer(value)} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} autoCorrect={false} onChangeText={setApiSecret} />
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} autoCorrect={false} onChangeText={(value)=>changeServer(value,true)} />
             <TouchableOpacity style={styles.primaryButton} disabled={authLoading || !apiUrl.trim()} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(false); }}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
           </View>
         ) : pinStage ? renderPinStageForm() : renderAuthMemberList()}
@@ -891,6 +923,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     );
   }
 
+  if(storageError)return (
+    <SafeAreaProvider><SafeAreaView style={styles.safe}>
+      <Text style={styles.title}>Stockage local indisponible</Text>
+      <Text style={styles.muted}>Les données ne sont pas affichées. Réessaie l'effacement avant de continuer.</Text>
+      <TouchableOpacity style={styles.primaryButton} onPress={async()=>{try{await resetSession();setStorageError(false);}catch{reportStorageError();}}}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
+    </SafeAreaView></SafeAreaProvider>
+  );
+
   if (!isSessionValid()) {
     return (
       <SafeAreaProvider>
@@ -904,6 +944,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     );
   }
 
+  if (!dataReady) return (
+    <SafeAreaProvider><SafeAreaView style={styles.safe}>
+      <Text style={styles.title}>Chargement des données</Text>
+      <Text style={styles.muted}>Aucune donnée financière disponible tant que la synchronisation initiale n'a pas réussi.</Text>
+      <TouchableOpacity style={styles.primaryButton} onPress={()=>syncFromServer(true)}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryButton} onPress={logout}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+    </SafeAreaView></SafeAreaProvider>
+  );
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
@@ -1146,9 +1194,9 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
           <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value)=>changeServer(value)} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={(value)=>changeServer(value,true)} />
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
               <View style={[styles.rowBetween, largeText && styles.stacked]}>
@@ -1162,9 +1210,9 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>
             <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de ce profil connecté par PIN.</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'Le téléphone utilisera seulement son cache local et ne partagera plus les données avec l’autre téléphone.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => setApiUrl('') }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'La session sera fermée et le cache effacé. Les actions locales non synchronisées peuvent être perdues.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => { resetSession(); setApiUrl(''); setShowGlance(false); } }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Il faudra ressaisir ton PIN pour continuer.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Le cache et les actions locales non synchronisées seront effacés. Il faudra ressaisir ton PIN pour continuer.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
             {isAdmin && <View style={styles.card}>
               <Text style={styles.cardTitle}>Sauvegarde et exports</Text>
               <Text style={styles.muted}>Actions réservées à l’administrateur. Les fichiers sont créés sur le serveur dans server/backups/.</Text>
