@@ -1,0 +1,330 @@
+COL|public.duo_v3_accounts.book|text|YES|
+COL|public.duo_v3_accounts.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_accounts.currency|text|NO|
+COL|public.duo_v3_accounts.household_id|uuid|NO|
+COL|public.duo_v3_accounts.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_accounts.kind|text|NO|
+COL|public.duo_v3_accounts.label|text|NO|
+COL|public.duo_v3_allocation_versions.amount_minor|numeric|NO|
+COL|public.duo_v3_allocation_versions.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_allocation_versions.effective_from|date|NO|
+COL|public.duo_v3_allocation_versions.envelope_id|uuid|NO|
+COL|public.duo_v3_allocation_versions.household_id|uuid|NO|
+COL|public.duo_v3_allocation_versions.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_entries.account_id|uuid|NO|
+COL|public.duo_v3_entries.amount_minor|numeric|NO|
+COL|public.duo_v3_entries.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_entries.currency|text|NO|
+COL|public.duo_v3_entries.household_id|uuid|NO|
+COL|public.duo_v3_entries.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_entries.transaction_id|uuid|NO|
+COL|public.duo_v3_envelope_balances.balance_minor|numeric|YES|
+COL|public.duo_v3_envelope_balances.carry_positive|boolean|YES|
+COL|public.duo_v3_envelope_balances.currency|text|YES|
+COL|public.duo_v3_envelope_balances.envelope_id|uuid|YES|
+COL|public.duo_v3_envelope_balances.household_id|uuid|YES|
+COL|public.duo_v3_envelope_balances.name|text|YES|
+COL|public.duo_v3_envelope_balances.status|text|YES|
+COL|public.duo_v3_envelopes.account_id|uuid|NO|
+COL|public.duo_v3_envelopes.archived_at|timestamp with time zone|YES|
+COL|public.duo_v3_envelopes.carry_positive|boolean|NO|true
+COL|public.duo_v3_envelopes.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_envelopes.currency|text|NO|
+COL|public.duo_v3_envelopes.household_id|uuid|NO|
+COL|public.duo_v3_envelopes.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_envelopes.name|text|NO|
+COL|public.duo_v3_envelopes.status|text|NO|'active'::text
+COL|public.duo_v3_household_position.allocated_minor|numeric|YES|
+COL|public.duo_v3_household_position.cash_minor|numeric|YES|
+COL|public.duo_v3_household_position.currency|text|YES|
+COL|public.duo_v3_household_position.envelopes_minor|numeric|YES|
+COL|public.duo_v3_household_position.funding_alert|boolean|YES|
+COL|public.duo_v3_household_position.funding_gap_minor|numeric|YES|
+COL|public.duo_v3_household_position.household_id|uuid|YES|
+COL|public.duo_v3_household_position.net_external_minor|numeric|YES|
+COL|public.duo_v3_household_position.reserve_minor|numeric|YES|
+COL|public.duo_v3_household_position.spent_minor|numeric|YES|
+COL|public.duo_v3_households.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_households.currency|text|NO|'EUR'::text
+COL|public.duo_v3_households.cycle_start_day|smallint|NO|1
+COL|public.duo_v3_households.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_households.time_zone|text|NO|'Europe/Paris'::text
+COL|public.duo_v3_members.household_id|uuid|NO|
+COL|public.duo_v3_members.joined_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_members.role|text|NO|
+COL|public.duo_v3_members.user_id|uuid|NO|
+COL|public.duo_v3_period_allocations.amount_minor|numeric|NO|
+COL|public.duo_v3_period_allocations.envelope_id|uuid|NO|
+COL|public.duo_v3_period_allocations.household_id|uuid|NO|
+COL|public.duo_v3_period_allocations.period_id|uuid|NO|
+COL|public.duo_v3_period_allocations.transaction_id|uuid|YES|
+COL|public.duo_v3_period_closes.allocations_total_minor|numeric|NO|
+COL|public.duo_v3_period_closes.closed_at|timestamp with time zone|NO|
+COL|public.duo_v3_period_closes.envelopes_closed|integer|NO|
+COL|public.duo_v3_period_closes.household_id|uuid|NO|
+COL|public.duo_v3_period_closes.next_period_id|uuid|NO|
+COL|public.duo_v3_period_closes.period_id|uuid|NO|
+COL|public.duo_v3_period_closes.to_reserve_total_minor|numeric|NO|
+COL|public.duo_v3_period_envelope_closes.carried_minor|numeric|NO|
+COL|public.duo_v3_period_envelope_closes.carry_positive|boolean|NO|
+COL|public.duo_v3_period_envelope_closes.closing_balance_minor|numeric|NO|
+COL|public.duo_v3_period_envelope_closes.envelope_id|uuid|NO|
+COL|public.duo_v3_period_envelope_closes.household_id|uuid|NO|
+COL|public.duo_v3_period_envelope_closes.period_id|uuid|NO|
+COL|public.duo_v3_period_envelope_closes.to_reserve_minor|numeric|NO|
+COL|public.duo_v3_period_envelope_closes.transaction_id|uuid|YES|
+COL|public.duo_v3_periods.closed_at|timestamp with time zone|YES|
+COL|public.duo_v3_periods.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_periods.ends_at|timestamp with time zone|NO|
+COL|public.duo_v3_periods.ends_on|date|NO|
+COL|public.duo_v3_periods.household_id|uuid|NO|
+COL|public.duo_v3_periods.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_periods.starts_at|timestamp with time zone|NO|
+COL|public.duo_v3_periods.starts_on|date|NO|
+COL|public.duo_v3_periods.state|text|NO|'open'::text
+COL|public.duo_v3_transactions.created_at|timestamp with time zone|NO|now()
+COL|public.duo_v3_transactions.created_by|uuid|YES|
+COL|public.duo_v3_transactions.currency|text|NO|
+COL|public.duo_v3_transactions.household_id|uuid|NO|
+COL|public.duo_v3_transactions.idempotency_key|text|NO|
+COL|public.duo_v3_transactions.id|uuid|NO|gen_random_uuid()
+COL|public.duo_v3_transactions.kind|text|NO|
+COL|public.duo_v3_transactions.late_imputation|boolean|NO|false
+COL|public.duo_v3_transactions.ledger_seq|bigint|NO|
+COL|public.duo_v3_transactions.occurred_on|date|YES|
+COL|public.duo_v3_transactions.origin|text|NO|'member'::text
+COL|public.duo_v3_transactions.period_id|uuid|YES|
+COL|public.duo_v3_transactions.posted_at|timestamp with time zone|YES|
+COL|public.duo_v3_transactions.posting_xid|xid8|YES|
+COL|public.duo_v3_transactions.request_sha256|bytea|YES|
+COL|public.duo_v3_transactions.reverses_transaction_id|uuid|YES|
+CON|duo_v3_accounts|duo_v3_accounts_currency_check|CHECK ((currency = ANY (ARRAY['EUR'::text, 'USD'::text, 'GBP'::text, 'XAF'::text, 'XOF'::text, 'JPY'::text])))
+CON|duo_v3_accounts|duo_v3_accounts_household_currency_fkey|FOREIGN KEY (household_id, currency) REFERENCES duo_v3_households(id, currency) ON UPDATE CASCADE
+CON|duo_v3_accounts|duo_v3_accounts_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+CON|duo_v3_accounts|duo_v3_accounts_id_household_id_currency_key|UNIQUE (id, household_id, currency)
+CON|duo_v3_accounts|duo_v3_accounts_kind_check|CHECK ((kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'envelope'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text])))
+CON|duo_v3_accounts|duo_v3_accounts_label_check|CHECK (((length(TRIM(BOTH FROM label)) >= 1) AND (length(TRIM(BOTH FROM label)) <= 120)))
+CON|duo_v3_accounts|duo_v3_accounts_pkey|PRIMARY KEY (id)
+CON|duo_v3_allocation_versions|duo_v3_allocation_versions_amount_minor_check|CHECK (((amount_minor)::numeric >= (0)::numeric))
+CON|duo_v3_allocation_versions|duo_v3_allocation_versions_envelope_id_effective_from_key|UNIQUE (envelope_id, effective_from)
+CON|duo_v3_allocation_versions|duo_v3_allocation_versions_envelope_id_household_id_fkey|FOREIGN KEY (envelope_id, household_id) REFERENCES duo_v3_envelopes(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_allocation_versions|duo_v3_allocation_versions_pkey|PRIMARY KEY (id)
+CON|duo_v3_entries|duo_v3_entries_account_id_household_id_currency_fkey|FOREIGN KEY (account_id, household_id, currency) REFERENCES duo_v3_accounts(id, household_id, currency) ON DELETE RESTRICT
+CON|duo_v3_entries|duo_v3_entries_amount_minor_check|CHECK (((amount_minor)::numeric <> (0)::numeric))
+CON|duo_v3_entries|duo_v3_entries_pkey|PRIMARY KEY (id)
+CON|duo_v3_entries|duo_v3_entries_transaction_id_household_id_currency_fkey|FOREIGN KEY (transaction_id, household_id, currency) REFERENCES duo_v3_transactions(id, household_id, currency) ON DELETE RESTRICT
+CON|duo_v3_entries|duo_v3_validate_entry_posting|TRIGGER DEFERRABLE INITIALLY DEFERRED
+CON|duo_v3_envelopes|duo_v3_envelopes_account_id_household_id_currency_fkey|FOREIGN KEY (account_id, household_id, currency) REFERENCES duo_v3_accounts(id, household_id, currency) ON UPDATE CASCADE ON DELETE RESTRICT
+CON|duo_v3_envelopes|duo_v3_envelopes_account_id_key|UNIQUE (account_id)
+CON|duo_v3_envelopes|duo_v3_envelopes_check|CHECK (((status = 'archived'::text) = (archived_at IS NOT NULL)))
+CON|duo_v3_envelopes|duo_v3_envelopes_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+CON|duo_v3_envelopes|duo_v3_envelopes_id_household_id_key|UNIQUE (id, household_id)
+CON|duo_v3_envelopes|duo_v3_envelopes_name_check|CHECK (((length(TRIM(BOTH FROM name)) >= 1) AND (length(TRIM(BOTH FROM name)) <= 80)))
+CON|duo_v3_envelopes|duo_v3_envelopes_pkey|PRIMARY KEY (id)
+CON|duo_v3_envelopes|duo_v3_envelopes_status_check|CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text])))
+CON|duo_v3_households|duo_v3_households_currency_check|CHECK ((currency = ANY (ARRAY['EUR'::text, 'USD'::text, 'GBP'::text, 'XAF'::text, 'XOF'::text, 'JPY'::text])))
+CON|duo_v3_households|duo_v3_households_cycle_start_day_check|CHECK (((cycle_start_day >= 1) AND (cycle_start_day <= 31)))
+CON|duo_v3_households|duo_v3_households_id_currency_key|UNIQUE (id, currency)
+CON|duo_v3_households|duo_v3_households_pkey|PRIMARY KEY (id)
+CON|duo_v3_households|duo_v3_households_time_zone_check|CHECK (((length(time_zone) >= 1) AND (length(time_zone) <= 64)))
+CON|duo_v3_members|duo_v3_members_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+CON|duo_v3_members|duo_v3_members_pkey|PRIMARY KEY (household_id, user_id)
+CON|duo_v3_members|duo_v3_members_role_check|CHECK ((role = ANY (ARRAY['owner'::text, 'partner'::text])))
+CON|duo_v3_members|duo_v3_members_user_id_fkey|FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+CON|duo_v3_period_allocations|duo_v3_period_allocations_amount_minor_check|CHECK (((amount_minor)::numeric >= (0)::numeric))
+CON|duo_v3_period_allocations|duo_v3_period_allocations_envelope_id_household_id_fkey|FOREIGN KEY (envelope_id, household_id) REFERENCES duo_v3_envelopes(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_allocations|duo_v3_period_allocations_period_id_household_id_fkey|FOREIGN KEY (period_id, household_id) REFERENCES duo_v3_periods(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_allocations|duo_v3_period_allocations_pkey|PRIMARY KEY (period_id, envelope_id)
+CON|duo_v3_period_closes|duo_v3_period_closes_next_period_id_household_id_fkey|FOREIGN KEY (next_period_id, household_id) REFERENCES duo_v3_periods(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_closes|duo_v3_period_closes_period_id_household_id_fkey|FOREIGN KEY (period_id, household_id) REFERENCES duo_v3_periods(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_closes|duo_v3_period_closes_pkey|PRIMARY KEY (period_id)
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check1|CHECK ((((to_reserve_minor)::numeric = (0)::numeric) OR (((closing_balance_minor)::numeric > (0)::numeric) AND (NOT carry_positive))))
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check|CHECK (((closing_balance_minor)::numeric = ((carried_minor)::numeric + (to_reserve_minor)::numeric)))
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_envelope_id_household_id_fkey|FOREIGN KEY (envelope_id, household_id) REFERENCES duo_v3_envelopes(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_period_id_household_id_fkey|FOREIGN KEY (period_id, household_id) REFERENCES duo_v3_periods(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_pkey|PRIMARY KEY (period_id, envelope_id)
+CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_to_reserve_minor_check|CHECK (((to_reserve_minor)::numeric >= (0)::numeric))
+CON|duo_v3_periods|duo_v3_periods_check1|CHECK (((state = 'closed'::text) = (closed_at IS NOT NULL)))
+CON|duo_v3_periods|duo_v3_periods_check|CHECK (((ends_on > starts_on) AND (ends_at > starts_at)))
+CON|duo_v3_periods|duo_v3_periods_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+CON|duo_v3_periods|duo_v3_periods_household_id_starts_on_key|UNIQUE (household_id, starts_on)
+CON|duo_v3_periods|duo_v3_periods_id_household_id_key|UNIQUE (id, household_id)
+CON|duo_v3_periods|duo_v3_periods_pkey|PRIMARY KEY (id)
+CON|duo_v3_periods|duo_v3_periods_state_check|CHECK ((state = ANY (ARRAY['open'::text, 'closed'::text])))
+CON|duo_v3_transactions|duo_v3_transactions_check1|CHECK (((kind = 'reversal'::text) = (reverses_transaction_id IS NOT NULL)))
+CON|duo_v3_transactions|duo_v3_transactions_check|CHECK (((reverses_transaction_id IS NULL) OR (reverses_transaction_id <> id)))
+CON|duo_v3_transactions|duo_v3_transactions_currency_check|CHECK ((currency = ANY (ARRAY['EUR'::text, 'USD'::text, 'GBP'::text, 'XAF'::text, 'XOF'::text, 'JPY'::text])))
+CON|duo_v3_transactions|duo_v3_transactions_household_id_created_by_fkey|FOREIGN KEY (household_id, created_by) REFERENCES duo_v3_members(household_id, user_id) ON DELETE RESTRICT
+CON|duo_v3_transactions|duo_v3_transactions_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+CON|duo_v3_transactions|duo_v3_transactions_id_household_id_currency_key|UNIQUE (id, household_id, currency)
+CON|duo_v3_transactions|duo_v3_transactions_idempotency_key_check|CHECK (((length(idempotency_key) >= 1) AND (length(idempotency_key) <= 128)))
+CON|duo_v3_transactions|duo_v3_transactions_kind_check|CHECK ((kind = ANY (ARRAY['expense'::text, 'income'::text, 'contribution'::text, 'transfer'::text, 'allocation'::text, 'carry'::text, 'reversal'::text])))
+CON|duo_v3_transactions|duo_v3_transactions_origin_actor|CHECK (((origin = 'system'::text) = (created_by IS NULL)))
+CON|duo_v3_transactions|duo_v3_transactions_origin_check|CHECK ((origin = ANY (ARRAY['member'::text, 'system'::text])))
+CON|duo_v3_transactions|duo_v3_transactions_period_fkey|FOREIGN KEY (period_id, household_id) REFERENCES duo_v3_periods(id, household_id) ON DELETE RESTRICT
+CON|duo_v3_transactions|duo_v3_transactions_pkey|PRIMARY KEY (id)
+CON|duo_v3_transactions|duo_v3_transactions_request_sha256_check|CHECK (((request_sha256 IS NULL) OR (length(request_sha256) = 32)))
+CON|duo_v3_transactions|duo_v3_transactions_reverses_transaction_id_fkey|FOREIGN KEY (reverses_transaction_id) REFERENCES duo_v3_transactions(id) ON DELETE RESTRICT
+CON|duo_v3_transactions|duo_v3_transactions_system_kinds|CHECK (((origin = 'member'::text) OR (kind = ANY (ARRAY['allocation'::text, 'carry'::text]))))
+CON|duo_v3_transactions|duo_v3_validate_transaction_posting|TRIGGER DEFERRABLE INITIALLY DEFERRED
+IDX|public.duo_v3_accounts_id_household_id_currency_key|CREATE UNIQUE INDEX duo_v3_accounts_id_household_id_currency_key ON public.duo_v3_accounts USING btree (id, household_id, currency)
+IDX|public.duo_v3_accounts_pkey|CREATE UNIQUE INDEX duo_v3_accounts_pkey ON public.duo_v3_accounts USING btree (id)
+IDX|public.duo_v3_allocation_versions_envelope_id_effective_from_key|CREATE UNIQUE INDEX duo_v3_allocation_versions_envelope_id_effective_from_key ON public.duo_v3_allocation_versions USING btree (envelope_id, effective_from)
+IDX|public.duo_v3_allocation_versions_pkey|CREATE UNIQUE INDEX duo_v3_allocation_versions_pkey ON public.duo_v3_allocation_versions USING btree (id)
+IDX|public.duo_v3_entries_by_account|CREATE INDEX duo_v3_entries_by_account ON public.duo_v3_entries USING btree (account_id, created_at)
+IDX|public.duo_v3_entries_by_transaction|CREATE INDEX duo_v3_entries_by_transaction ON public.duo_v3_entries USING btree (transaction_id)
+IDX|public.duo_v3_entries_pkey|CREATE UNIQUE INDEX duo_v3_entries_pkey ON public.duo_v3_entries USING btree (id)
+IDX|public.duo_v3_envelopes_account_id_key|CREATE UNIQUE INDEX duo_v3_envelopes_account_id_key ON public.duo_v3_envelopes USING btree (account_id)
+IDX|public.duo_v3_envelopes_id_household_id_key|CREATE UNIQUE INDEX duo_v3_envelopes_id_household_id_key ON public.duo_v3_envelopes USING btree (id, household_id)
+IDX|public.duo_v3_envelopes_pkey|CREATE UNIQUE INDEX duo_v3_envelopes_pkey ON public.duo_v3_envelopes USING btree (id)
+IDX|public.duo_v3_households_id_currency_key|CREATE UNIQUE INDEX duo_v3_households_id_currency_key ON public.duo_v3_households USING btree (id, currency)
+IDX|public.duo_v3_households_pkey|CREATE UNIQUE INDEX duo_v3_households_pkey ON public.duo_v3_households USING btree (id)
+IDX|public.duo_v3_member_idempotency|CREATE UNIQUE INDEX duo_v3_member_idempotency ON public.duo_v3_transactions USING btree (household_id, created_by, idempotency_key) WHERE (origin = 'member'::text)
+IDX|public.duo_v3_members_pkey|CREATE UNIQUE INDEX duo_v3_members_pkey ON public.duo_v3_members USING btree (household_id, user_id)
+IDX|public.duo_v3_one_open_period|CREATE UNIQUE INDEX duo_v3_one_open_period ON public.duo_v3_periods USING btree (household_id) WHERE (state = 'open'::text)
+IDX|public.duo_v3_one_owner_per_household|CREATE UNIQUE INDEX duo_v3_one_owner_per_household ON public.duo_v3_members USING btree (household_id) WHERE (role = 'owner'::text)
+IDX|public.duo_v3_one_system_account|CREATE UNIQUE INDEX duo_v3_one_system_account ON public.duo_v3_accounts USING btree (household_id, kind, currency) WHERE (kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text]))
+IDX|public.duo_v3_period_allocations_pkey|CREATE UNIQUE INDEX duo_v3_period_allocations_pkey ON public.duo_v3_period_allocations USING btree (period_id, envelope_id)
+IDX|public.duo_v3_period_closes_pkey|CREATE UNIQUE INDEX duo_v3_period_closes_pkey ON public.duo_v3_period_closes USING btree (period_id)
+IDX|public.duo_v3_period_envelope_closes_pkey|CREATE UNIQUE INDEX duo_v3_period_envelope_closes_pkey ON public.duo_v3_period_envelope_closes USING btree (period_id, envelope_id)
+IDX|public.duo_v3_periods_household_id_starts_on_key|CREATE UNIQUE INDEX duo_v3_periods_household_id_starts_on_key ON public.duo_v3_periods USING btree (household_id, starts_on)
+IDX|public.duo_v3_periods_id_household_id_key|CREATE UNIQUE INDEX duo_v3_periods_id_household_id_key ON public.duo_v3_periods USING btree (id, household_id)
+IDX|public.duo_v3_periods_pkey|CREATE UNIQUE INDEX duo_v3_periods_pkey ON public.duo_v3_periods USING btree (id)
+IDX|public.duo_v3_single_reversal|CREATE UNIQUE INDEX duo_v3_single_reversal ON public.duo_v3_transactions USING btree (reverses_transaction_id) WHERE (reverses_transaction_id IS NOT NULL)
+IDX|public.duo_v3_system_idempotency|CREATE UNIQUE INDEX duo_v3_system_idempotency ON public.duo_v3_transactions USING btree (household_id, idempotency_key) WHERE (origin = 'system'::text)
+IDX|public.duo_v3_transactions_id_household_id_currency_key|CREATE UNIQUE INDEX duo_v3_transactions_id_household_id_currency_key ON public.duo_v3_transactions USING btree (id, household_id, currency)
+IDX|public.duo_v3_transactions_pkey|CREATE UNIQUE INDEX duo_v3_transactions_pkey ON public.duo_v3_transactions USING btree (id)
+TRG|duo_v3_allocation_versions|duo_v3_allocation_versions_immutable|O|CREATE TRIGGER duo_v3_allocation_versions_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_allocation_versions FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_allocation_versions|duo_v3_allocation_versions_no_truncate|O|CREATE TRIGGER duo_v3_allocation_versions_no_truncate BEFORE TRUNCATE ON public.duo_v3_allocation_versions FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_entries|duo_v3_entries_guard_insert|O|CREATE TRIGGER duo_v3_entries_guard_insert BEFORE INSERT ON public.duo_v3_entries FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_entry_insert()
+TRG|duo_v3_entries|duo_v3_entries_immutable|O|CREATE TRIGGER duo_v3_entries_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_entries FOR EACH ROW EXECUTE FUNCTION duo_v3_reject_ledger_mutation()
+TRG|duo_v3_entries|duo_v3_entries_no_truncate|O|CREATE TRIGGER duo_v3_entries_no_truncate BEFORE TRUNCATE ON public.duo_v3_entries FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_reject_ledger_mutation()
+TRG|duo_v3_entries|duo_v3_validate_entry_posting|O|CREATE CONSTRAINT TRIGGER duo_v3_validate_entry_posting AFTER INSERT ON public.duo_v3_entries DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION duo_v3_validate_posting()
+TRG|duo_v3_envelopes|duo_v3_envelopes_guard|O|CREATE TRIGGER duo_v3_envelopes_guard BEFORE INSERT OR UPDATE ON public.duo_v3_envelopes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_envelope()
+TRG|duo_v3_envelopes|duo_v3_envelopes_no_delete|O|CREATE TRIGGER duo_v3_envelopes_no_delete BEFORE DELETE ON public.duo_v3_envelopes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_envelopes|duo_v3_envelopes_no_truncate|O|CREATE TRIGGER duo_v3_envelopes_no_truncate BEFORE TRUNCATE ON public.duo_v3_envelopes FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_households|duo_v3_households_calendar_guard|O|CREATE TRIGGER duo_v3_households_calendar_guard BEFORE UPDATE ON public.duo_v3_households FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_household_calendar()
+TRG|duo_v3_period_allocations|duo_v3_period_allocations_immutable|O|CREATE TRIGGER duo_v3_period_allocations_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_period_allocations FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_period_allocations|duo_v3_period_allocations_no_truncate|O|CREATE TRIGGER duo_v3_period_allocations_no_truncate BEFORE TRUNCATE ON public.duo_v3_period_allocations FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_period_closes|duo_v3_period_closes_immutable|O|CREATE TRIGGER duo_v3_period_closes_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_period_closes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_period_closes|duo_v3_period_closes_no_truncate|O|CREATE TRIGGER duo_v3_period_closes_no_truncate BEFORE TRUNCATE ON public.duo_v3_period_closes FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_immutable|O|CREATE TRIGGER duo_v3_period_envelope_closes_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_period_envelope_closes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_no_truncate|O|CREATE TRIGGER duo_v3_period_envelope_closes_no_truncate BEFORE TRUNCATE ON public.duo_v3_period_envelope_closes FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_periods|duo_v3_periods_contiguous|O|CREATE TRIGGER duo_v3_periods_contiguous BEFORE INSERT ON public.duo_v3_periods FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_period_insert()
+TRG|duo_v3_periods|duo_v3_periods_guard_update|O|CREATE TRIGGER duo_v3_periods_guard_update BEFORE UPDATE ON public.duo_v3_periods FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_period_update()
+TRG|duo_v3_periods|duo_v3_periods_no_delete|O|CREATE TRIGGER duo_v3_periods_no_delete BEFORE DELETE ON public.duo_v3_periods FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_periods|duo_v3_periods_no_truncate|O|CREATE TRIGGER duo_v3_periods_no_truncate BEFORE TRUNCATE ON public.duo_v3_periods FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_private.reject_mutation()
+TRG|duo_v3_transactions|duo_v3_transactions_guard_insert|O|CREATE TRIGGER duo_v3_transactions_guard_insert BEFORE INSERT ON public.duo_v3_transactions FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_transaction_insert()
+TRG|duo_v3_transactions|duo_v3_transactions_immutable|O|CREATE TRIGGER duo_v3_transactions_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_transactions FOR EACH ROW EXECUTE FUNCTION duo_v3_reject_ledger_mutation()
+TRG|duo_v3_transactions|duo_v3_transactions_no_truncate|O|CREATE TRIGGER duo_v3_transactions_no_truncate BEFORE TRUNCATE ON public.duo_v3_transactions FOR EACH STATEMENT EXECUTE FUNCTION duo_v3_reject_ledger_mutation()
+TRG|duo_v3_transactions|duo_v3_validate_transaction_posting|O|CREATE CONSTRAINT TRIGGER duo_v3_validate_transaction_posting AFTER INSERT ON public.duo_v3_transactions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION duo_v3_validate_posting()
+POL|public.duo_v3_accounts|duo_v3_accounts_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_allocation_versions|duo_v3_allocation_versions_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_entries|duo_v3_entries_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_envelopes|duo_v3_envelopes_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_households|duo_v3_households_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(id)|
+POL|public.duo_v3_members|duo_v3_members_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_period_allocations|duo_v3_period_allocations_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_period_closes|duo_v3_period_closes_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_periods|duo_v3_periods_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+POL|public.duo_v3_transactions|duo_v3_transactions_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+RLS|public.duo_v3_accounts|true|false
+RLS|public.duo_v3_allocation_versions|true|false
+RLS|public.duo_v3_entries|true|false
+RLS|public.duo_v3_envelopes|true|false
+RLS|public.duo_v3_households|true|false
+RLS|public.duo_v3_members|true|false
+RLS|public.duo_v3_period_allocations|true|false
+RLS|public.duo_v3_period_closes|true|false
+RLS|public.duo_v3_period_envelope_closes|true|false
+RLS|public.duo_v3_periods|true|false
+RLS|public.duo_v3_transactions|true|false
+TACL|public.duo_v3_accounts|r|{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}
+TACL|public.duo_v3_allocation_versions|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_entries|r|{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}
+TACL|public.duo_v3_envelope_balances|v|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_envelopes|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_household_position|v|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_households|r|{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}
+TACL|public.duo_v3_members|r|{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}
+TACL|public.duo_v3_period_allocations|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_period_closes|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_period_envelope_closes|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_periods|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+TACL|public.duo_v3_transactions_ledger_seq_seq|S|{postgres=rwU/postgres,service_role=rwU/postgres}
+TACL|public.duo_v3_transactions|r|{postgres=arwdDxtm/postgres,authenticated=rm/postgres,service_role=arwdDxtm/postgres}
+FN|duo_v3_private.account_of(p_household uuid, p_kind text)|secdef=true|{postgres=X/postgres}|search_path=""|75f6b89d1036ab9ae19fa3b22004ae47
+FN|duo_v3_private.admin_catch_up(p_household uuid, p_max integer)|secdef=true|{postgres=X/postgres}|search_path=""|0c3ebfde5d3a0c0ff77400a0c958494e
+FN|duo_v3_private.archive_envelope(p_envelope uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|ec41d45461804b3ed12a5ba2bab5f197
+FN|duo_v3_private.bootstrap_household(p_household uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|eddfb54ab36821918e52819d10aadac9
+FN|duo_v3_private.close_period(p_household uuid, p_period uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|c6165a1e709274d7f17affc882133fc2
+FN|duo_v3_private.create_envelope(p_household uuid, p_name text, p_carry_positive boolean)|secdef=true|{postgres=X/postgres}|search_path=""|b5e51113ae2a846a45ed0ddd255dbf9b
+FN|duo_v3_private.create_period(p_household uuid, p_starts_on date)|secdef=true|{postgres=X/postgres}|search_path=""|2f88e79f5b55a4baeefc132e59cab5b9
+FN|duo_v3_private.cycle_boundary(p_day smallint, p_year integer, p_month integer)|secdef=false|{postgres=X/postgres}|search_path=""|0e01303b375d3393f397640faf195dc4
+FN|duo_v3_private.cycle_containing(p_day smallint, p_local date, OUT starts_on date, OUT ends_on date)|secdef=false|{postgres=X/postgres}|search_path=""|b5dcbfb1893d3dcc359a4cdb0fcda2d5
+FN|duo_v3_private.ensure_current_period(p_household uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|be5ec5ea6cf453fbd5dd50013a59d7df
+FN|duo_v3_private.guard_entry_insert()|secdef=false|{postgres=X/postgres}|search_path=""|b38316cececf0a3b3a00f9f56a7341c6
+FN|duo_v3_private.guard_envelope()|secdef=false|{postgres=X/postgres}|search_path=""|77a7872b9f1b7efac3402741005ce19a
+FN|duo_v3_private.guard_household_calendar()|secdef=false|{postgres=X/postgres}|search_path=""|1169000c44afb0ae87c871be5a9f590e
+FN|duo_v3_private.guard_period_insert()|secdef=false|{postgres=X/postgres}|search_path=""|5b0f7985146b21a6aa15c068971a48ce
+FN|duo_v3_private.guard_period_update()|secdef=false|{postgres=X/postgres}|search_path=""|85df1fdcca34841f15e44923e57169a4
+FN|duo_v3_private.guard_transaction_insert()|secdef=false|{postgres=X/postgres}|search_path=""|e7635787a8e9d88228cfb4550070431d
+FN|duo_v3_private.is_current_member(p_household uuid)|secdef=true|{postgres=X/postgres,authenticated=X/postgres}|search_path=""|e2928b7dee52b180a68ac2a1b464ad18
+FN|duo_v3_private.is_member(p_household uuid, p_user uuid)|secdef=true|{postgres=X/postgres}|search_path=""|ec870cc6dbbeabb3675b9aadb729e5fe
+FN|duo_v3_private.post_period_allocations(p_household uuid, p_period uuid)|secdef=true|{postgres=X/postgres}|search_path=""|cf744db4d7df68aa5be620decdcf68c5
+FN|duo_v3_private.post_system(p_household uuid, p_period uuid, p_kind text, p_key text, p_debit_account uuid, p_credit_account uuid, p_amount numeric, p_occurred_on date)|secdef=true|{postgres=X/postgres}|search_path=""|8dd19af6c70a9f2ad77cb22767ef3426
+FN|duo_v3_private.reject_mutation()|secdef=false|{postgres=X/postgres}|search_path=""|00ca467b311bd63a91cd796b2b597e5f
+FN|duo_v3_private.request_hash(p_parts text[])|secdef=false|{postgres=X/postgres}|search_path=""|e5ca3e6abd6bdedb3478f6154e7655cd
+FN|duo_v3_private.set_allocation(p_envelope uuid, p_amount_minor numeric, p_effective_from date)|secdef=true|{postgres=X/postgres}|search_path=""|b059d600bef53eac1b26a429d5a7e0ef
+FN|public.armor(bytea)|secdef=false|NULL||f6d2959639d44048e31b0b9a869efa66
+FN|public.armor(bytea, text[], text[])|secdef=false|NULL||1bce182b530c0933287cdf307667e70f
+FN|public.crypt(text, text)|secdef=false|NULL||0939715a0bd721d85d420be1aee841c7
+FN|public.dearmor(text)|secdef=false|NULL||d7729372e3d9336abc8d7741203a42e4
+FN|public.decrypt(bytea, bytea, text)|secdef=false|NULL||d7d544993f5eb2f2442a40bc9649abdf
+FN|public.decrypt_iv(bytea, bytea, bytea, text)|secdef=false|NULL||e16d9883f8115f21498926b02d6d68f2
+FN|public.digest(bytea, text)|secdef=false|NULL||f95b6d7c3e7b772aaa79cd847eca825b
+FN|public.digest(text, text)|secdef=false|NULL||6b75958a35b3317d784bfa9f6b4f44b5
+FN|public.duo_v3_get_envelope_snapshot(p_household uuid)|secdef=false|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|396054352add44a47e43544be07d6a5f
+FN|public.duo_v3_post_contribution(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|f4f1082081a4d681577288a9cfb875d7
+FN|public.duo_v3_post_expense(p_household uuid, p_envelope uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3ab2d3e89cca223b7dc73eaed26ddee8
+FN|public.duo_v3_post_transfer(p_household uuid, p_from_account uuid, p_to_account uuid, p_amount_minor numeric, p_currency text, p_idempotency_key text)|secdef=true|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|search_path=""|7f153a5305b04f0522852ff61a305184
+FN|public.duo_v3_reject_ledger_mutation()|secdef=false|{postgres=X/postgres,service_role=X/postgres}|search_path=""|60599ce912fa112125f83b02f798a8fb
+FN|public.duo_v3_validate_posting()|secdef=false|{postgres=X/postgres,service_role=X/postgres}|search_path=""|2ecad3c150a8510f097ef646f0baf476
+FN|public.encrypt(bytea, bytea, text)|secdef=false|NULL||2db5595d113688d14c7a081025de55ee
+FN|public.encrypt_iv(bytea, bytea, bytea, text)|secdef=false|NULL||607102fa4c3c8e98c9a2eea7bc631546
+FN|public.gen_random_bytes(integer)|secdef=false|NULL||767c42f6188fd5c462c3e27384858565
+FN|public.gen_random_uuid()|secdef=false|NULL||ff30e0a6015ca70d7bb1a880f09a11bf
+FN|public.gen_salt(text)|secdef=false|NULL||75059627384e3cc1164aa5bfeeb91fce
+FN|public.gen_salt(text, integer)|secdef=false|NULL||33498c853264afae81c9eef1e42637dd
+FN|public.hmac(bytea, bytea, text)|secdef=false|NULL||255f76d34f69f526e821c43c1924e758
+FN|public.hmac(text, text, text)|secdef=false|NULL||1fa6ecfa0fbb980310ed74909d1315cd
+FN|public.pgp_armor_headers(text, OUT key text, OUT value text)|secdef=false|NULL||e8e0141fd364a9f4f2bb77cddefc1375
+FN|public.pgp_key_id(bytea)|secdef=false|NULL||65a7e7e64c0e9357f3d9ef90684fc901
+FN|public.pgp_pub_decrypt(bytea, bytea)|secdef=false|NULL||8405a5854d6a196497505558a08836d6
+FN|public.pgp_pub_decrypt(bytea, bytea, text)|secdef=false|NULL||f75b5fe07aa0b9878dd0c4b740b4b7c0
+FN|public.pgp_pub_decrypt(bytea, bytea, text, text)|secdef=false|NULL||19e39f76f9c02c23f186c03708a697b6
+FN|public.pgp_pub_decrypt_bytea(bytea, bytea)|secdef=false|NULL||67dc9e8d117eaceb2ecb2b9ecd4a84bd
+FN|public.pgp_pub_decrypt_bytea(bytea, bytea, text)|secdef=false|NULL||b454111dbd336c971f5f943d034522ee
+FN|public.pgp_pub_decrypt_bytea(bytea, bytea, text, text)|secdef=false|NULL||6bfe210845fb03480bd1c6ba0a23c8ab
+FN|public.pgp_pub_encrypt(text, bytea)|secdef=false|NULL||35b1cfe47cb1c41981ca0cc47d180ff1
+FN|public.pgp_pub_encrypt(text, bytea, text)|secdef=false|NULL||69c8935398e493c55f1a4416f5e19634
+FN|public.pgp_pub_encrypt_bytea(bytea, bytea)|secdef=false|NULL||4652e16255901f99b425e1591ac4067b
+FN|public.pgp_pub_encrypt_bytea(bytea, bytea, text)|secdef=false|NULL||a9e9a634c9e5b0043e6545b31bc61abc
+FN|public.pgp_sym_decrypt(bytea, text)|secdef=false|NULL||964df44396e5184c4edd079067e0b616
+FN|public.pgp_sym_decrypt(bytea, text, text)|secdef=false|NULL||03a9646c8b0a1df4e03651a942f28462
+FN|public.pgp_sym_decrypt_bytea(bytea, text)|secdef=false|NULL||85bf7797885fc606a004da1491be44d4
+FN|public.pgp_sym_decrypt_bytea(bytea, text, text)|secdef=false|NULL||7efaa9f9cd67e698d2c1746a6b1869da
+FN|public.pgp_sym_encrypt(text, text)|secdef=false|NULL||9de92e2e6e5911ada3edb52d67cce15a
+FN|public.pgp_sym_encrypt(text, text, text)|secdef=false|NULL||780e212e582eccd1b836f953192aad99
+FN|public.pgp_sym_encrypt_bytea(bytea, text)|secdef=false|NULL||4e6c92a8b7d749d0848233de20e747d9
+FN|public.pgp_sym_encrypt_bytea(bytea, text, text)|secdef=false|NULL||6ebf4ffeeb75d708ea16cd9cc2628cca
+NSP|auth|{supabase_admin=UC/supabase_admin,anon=U/supabase_admin,authenticated=U/supabase_admin,service_role=U/supabase_admin,postgres=U/supabase_admin}
+NSP|duo_v3_private|{postgres=UC/postgres,authenticated=U/postgres}
+NSP|public|{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,postgres=UC/pg_database_owner,anon=U/pg_database_owner,authenticated=U/pg_database_owner,service_role=U/pg_database_owner}
+DACL|postgres|-|f|{postgres=X/postgres}
+DACL|postgres|public|S|{service_role=rwU/postgres}
+DACL|postgres|public|f|{service_role=X/postgres}
+DACL|postgres|public|r|{service_role=arwdDxtm/postgres}
+DACL|supabase_admin|public|f|{anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}
+DACL|supabase_admin|public|r|{anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}
