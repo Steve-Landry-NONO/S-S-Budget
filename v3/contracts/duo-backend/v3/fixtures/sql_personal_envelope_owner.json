@@ -1,0 +1,49 @@
+{
+ "asOf": "2026-11-26T10:47:59.580035+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "assignedRealFunds": "5000",
+   "assignedRealFundsCumulative": "5000",
+   "budgetAllocation": "6000",
+   "budgetBalance": "4500",
+   "carryOver": "0",
+   "envelopeId": "aff81014-33eb-41a3-b8d4-3ac75d1e3ae0",
+   "flags": [
+    "unfunded_target"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Lecture",
+   "protectionState": "none",
+   "realAvailable": "3500",
+   "realCarryOver": "0",
+   "realizedExpenses": "1500",
+   "remainingBudget": "4500",
+   "status": "active",
+   "target": "6000",
+   "unfundedTarget": "1000"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "3500",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "3500",
+  "realizedContributions": "5000",
+  "unassignedRealFunds": "0"
+ },
+ "householdId": "0a46212a-2371-4de4-8f6c-60ccf79f18f2",
+ "ledgerVersion": 3,
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "000e4776-b12b-4d34-a177-53d2184e127e",
+  "startsOn": "2026-11-01"
+ }
+}
