@@ -117,3 +117,41 @@ Source : dossier de revue passe 2 du 24/11 et [page 11 Figma](https://www.figma.
 - PR #10 : consolider la roadmap et les décisions ; vérifier absence de déploiement involontaire avant fusion.
 - Lots backend transmis : 005 déclarée appliquée sur DEV (57 réussis, 0 échec, 4 constats selon rapport fourni), 006 testée en transaction annulée (72/72 selon rapport), non-régression locale 58 réussis et 4 constats. Pas de nouvelle exécution DEV. Base distante 4d41286 vérifiée le 24/11 ; publication des bundles conditionnée à audit complet. Aucun push constaté à ce stade.
 - Tâche quotidienne 19 h : consolidation prioritaire, état réel PR/branches/CI, preuves, registre des décisions, critères de sortie, actions à faible risque autonomes et demandes explicites pour arbitrages. Pas de nouvelle fonctionnalité hors chemin critique sans justification. Revenir au développement courant après clôture vérifiée.
+
+
+## Clôture de journée — 24 novembre 2026, 23 h 17 (Paris)
+
+### Cap produit confirmé
+Duo Budget est une application mobile grand public iOS/Android de gestion budgétaire à deux, et non un outil auto-hébergé. SQLite/V2 et Expo Go sont des supports de transition et de recette, non la cible commerciale. La cible cloud multi-duo doit être qualifiée avant tout test externe avec données réelles. Aucun compte bancaire ni service de paiement n'est revendiqué. Les utilisateurs finaux ne saisissent ni URL serveur ni secret API. V3.0.7 reste gelée ; V3.0.9 et Motion V3.1 restent des candidats. Pages Figma 12 et 13 : explorations rapportées, non promues.
+
+### État vérifié des PR ouvertes
+| PR | Tête | Suite |
+|---|---|---|
+| #15 hardening | cb3161826ee78e26954693566b0bcd2f7707261a | Recheck natif, décisions L2-1 à L2-5, revue des risques avant intégration |
+| #14 Dashboard | 376c7190dd76cdad5351336515662277114ba0b3 | Intégrer #15 après GO ; recette ciblée, re-ciblage après #3 |
+| #3 Glance/navigation | b03af49000a57f3d628339614e70c6848e53c7f6 | Contrôler critères manquants, dépendances et déploiements avant fusion |
+| #4 Android | 590adfec05010a8ecbcf832ea244fd929a74cd7c | Remplacement par #15 proposé ; ne fermer qu'après intégration confirmée |
+| #6 architecture | c87f4ad6 | Base ancienne #5, réaligner après audit |
+| #7 finance | f3e71d3 | Revue de la chaîne cloud |
+| #8 schéma | 2e28a43 | Revue uniquement |
+| #9 ledger/RLS | 013c122 | Qualification SQL |
+| #11 tests finance | 22aee4a | Comparer avec #7 |
+| #12 schéma DEV | 4d41286 | Restrictions backend précédentes maintenues |
+
+Toutes ces PR sont encore ouvertes et en brouillon. Aucune fusion de ce lot aujourd'hui dans main.
+### Preuves et réserves
+- #15 : CI push 45480654607 et PR 45480666745 réussies sur cb31618 ; 39 tests frontend, 30 tests serveur réussis + 2 TODO R-02/R-03, 13 assertions Glance, 40/40 navigateur, audits 0/0 à la date du test. Ce n'est pas une certification de sécurité. L'utilisateur a reproduit localement les suites 39/39, 30 + 2 TODO, 13 assertions et installation source SQLite ; connexion iPhone confirmée. Recheck cartes membres/0,00 EUR non confirmé. Aucune APK.
+- P0 exploitation V2 : résultat ALERTE dans la copie de recette, aucun .env trouvé dans le périmètre local inspecté ni écoute sur 3001/3301 à ce moment. Serveur réel non identifié ; ne pas conclure qu'il est protégé. Vérifier sa configuration effective sans exposer le secret ; rotation et correctif sous contrôle du propriétaire. Ne pas déployer #15 automatiquement. SQLite 6.0.1 exige qualification native (glibc ou compilation source).
+- Verrou d'écriture corrigé sur #15 ; cohérence des lectures intermédiaires, révocation, enrôlement, stockage/cache, idempotence et HTTPS restent des sujets à traiter sur l'architecture cible avant bêta externe. Limiter les investissements dans le serveur historique aux P0 et à la transition. B-07 audit lecture seule, aucune reclassification automatique.
+- Page 13 : 19 écrans principaux, 13 alternatifs/états selon rapport ; revue visuelle directe non effectuée. ONB-01 à ONB-06 et L2-1 à L2-5 sont des recommandations en attente d'arbitrage explicite. Démarrage rapide, premiers pas, séparation budget objectif / solde réel / prévisionnel, confidentialité et parcours alternatifs sont des propositions à valider, pas des fonctionnalités livrées.
+
+### Reprise ordonnée — 25 novembre
+1. Identifier le serveur réel V2 et vérifier sa sécurité ; conserver la recette isolée.
+2. Obtenir recheck iPhone #15, arbitrages L2, revue ciblée du diff et de la CI ; ne fusionner qu'après validation applicable.
+3. Vérifier mécanismes de déploiement et protections GitHub ; ordre proposé #15 vers #14, #3 vers main, #14 re-ciblée vers main, puis clôture #4 après confirmation. Prévoir contrôles sur états intermédiaires, ne pas publier un état vulnérable.
+4. Reprendre audit des lots cloud 1/2 et qualification du grand livre/RLS (006 non exécutée sans autorisation, pas de push backend sans audit complet). Réconcilier D-001 à D-029 avec les parcours Figma 12/13 et la feuille de route.
+5. Préparer Sprint 3 Enveloppes sans refonte SQLite ni nouvelle fonctionnalité hors chemin critique ; faire une spécification indépendante du transport pour l'intégration cloud. Préparer en parallèle les tests utilisateurs onboarding et la recette Android interne.
+6. Porte avant toute bêta avec couples externes : auth cloud, isolation inter-duos et dépenses privées, écritures atomiques/idempotentes et lectures cohérentes, sécurité sessions et stockage, HTTPS, parcours de compte/invitation, builds signés iOS/Android, accessibilité, politique confidentialité/suppression et support. Cette porte est une proposition de recalage de la roadmap : ne pas reporter ces prérequis à la bêta publique. Dates originales inchangées jusqu'à validation du recalage.
+
+### Collaboration
+ChatGPT pilote la revue indépendante, les critères de sortie et l'intégration ; Claude peut travailler sur des lots isolés, sans concurrence d'écriture. L'automatisation quotidienne doit consulter ce point de pilotage lorsqu'il est accessible, sans présumer sa fusion ni son propre changement de configuration. Aucun nouveau gros chantier ce soir. Le prochain livrable est un GO/NO GO motivé de consolidation, pas un pourcentage de progrès.
