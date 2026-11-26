@@ -14,9 +14,10 @@
 
 ## Étapes
 
-1. **Essai à blanc sur DEV en transaction annulée** :
-   - exécuter le contenu de la migration dans `begin; … rollback;` ;
-   - relever la durée, les erreurs et les verrous.
+1. **Essai à blanc réellement annulable (REV-08).** Ne **jamais** exécuter le fichier tel quel dans `begin; … rollback;` : son propre `commit;` validerait la migration. C'est le défaut reproduit par REV08-01.
+   - Utiliser `v3/database/tools/dry_run_migration.sh "<conninfo>" supabase/migrations/20261126120000_duo_v3_financial_model_r1.sql`. Le script exige exactement un `begin;` et un `commit;` de premier niveau, extrait le corps, l'exécute dans une transaction terminée par `ROLLBACK`, puis compare le catalogue et l'historique des versions avant et après.
+   - **Préférer une réplique jetable**, ou une copie de DEV restaurée. Sur DEV même, uniquement si l'autorisation l'inclut explicitement.
+   - Relever la durée, les erreurs et les verrous.
 2. **Comparaison** : rejouer `deep006r1.py` et `qualify_rollback.py` sur une copie de DEV, ou sur la réplique avec le catalogue DEV comme gabarit.
 3. **Application** en une transaction, par la CLI (`supabase db push`, après `supabase migration list`) ou par l'outil d'application de migration. Un seul fichier : `20261126120000_duo_v3_financial_model_r1.sql`.
 4. **Vérifications après application** :

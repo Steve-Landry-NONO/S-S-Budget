@@ -1,4 +1,9 @@
 'use strict';
+// NEUTRALISÉ (A-05 / G13, 26/11/2026) : ce harnais suppose un transfert cash → envelope sur un duo sans période,
+// refusé par la 006 révisée (lot 2 C07). Il s'arrête avant toute lecture d'environnement ou tout appel réseau.
+// Remplacement : docs/v3/E2E_AUTH_REPLACEMENT_PLAN.md.
+console.error('v3-finance-e2e-dev.cjs est neutralisé (A-05/G13) : harnais obsolète, voir docs/v3/E2E_AUTH_REPLACEMENT_PLAN.md');
+process.exit(3);
 // Optional, manual end-to-end test against DEV only.
 // Requires two real Supabase Auth test accounts and pre-provisioned household/accounts.
 // Never commit credentials. Uses native Node 22 fetch; no dependency required.
