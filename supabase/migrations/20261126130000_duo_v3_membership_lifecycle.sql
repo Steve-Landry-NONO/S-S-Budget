@@ -559,7 +559,7 @@ begin
   return pg_catalog.jsonb_build_object('householdId', h.id, 'archivedAt', h.archived_at, 'currency', h.currency,
     'members', (select coalesce(jsonb_agg(jsonb_build_object('userId', m.user_id, 'role', m.role, 'leftAt', m.left_at) order by m.joined_at), '[]') from public.duo_v3_members m where m.household_id = h.id),
     'events', (select coalesce(jsonb_agg(to_jsonb(e) order by e.id), '[]') from public.duo_v3_membership_events e where e.household_id = h.id),
-    'transactions', (select count(*) from public.duo_v3_transactions t where t.household_id = h.id),
+    'transactions', (select count(*)::text from public.duo_v3_transactions t where t.household_id = h.id),   -- REV-01 : compteur en chaîne
     'ledgerChecksum', (select md5(coalesce(string_agg(x.id::text || ':' || x.amount_minor::text, ',' order by x.id), '')) from public.duo_v3_entries x where x.household_id = h.id));
 end $$;
 revoke all on function duo_v3_private.on_member_return(), duo_v3_private.export_archived_household(uuid) from public, anon, authenticated;
