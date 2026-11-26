@@ -761,6 +761,7 @@ lines as (
   from public.duo_v3_envelopes e where e.household_id = p_household)
 select pg_catalog.jsonb_build_object(
   'householdId', p_household, 'asOf', pg_catalog.now(), 'currency', (select currency from h),
+  'scope', (select case when h.kind = 'personal' then 'personal' else 'common' end from h),   -- REV-04 / G9 : l'espace est donné par le serveur, jamais par l'appelant
   'fundsTracking', (select funds_tracking from h),
   'ledgerVersion', (select pg_catalog.count(*)::text from public.duo_v3_transactions t where t.household_id = p_household),   -- REV-01
   'period', (select pg_catalog.jsonb_build_object('periodId', p.id, 'startsOn', p.starts_on, 'endsBefore', p.ends_on) from p),
