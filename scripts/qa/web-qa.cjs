@@ -233,7 +233,7 @@ async function main() {
         await p.waitForFunction(() => document.body.innerText.trim().length > 20, null, { timeout: 15000 }).catch(() => {});
         await p.waitForTimeout(1500);
         const text = await p.evaluate(() => document.body.innerText);
-        const storage = await p.evaluate(() => ({ token: localStorage.getItem('SS_BUDGET_V2_AUTH_TOKEN'), expires: localStorage.getItem('SS_BUDGET_V2_AUTH_EXPIRES_AT') }));
+        const storage = await p.evaluate(() => ({ token: localStorage.getItem('SS_BUDGET_V2_AUTH_TOKEN'), expires: localStorage.getItem('SS_BUDGET_V2_AUTH_EXPIRES_AT'), cache: localStorage.getItem('SS_BUDGET_V2_CACHE') }));
         report.glance[`normalBuild_${name}`] = {
           glanceShown: /Montants fictifs/.test(text),
           rendersSentinel: /SENTINEL|98765/.test(text),
@@ -242,6 +242,7 @@ async function main() {
         };
         await p.screenshot({ path: path.join(OUT, `normal-build-${name}-390.png`) });
         if (name !== 'validStoredToken') {
+          if (storage.cache || storage.token || storage.expires) fail(`normal build (${name}): invalid session cache or credentials persisted`);
           if (!report.glance[`normalBuild_${name}`].glanceShown) fail(`normal build (${name}): Duo Glance not shown before authentication`);
           if (report.glance[`normalBuild_${name}`].rendersSentinel) fail(`normal build (${name}): cached private data rendered before authentication`);
           if (report.glance[`normalBuild_${name}`].requests.some((r) => r !== '/api/auth/status')) fail(`normal build (${name}): private API called before authentication`);

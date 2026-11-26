@@ -22,7 +22,6 @@ import { palette } from './src/theme/tokens';
 import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
 import DashboardOverview from './src/features/dashboard/DashboardOverview';
 import WebPreview from './src/features/preview/WebPreview';
-import sessionStorage from './src/features/session/sessionBoundary.cjs';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -189,6 +188,7 @@ export default function App() {
 }
 
 function AuthenticatedApp() {
+  const sessionStorage = require('./src/features/session/sessionBoundary.cjs');
   const {fontScale, width} = useWindowDimensions();
   const largeText = fontScale >= 1.3 || width < 340;
   const [showGlance, setShowGlance] = useState(true);
@@ -229,7 +229,7 @@ function AuthenticatedApp() {
   const [pinManageDraft, setPinManageDraft] = useState({ currentPin: '', newPin: '', newPin2: '' });
 
   const boundaryRef=useRef(null);
-  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage);
+  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage,{cache:CACHE_KEY,api:API_KEY,secret:SECRET_KEY,user:USER_KEY,token:AUTH_TOKEN_KEY,expires:AUTH_EXPIRES_KEY});
   const boundary=boundaryRef.current;
   const epoch=boundary.current();
   const session={api:apiUrl,secret:apiSecret,user:currentUserId,token:authToken,expires:authTokenExpiresAt};
@@ -341,6 +341,7 @@ function AuthenticatedApp() {
   const syncFromServer = async (showAlert = true) => {
     try {
       const data = await request('/api/state');
+      if (!boundary.isCurrent(epoch)) return;
       applyServerState(data);
       if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
     } catch (error) {
@@ -464,7 +465,7 @@ function AuthenticatedApp() {
       setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' });
       Alert.alert('PIN modifié', 'Ton PIN a été mis à jour.');
     } catch (error) {
-      Alert.alert('Modification impossible', error.message);
+      if (!staleError(error)) Alert.alert('Modification impossible', error.message);
     }
   };
 
