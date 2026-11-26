@@ -12,7 +12,7 @@
 |---|---|
 | V2 historique sur main | Application Expo/React Native, API Express et SQLite auto-hébergées ; documentation historique V2.2.3 |
 | V3 mobile | Navigation et Dashboard candidats, PR #3/#14/#15 en attente d'intégration |
-| V3 cloud | Supabase/PostgreSQL ; migrations 001–005 déclarées appliquées sur DEV selon rapport ; 006 révisée candidate, non autorisée sur DEV |
+| V3 cloud | Supabase/PostgreSQL ; migrations 001–005 déclarées appliquées sur DEV selon rapport ; PR #23–25 publiées, qualifiées sur réplique selon Claude, non autorisées sur DEV |
 | Alpha Cloud | Prochain jalon, non disponible |
 | Bêta / stores | Non ouverts |
 
@@ -34,6 +34,8 @@ Aider deux partenaires à comprendre, organiser et anticiper leurs finances comm
 iOS / Android (React Native + Expo)
           |
    Contrat DuoBackend V3
+          |
+Couche de gestion applicative (G-A à G-E, à développer)
           |
 Supabase Auth + PostgreSQL (RLS, transactions)
           |
@@ -59,6 +61,10 @@ Les trois livres représentent des dimensions distinctes : une allocation budgé
 Dates de la roadmap historique, non engagements de sortie. Sprint 1 non clôturé : recette et intégration restantes. Aucun couple externe avant qualification cloud, sécurité et distribution. Recalage du calendrier à valider.
 
 ## Documentation
+
+- [Consolidation des trois audits](docs/CONSOLIDATED_AUDITS_2026-11-26.md)
+- [Arbitrages de consolidation validés](docs/CONSOLIDATION_DECISIONS_2026-11-26.md)
+- [Registre historique récupéré](docs/product/DECISION_REGISTER_RECOVERED_2026-11-26.md)
 
 - [État du projet et méthode de mesure](docs/PROJECT_STATUS.md)
 - [Roadmap détaillée](docs/ROADMAP_DUO_BUDGET_2026_2027.md)
