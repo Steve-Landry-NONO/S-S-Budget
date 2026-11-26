@@ -1,0 +1,292 @@
+{
+ "label": "r2_s2_lot3v2",
+ "template": "s2",
+ "horodatage": "2026-11-26T15:40:22+00:00",
+ "bilan": {
+  "Réussi": 26,
+  "Décision requise": 1,
+  "Constat": 1
+ },
+ "resultats": [
+  {
+   "id": "L3-01",
+   "regle": "D-002 lien : acceptation authentifiée",
+   "decision": "",
+   "action": "B accepte",
+   "attendu": "B actif, 2 actifs",
+   "observe": "ok=True actifs=2",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-02",
+   "regle": "CF-08 : jeton haché",
+   "decision": "",
+   "action": "comparer",
+   "attendu": "sha256 seul",
+   "observe": "66ab5c0f4955…",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-03",
+   "regle": "CF-08 : usage unique",
+   "decision": "",
+   "action": "réutilisation",
+   "attendu": "P0002",
+   "observe": "P0002 Invitation invalid",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-04",
+   "regle": "D-001 : pas d'invitation pour un duo complet",
+   "decision": "",
+   "action": "créer",
+   "attendu": "23514",
+   "observe": "23514 Household is full",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-05",
+   "regle": "D-001 garanti en base",
+   "decision": "",
+   "action": "INSERT direct d'un 3e membre",
+   "attendu": "23514",
+   "observe": "23514 Household is full\nDETAIL:  DUO_FULL\nCONTEXT:  PL/pgSQL function duo_v3_private.enforce_membership() line 13 at RAI",
+   "statut": "Réussi",
+   "note": "Corrige M01."
+  },
+  {
+   "id": "L3-06",
+   "regle": "D-001 sous concurrence",
+   "decision": "",
+   "action": "6 acceptations simultanées du même lien",
+   "attendu": "1 succès, 2 actifs",
+   "observe": "['P0002', 'P0002', 'P0002', 'P0002', 'P0002', 'ok'] actifs=2",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-07",
+   "regle": "CF-08 : 48 h",
+   "decision": "",
+   "action": "acceptation après échéance",
+   "attendu": "null, statut expired",
+   "observe": "(None,) expired",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-08",
+   "regle": "CF-08 : renvoi = nouveau lien + révocation de l'ancien ; une invitation par siège",
+   "decision": "",
+   "action": "accepter l'ancien",
+   "attendu": "P0002 ; 1 invitation en attente",
+   "observe": "P0002 Invitation invalid en_attente=1",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-09",
+   "regle": "CF-08 : destinataire vérifié par l'e-mail CONFIRMÉ en base, pas par le JWT",
+   "decision": "",
+   "action": "intrus avec claim email falsifié ; destinataire non confirmé",
+   "attendu": "P0002 et P0002",
+   "observe": "intrus=P0002 Invitation invalid ; non confirmé=P0002 Invitation invalid",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-10",
+   "regle": "Refus nominatif : destinataire vérifié aussi au refus",
+   "decision": "",
+   "action": "l'intrus refuse",
+   "attendu": "aucun effet, réponse identique",
+   "observe": "réponse_ok=True statut=pending",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-11",
+   "regle": "Destinataire confirmé accepté",
+   "decision": "",
+   "action": "après confirmation",
+   "attendu": "accepté",
+   "observe": "ok=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-12",
+   "regle": "Refus d'un jeton inconnu : même réponse",
+   "decision": "",
+   "action": "decline inconnu",
+   "attendu": "succès silencieux",
+   "observe": "ok=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-13",
+   "regle": "Session anonyme refusée",
+   "decision": "",
+   "action": "accepter",
+   "attendu": "42501",
+   "observe": "42501 Authentication required",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-14",
+   "regle": "CF-05 : un seul duo actif par compte",
+   "decision": "",
+   "action": "A (actif dans un duo) accepte une invitation d'un autre duo",
+   "attendu": "23505 ALREADY_IN_ANOTHER_DUO",
+   "observe": "23505 Account already active in another household (CF-05)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-15",
+   "regle": "CF-05 sous concurrence (deux duos distincts)",
+   "decision": "",
+   "action": "acceptations simultanées dans X et Y",
+   "attendu": "1 succès, 1 refus 23505",
+   "observe": "['23505', 'ok'] duos_actifs=1",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-16",
+   "regle": "Révocation et acceptation simultanées",
+   "decision": "",
+   "action": "15 courses",
+   "attendu": "accepté+2 membres ou révoqué+1 membre, jamais d'état mixte",
+   "observe": "incohérences=0 issues={\"(('P0002', 'ok'), 'revoked', 1)\": 13, \"(('ok', 'ok'), 'accepted', 2)\": 2}",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-17",
+   "regle": "Départ du propriétaire et acceptation simultanés",
+   "decision": "",
+   "action": "15 courses",
+   "attendu": "état final cohérent",
+   "observe": "incohérences=0 issues={\"(('P0002', 'ok'), 'revoked', None)\": 14, \"(('ok', 'ok'), 'accepted', 'active')\": 1}",
+   "statut": "Réussi",
+   "note": "Si le départ passe d'abord, l'invitation est révoquée et l'acceptation refusée."
+  },
+  {
+   "id": "L3-18",
+   "regle": "Départ : accès révoqué, historique conservé",
+   "decision": "",
+   "action": "B quitte",
+   "attendu": "B lit 0 ; RPC 42501 ; historique 1",
+   "observe": "lus=(0,) rpc=42501 Not authorized for this household historique=1",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-18b",
+   "regle": "CF-06 : aucun rejeu ne contourne la révocation",
+   "decision": "",
+   "action": "B (parti) rejoue sa propre clé déjà utilisée, même charge",
+   "attendu": "42501",
+   "observe": "42501 Not authorized for this household",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-19",
+   "regle": "CF-07 : retour par nouvelle invitation",
+   "decision": "",
+   "action": "B accepte",
+   "attendu": "B actif (partner)",
+   "observe": "ok=True actifs=2 rôle=partner",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-20",
+   "regle": "CF-07 : pas d'accès automatique aux opérations produites pendant l'absence",
+   "decision": "",
+   "action": "B relit le journal",
+   "attendu": "voit « b-before », pas « a-during-absence »",
+   "observe": "clés visibles=['alloc:299e4cd0-35e5-49c0-b0a0-f9bb7633e0fe:a4bc9575-d531-472e-b4a3-c9743026765c', 'b-before']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-21",
+   "regle": "CF-07 : agrégats (vue des soldes) pour un membre revenu",
+   "decision": "",
+   "action": "A et B lisent le solde de Courses",
+   "attendu": "politique à préciser (CF-07)",
+   "observe": "A=(Decimal('47000'),) B=(Decimal('47000'),)",
+   "statut": "Décision requise",
+   "note": "Avec un filtrage des lignes, B voit un solde différent de A (les opérations de l'absence sont exclues du calcul) ; sans filtrage, l'agrégat révèle indirectement l'absence. CF-07 laisse ce point à préciser."
+  },
+  {
+   "id": "L3-22",
+   "regle": "CF-09 : suppression du compte Auth sans altérer le grand livre",
+   "decision": "",
+   "action": "préparation puis DELETE auth.users",
+   "attendu": "suppression OK ; lignes et sommes identiques ; membre « left »",
+   "observe": "suppression=supprimé avant=(10, Decimal('0')) après=(10, Decimal('0')) membre=left déséquilibres=0",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-23",
+   "regle": "CF-09 : la place libérée est réutilisable",
+   "decision": "",
+   "action": "nouvelle invitation acceptée",
+   "attendu": "accepté",
+   "observe": "ok=True actifs=2",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-24",
+   "regle": "Suppression Auth directe sans préparation",
+   "decision": "",
+   "action": "DELETE auth.users d'un membre actif",
+   "attendu": "refus souhaité",
+   "observe": "suppression=True actifs_restants=1",
+   "statut": "Constat",
+   "note": "Sans clé étrangère, une suppression qui contourne la procédure laisse une place active orpheline. Garde-fou : passer exclusivement par la fonction serveur, contrôle périodique des orphelins."
+  },
+  {
+   "id": "L3-25",
+   "regle": "Condensat illisible",
+   "decision": "",
+   "action": "SELECT token_sha256",
+   "attendu": "42501",
+   "observe": "42501 permission denied for table duo_v3_invitations",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-26",
+   "regle": "Non-membre ne peut pas inviter",
+   "decision": "",
+   "action": "create_invitation",
+   "attendu": "42501",
+   "observe": "42501 Not authorized for this household",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "L3-27",
+   "regle": "Clôture d'un duo après départ d'un membre",
+   "decision": "",
+   "action": "close_period",
+   "attendu": "clôture et nouvelle période",
+   "observe": "ok=True périodes=2",
+   "statut": "Réussi",
+   "note": ""
+  }
+ ]
+}
