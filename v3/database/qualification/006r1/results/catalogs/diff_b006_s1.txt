@@ -1,0 +1,86 @@
+92a93
+> COL|public.duo_v3_transactions.ledger_seq|bigint|NO|
+95a97,99
+> COL|public.duo_v3_transactions.posted_at|timestamp with time zone|YES|
+> COL|public.duo_v3_transactions.posting_xid|xid8|YES|
+> COL|public.duo_v3_transactions.request_sha256|bytea|YES|
+97a102
+> CON|duo_v3_accounts|duo_v3_accounts_household_currency_fkey|FOREIGN KEY (household_id, currency) REFERENCES duo_v3_households(id, currency) ON UPDATE CASCADE
+103c108
+< CON|duo_v3_allocation_versions|duo_v3_allocation_versions_amount_minor_check|CHECK ((amount_minor >= (0)::numeric))
+---
+> CON|duo_v3_allocation_versions|duo_v3_allocation_versions_amount_minor_check|CHECK (((amount_minor)::numeric >= (0)::numeric))
+108c113
+< CON|duo_v3_entries|duo_v3_entries_amount_minor_check|CHECK ((amount_minor <> (0)::numeric))
+---
+> CON|duo_v3_entries|duo_v3_entries_amount_minor_check|CHECK (((amount_minor)::numeric <> (0)::numeric))
+112c117
+< CON|duo_v3_envelopes|duo_v3_envelopes_account_id_household_id_currency_fkey|FOREIGN KEY (account_id, household_id, currency) REFERENCES duo_v3_accounts(id, household_id, currency) ON DELETE RESTRICT
+---
+> CON|duo_v3_envelopes|duo_v3_envelopes_account_id_household_id_currency_fkey|FOREIGN KEY (account_id, household_id, currency) REFERENCES duo_v3_accounts(id, household_id, currency) ON UPDATE CASCADE ON DELETE RESTRICT
+121a127
+> CON|duo_v3_households|duo_v3_households_id_currency_key|UNIQUE (id, currency)
+128c134
+< CON|duo_v3_period_allocations|duo_v3_period_allocations_amount_minor_check|CHECK ((amount_minor >= (0)::numeric))
+---
+> CON|duo_v3_period_allocations|duo_v3_period_allocations_amount_minor_check|CHECK (((amount_minor)::numeric >= (0)::numeric))
+135,136c141,142
+< CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check1|CHECK (((to_reserve_minor = (0)::numeric) OR ((closing_balance_minor > (0)::numeric) AND (NOT carry_positive))))
+< CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check|CHECK ((closing_balance_minor = (carried_minor + to_reserve_minor)))
+---
+> CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check1|CHECK ((((to_reserve_minor)::numeric = (0)::numeric) OR (((closing_balance_minor)::numeric > (0)::numeric) AND (NOT carry_positive))))
+> CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_check|CHECK (((closing_balance_minor)::numeric = ((carried_minor)::numeric + (to_reserve_minor)::numeric)))
+140c146
+< CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_to_reserve_minor_check|CHECK ((to_reserve_minor >= (0)::numeric))
+---
+> CON|duo_v3_period_envelope_closes|duo_v3_period_envelope_closes_to_reserve_minor_check|CHECK (((to_reserve_minor)::numeric >= (0)::numeric))
+153d158
+< CON|duo_v3_transactions|duo_v3_transactions_household_id_idempotency_key_key|UNIQUE (household_id, idempotency_key)
+160a166
+> CON|duo_v3_transactions|duo_v3_transactions_request_sha256_check|CHECK (((request_sha256 IS NULL) OR (length(request_sha256) = 32)))
+173a180
+> IDX|public.duo_v3_households_id_currency_key|CREATE UNIQUE INDEX duo_v3_households_id_currency_key ON public.duo_v3_households USING btree (id, currency)
+174a182
+> IDX|public.duo_v3_member_idempotency|CREATE UNIQUE INDEX duo_v3_member_idempotency ON public.duo_v3_transactions USING btree (household_id, created_by, idempotency_key) WHERE (origin = 'member'::text)
+186c194
+< IDX|public.duo_v3_transactions_household_id_idempotency_key_key|CREATE UNIQUE INDEX duo_v3_transactions_household_id_idempotency_key_key ON public.duo_v3_transactions USING btree (household_id, idempotency_key)
+---
+> IDX|public.duo_v3_system_idempotency|CREATE UNIQUE INDEX duo_v3_system_idempotency ON public.duo_v3_transactions USING btree (household_id, idempotency_key) WHERE (origin = 'system'::text)
+190a199
+> TRG|duo_v3_entries|duo_v3_entries_guard_insert|O|CREATE TRIGGER duo_v3_entries_guard_insert BEFORE INSERT ON public.duo_v3_entries FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_entry_insert()
+207a217
+> TRG|duo_v3_transactions|duo_v3_transactions_guard_insert|O|CREATE TRIGGER duo_v3_transactions_guard_insert BEFORE INSERT ON public.duo_v3_transactions FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_transaction_insert()
+244a255
+> TACL|public.duo_v3_transactions_ledger_seq_seq|S|{postgres=rwU/postgres,service_role=rwU/postgres}
+246a258
+> FN|duo_v3_private.admin_catch_up(p_household uuid, p_max integer)|secdef=true|{postgres=X/postgres}|search_path=""|0c3ebfde5d3a0c0ff77400a0c958494e
+254,256c266,269
+< FN|duo_v3_private.ensure_current_period(p_household uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|25702ff10c6853d4031ac71502f808fe
+< FN|duo_v3_private.guard_envelope()|secdef=false|{postgres=X/postgres}|search_path=""|25d193992b04f9ec9823b1f77c925a1e
+< FN|duo_v3_private.guard_household_calendar()|secdef=false|{postgres=X/postgres}|search_path=""|290e3fe83a9c6048f4ec4e2dae22db63
+---
+> FN|duo_v3_private.ensure_current_period(p_household uuid, p_now timestamp with time zone)|secdef=true|{postgres=X/postgres}|search_path=""|be5ec5ea6cf453fbd5dd50013a59d7df
+> FN|duo_v3_private.guard_entry_insert()|secdef=false|{postgres=X/postgres}|search_path=""|b38316cececf0a3b3a00f9f56a7341c6
+> FN|duo_v3_private.guard_envelope()|secdef=false|{postgres=X/postgres}|search_path=""|77a7872b9f1b7efac3402741005ce19a
+> FN|duo_v3_private.guard_household_calendar()|secdef=false|{postgres=X/postgres}|search_path=""|1169000c44afb0ae87c871be5a9f590e
+258a272
+> FN|duo_v3_private.guard_transaction_insert()|secdef=false|{postgres=X/postgres}|search_path=""|e7635787a8e9d88228cfb4550070431d
+262c276
+< FN|duo_v3_private.post_system(p_household uuid, p_period uuid, p_kind text, p_key text, p_debit_account uuid, p_credit_account uuid, p_amount numeric, p_occurred_on date)|secdef=true|{postgres=X/postgres}|search_path=""|22d3a80ea9b98b5504d375930438a126
+---
+> FN|duo_v3_private.post_system(p_household uuid, p_period uuid, p_kind text, p_key text, p_debit_account uuid, p_credit_account uuid, p_amount numeric, p_occurred_on date)|secdef=true|{postgres=X/postgres}|search_path=""|8dd19af6c70a9f2ad77cb22767ef3426
+263a278
+> FN|duo_v3_private.request_hash(p_parts text[])|secdef=false|{postgres=X/postgres}|search_path=""|e5ca3e6abd6bdedb3478f6154e7655cd
+273,275c288,291
+< FN|public.duo_v3_post_contribution(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|082447efd86b972295b09e783a11883d
+< FN|public.duo_v3_post_expense(p_household uuid, p_envelope uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|0f3e261b23e0b426bc67a20ea926b4a4
+< FN|public.duo_v3_post_transfer(p_household uuid, p_from_account uuid, p_to_account uuid, p_amount_minor numeric, p_currency text, p_idempotency_key text)|secdef=true|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|search_path=""|6cfa22004c51de0712764e44285f58ec
+---
+> FN|public.duo_v3_get_envelope_snapshot(p_household uuid)|secdef=false|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|ca2d25e5c6455bdae73e1f29bf6e9aaf
+> FN|public.duo_v3_post_contribution(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|f4f1082081a4d681577288a9cfb875d7
+> FN|public.duo_v3_post_expense(p_household uuid, p_envelope uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3ab2d3e89cca223b7dc73eaed26ddee8
+> FN|public.duo_v3_post_transfer(p_household uuid, p_from_account uuid, p_to_account uuid, p_amount_minor numeric, p_currency text, p_idempotency_key text)|secdef=true|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|search_path=""|7f153a5305b04f0522852ff61a305184
+277c293
+< FN|public.duo_v3_validate_posting()|secdef=false|{postgres=X/postgres,service_role=X/postgres}|search_path=""|b42f301c05ba0896cfedfcd5ea11dc34
+---
+> FN|public.duo_v3_validate_posting()|secdef=false|{postgres=X/postgres,service_role=X/postgres}|search_path=""|2ecad3c150a8510f097ef646f0baf476

@@ -1,0 +1,2 @@
+psql:final/20261126120000_duo_v3_financial_model_r1.down.sql:20: ERROR:  006r1 down : données du modèle 006 ou paramètres de duo présents ; retour arrière refusé
+CONTEXT:  PL/pgSQL function inline_code_block line 9 at RAISE

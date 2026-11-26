@@ -1,0 +1,436 @@
+[
+ {
+  "id": "L01",
+  "mat": "—",
+  "titre": "Écriture équilibrée +100/−100 validée au COMMIT",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "L02",
+  "mat": "—",
+  "titre": "Une seule ligne d’écriture refusée au COMMIT",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L03",
+  "mat": "—",
+  "titre": "Écriture déséquilibrée +100/−99 refusée",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L04",
+  "mat": "—",
+  "titre": "Transaction sans ligne refusée",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L05",
+  "mat": "SEC-01",
+  "titre": "Ligne du duo A pointant un compte du duo B refusée (FK composite)",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "L06",
+  "mat": "FIA-05",
+  "titre": "Clé d’idempotence dupliquée dans un même duo refusée",
+  "expect": "23505",
+  "info": false
+ },
+ {
+  "id": "L07a",
+  "mat": "SEC-08",
+  "titre": "UPDATE d’une transaction comptabilisée refusé",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L07b",
+  "mat": "SEC-08",
+  "titre": "DELETE d’une ligne comptabilisée refusé",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L08",
+  "mat": "TRF-15",
+  "titre": "Contre-passation exacte acceptée",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "L09",
+  "mat": "TRF-15",
+  "titre": "Deuxième contre-passation du même original refusée",
+  "expect": "23505",
+  "info": false
+ },
+ {
+  "id": "L10a",
+  "mat": "SEC-01",
+  "titre": "Contre-passation depuis un autre duo refusée",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "L10b",
+  "mat": "—",
+  "titre": "VARIANTE F3 — compte d’une autre devise refusé en amont (la contre-passation inter-devises devient impossible)",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "L11",
+  "mat": "TRF-15",
+  "titre": "Contre-passation inexacte (répartition différente) refusée",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "P01",
+  "mat": "TRF-12",
+  "titre": "Écriture privilégiée 100,6 centimes : refus attendu (pas d’arrondi silencieux)",
+  "expect": "22023",
+  "info": true
+ },
+ {
+  "id": "S01",
+  "mat": "SEC-02",
+  "titre": "Camille lit son duo : 1 duo, 2 membres, 6 comptes, écritures visibles",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S02",
+  "mat": "SEC-02",
+  "titre": "Alex (partenaire) lit le même registre partagé",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S03",
+  "mat": "SEC-01",
+  "titre": "Claire (duo B) ne voit rien du duo A",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S04",
+  "mat": "SEC-01",
+  "titre": "Rôle anon : lecture du registre refusée",
+  "expect": "42501|OK",
+  "info": false
+ },
+ {
+  "id": "S05",
+  "mat": "SEC-01",
+  "titre": "Jeton authenticated sans sujet : zéro ligne",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S06",
+  "mat": "SEC-04",
+  "titre": "INSERT direct d’une transaction par Camille refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S07",
+  "mat": "SEC-04",
+  "titre": "INSERT direct de lignes par Camille refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S08",
+  "mat": "SEC-01",
+  "titre": "Claire s’ajoute elle-même au duo A : refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S09",
+  "mat": "SEC-04",
+  "titre": "UPDATE direct d’un compte refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S10",
+  "mat": "SEC-08",
+  "titre": "DELETE direct d’une ligne refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S12",
+  "mat": "SEC-08",
+  "titre": "TRUNCATE du registre par un utilisateur connecté refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S13",
+  "mat": "SEC-08",
+  "titre": "TRUNCATE du registre par anon refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R01",
+  "mat": "TRF-13",
+  "titre": "Transfert 25,00 € cash → Loisirs : conservatif (somme du duo constante)",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R02",
+  "mat": "FIA-05",
+  "titre": "Rejeu identique (même clé) : même identifiant, une seule transaction",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R03",
+  "mat": "FIA-06",
+  "titre": "Même clé, 30,00 € au lieu de 25,00 € : rejet 23505, rien écrit",
+  "expect": "23505",
+  "info": false
+ },
+ {
+  "id": "R04",
+  "mat": "FIA-07",
+  "titre": "Double appui (deux appels successifs, même clé) : une seule opération",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R05",
+  "mat": "SEC-01",
+  "titre": "Claire écrit dans le duo A par la RPC : refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R06",
+  "mat": "SEC-01",
+  "titre": "Camille vise un compte du duo B : refusé",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "R07a",
+  "mat": "TRF-12",
+  "titre": "Montant zéro refusé (22023)",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R07b",
+  "mat": "TRF-12",
+  "titre": "Montant négatif refusé (22023)",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R07c",
+  "mat": "TRF-12",
+  "titre": "Montant fraction de centime (0,015 €) refusé (22023)",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R07d",
+  "mat": "TRF-12",
+  "titre": "Montant nul refusé (22023)",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R07e",
+  "mat": "TRF-12",
+  "titre": "Montant 10^38 (hors bornes) refusé (22023)",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R08",
+  "mat": "TRF-12",
+  "titre": "Compte source = destination refusé",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R09",
+  "mat": "—",
+  "titre": "Compte de compensation exclu des transferts",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "R10",
+  "mat": "—",
+  "titre": "Devise incohérente avec les comptes refusée",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "R11",
+  "mat": "SEC-01",
+  "titre": "Session anonyme Supabase (is_anonymous) refusée",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R12",
+  "mat": "SEC-01",
+  "titre": "Jeton sans sujet refusé",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R13",
+  "mat": "SEC-01",
+  "titre": "Rôle anon : exécution de la RPC refusée",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R14",
+  "mat": "SEC-02",
+  "titre": "Alex (partenaire) écrit dans le duo A",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R15",
+  "mat": "SEC-01",
+  "titre": "… et Claire ne voit pas cette écriture",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R16",
+  "mat": "TRF-12",
+  "titre": "Grand montant 10^20 − 1 centimes conservé exactement",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R17a",
+  "mat": "FIA-05",
+  "titre": "Clé d’idempotence vide refusée",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R17b",
+  "mat": "FIA-05",
+  "titre": "Clé d’idempotence de 129 caractères refusée",
+  "expect": "22023",
+  "info": false
+ },
+ {
+  "id": "R18",
+  "mat": "SEC-01",
+  "titre": "Même clé dans un autre duo : transaction distincte, aucune fuite",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "R21",
+  "mat": "TRF-13",
+  "titre": "Transition du contrat 006 : transfert trésorerie → enveloppe refusé (23503)",
+  "expect": "23503",
+  "info": false
+ },
+ {
+  "id": "R19",
+  "mat": "SEC-01",
+  "titre": "Oracle d’appartenance fermé : is_member(duo A, Camille) refusé à Claire",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "R20",
+  "mat": "SEC-01",
+  "titre": "is_current_member : vrai pour Camille sur son duo, faux pour Claire",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "T01",
+  "mat": "SEC-08",
+  "titre": "TRUNCATE par postgres refusé (trigger, contrôles différés vidés)",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "T02",
+  "mat": "SEC-08",
+  "titre": "TRUNCATE … CASCADE par service_role refusé",
+  "expect": "23514",
+  "info": false
+ },
+ {
+  "id": "T03",
+  "mat": "SEC-08",
+  "titre": "Mode réplication (postgres) : refus attendu, contournement constaté puis annulé",
+  "expect": "23514",
+  "info": true
+ },
+ {
+  "id": "D01",
+  "mat": "SEC-08",
+  "titre": "Nouvelle table et nouvelle fonction : aucun droit implicite pour anon/authenticated",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "D02",
+  "mat": "SEC-08",
+  "titre": "Privilèges effectifs : anon aucun, authenticated SELECT seul sur les 5 tables",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "M01",
+  "mat": "SEC-06",
+  "titre": "Troisième membre ajouté directement en base (rôle privilégié) : refus attendu",
+  "expect": "23514|P0001",
+  "info": true
+ },
+ {
+  "id": "S11p",
+  "mat": "SEC-06",
+  "titre": "Contrôle préalable : Dan, encore membre, lit le duo A",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S11a",
+  "mat": "SEC-06",
+  "titre": "Membre retiré : il ne lit plus rien du duo A",
+  "expect": "ok",
+  "info": false
+ },
+ {
+  "id": "S11b",
+  "mat": "SEC-06",
+  "titre": "Membre retiré : écriture par la RPC refusée",
+  "expect": "42501",
+  "info": false
+ },
+ {
+  "id": "S11c",
+  "mat": "SEC-06",
+  "titre": "Retrait d’un membre qui a déjà écrit (Alex) : possible sans casser l’historique",
+  "expect": "ok",
+  "info": true
+ }
+]
