@@ -12,18 +12,22 @@
     "server": "npm --prefix server run dev"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~6.1.2",
+    "@expo/metro-runtime": "~58.0.17",
     "@react-native-async-storage/async-storage": "2.2.0",
-    "expo": "~54.0.36",
-    "expo-status-bar": "~3.0.8",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "react-native": "0.81.5",
-    "react-native-safe-area-context": "~5.6.0",
+    "expo": "^58.0.26",
+    "expo-splash-screen": "~58.0.14",
+    "expo-status-bar": "~58.0.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "babel-preset-expo": "~54.0.10"
+    "babel-preset-expo": "~58.0.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.9"
   }
 }

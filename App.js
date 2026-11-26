@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -8,10 +10,17 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
+import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
+import { palette } from './src/theme/tokens';
+import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
+import DashboardOverview from './src/features/dashboard/DashboardOverview';
+import WebPreview from './src/features/preview/WebPreview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -27,7 +36,8 @@ const currentMonthKey = () => todayKey().slice(0, 7);
 const isValidPinFormat = (pin) => /^\d{4,8}$/.test(String(pin || ''));
 
 const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
-const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
+// F-01: shared presentation (same cent rounding as before, never "-0,00 €").
+const formatEuro = (value) => dashboardModel.formatEuro(value);
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
 const monthDefaultDate = (month) => {
   const normalized = /^\d{4}-\d{2}$/.test(String(month || '')) ? month : currentMonthKey();
@@ -172,8 +182,17 @@ const initialState = {
 };
 
 export default function App() {
+  if (Platform.OS === 'web' && process.env.EXPO_PUBLIC_DUO_PREVIEW === '1') return <WebPreview />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const {fontScale, width} = useWindowDimensions();
+  const largeText = fontScale >= 1.3 || width < 340;
+  const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [editingServer, setEditingServer] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('steve');
   const [connected, setConnected] = useState(false);
   const [syncMessage, setSyncMessage] = useState('Mode local');
@@ -184,6 +203,7 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [monthDraft, setMonthDraft] = useState(currentMonthKey());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
@@ -234,8 +254,8 @@ export default function App() {
   }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
 
   useEffect(() => {
-    if (apiUrl && !isSessionValid()) fetchAuthStatus();
-  }, [apiUrl, authToken, authTokenExpiresAt]);
+    if (apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
+  }, [apiUrl, authToken, authTokenExpiresAt, editingServer]);
 
   const request = async (path, options = {}) => {
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
@@ -316,6 +336,7 @@ export default function App() {
       const data = await request('/api/auth/status');
       setAuthMembers(data.members || []);
     } catch (error) {
+      setAuthMembers([]);
       setAuthError(error.message || 'Impossible de contacter le serveur.');
     } finally {
       setAuthLoading(false);
@@ -455,49 +476,11 @@ export default function App() {
   const previousExpenses = useMemo(() => expenses.filter((e) => !isPlannedAction(e) && isBeforeMonth(e.date, selectedMonth)), [expenses, selectedMonth]);
   const previousContributions = useMemo(() => contributions.filter((c) => !isPlannedAction(c) && isBeforeMonth(c.date, selectedMonth)), [contributions, selectedMonth]);
 
-  const summary = useMemo(() => categories.map((category) => {
-    const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const previousSpent = previousExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const previousPaidIn = previousContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-    const carryOver = previousPaidIn - previousSpent;
-    const availableBudget = carryOver + monthlyBudget;
-    const remainingBudget = availableBudget - spent;
-    const cashBalance = carryOver + paidIn - spent;
-    return {
-      ...category,
-      spent,
-      paidIn,
-      previousSpent,
-      previousPaidIn,
-      carryOver,
-      monthlyBudget,
-      availableBudget,
-      remainingBudget,
-      cashBalance,
-      overBudget: spent > availableBudget,
-      needsFunding: cashBalance < 0,
-    };
-  }), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
-
-  const totals = useMemo(() => summary.reduce((acc, c) => ({
-    monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
-    availableBudget: acc.availableBudget + c.availableBudget,
-    carryOver: acc.carryOver + c.carryOver,
-    spent: acc.spent + c.spent,
-    paidIn: acc.paidIn + c.paidIn,
-    cashBalance: acc.cashBalance + c.cashBalance,
-  }), { monthlyBudget: 0, availableBudget: 0, carryOver: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
-
-
-  const plannedTotals = useMemo(() => ({
-    spent: plannedMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
-    paidIn: plannedMonthContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-  }), [plannedMonthExpenses, plannedMonthContributions]);
-
+  const summary = useMemo(() => dashboardModel.summarizeCategories(categories, members.length, monthExpenses, monthContributions, previousExpenses, previousContributions), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
+  const totals = useMemo(() => dashboardModel.summarizeTotals(summary), [summary]);
+  const plannedTotals = useMemo(() => dashboardModel.summarizePlanned(plannedMonthExpenses, plannedMonthContributions), [plannedMonthExpenses, plannedMonthContributions]);
   const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
-  const forecastCashBalance = totals.cashBalance + plannedTotals.paidIn - plannedTotals.spent;
+  const forecastCashBalance = dashboardModel.forecastBalance(totals, plannedTotals);
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -523,6 +506,7 @@ export default function App() {
     const normalized = normalizeMonth(monthDraft);
     if (!normalized) return Alert.alert('Mois invalide', 'Utilise le format AAAA-MM, par exemple 2026-07.');
     setSelectedMonth(normalized);
+    setMonthPickerOpen(false);
   };
 
   const confirmFutureDateIfNeeded = (date, actionLabel, onConfirm) => {
@@ -788,7 +772,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       {authLoading && !authMembers.length ? <Text style={styles.muted}>Chargement…</Text> : null}
       {authMembers.map((member) => (
         <View key={member.id} style={styles.card}>
-          <View style={styles.rowBetween}>
+          <View style={[styles.rowBetween, largeText && styles.stacked]}>
             <Text style={styles.cardTitle}>{member.name}</Text>
             <Text style={member.locked ? styles.badgeWarn : (member.pinSet ? styles.badgeOk : styles.badge)}>
               {member.locked ? 'Verrouillé' : member.pinSet ? 'PIN défini' : 'PIN à créer'}
@@ -809,25 +793,29 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
   const renderAuthGate = () => (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>S&S Budget</Text>
+      <StatusBar style="dark" />
+      <View style={[styles.header, largeText && styles.stacked]}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>Duo Budget</Text>
           <Text style={styles.subtitle}>Connexion sécurisée</Text>
         </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retour à l'aperçu" onPress={() => setShowGlance(true)} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>← Aperçu</Text>
+        </TouchableOpacity>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {!apiUrl ? (
+        {(!apiUrl || editingServer) ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Configurer le serveur</Text>
-            <Text style={styles.muted}>Renseigne l’URL Tailscale du serveur avant de te connecter.</Text>
+            <Text style={styles.muted}>Renseigne l’adresse du serveur de confiance (réseau local ou Tailscale).</Text>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value) => { setEditingServer(true); setApiUrl(value); }} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
-            <TouchableOpacity style={styles.primaryButton} onPress={fetchAuthStatus}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} autoCorrect={false} onChangeText={setApiSecret} />
+            <TouchableOpacity style={styles.primaryButton} disabled={authLoading || !apiUrl.trim()} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(false); }}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
           </View>
         ) : pinStage ? renderPinStageForm() : renderAuthMemberList()}
+        {apiUrl && !editingServer ? <TouchableOpacity accessibilityRole="button" disabled={authLoading} style={styles.secondaryButton} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(true); }}><Text style={styles.secondaryButtonText}>Modifier la configuration du serveur</Text></TouchableOpacity> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -874,10 +862,31 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     return lines;
   };
 
+  const renderMainControls = () => (<>
+      <View style={[styles.compactHeader, largeText && styles.stacked]}>
+        <View style={styles.brandRow}>
+          <Image source={require('./assets/duo-mark-blue.png')} style={styles.brandMark} accessibilityIgnoresInvertColors accessible={false} />
+          <Text style={styles.brandName}>Duo Budget</Text>
+        </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configuration" style={styles.compactConfig} onPress={() => setSettingsModal(true)}><Text style={styles.compactConfigText}>Config</Text></TouchableOpacity>
+      </View>
+      <View style={[styles.compactMonth, largeText && styles.monthWrap]}>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois précédent" accessibilityRole="button" onPress={() => updateMonth(-1)}><Text style={styles.compactArrowText}>‹</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choisir le mois" style={styles.monthCenter} onPress={() => setMonthPickerOpen(v => !v)}><Text style={styles.monthCaption}>{new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(selectedMonth+'-01T00:00:00Z'))} ▾</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois suivant" accessibilityRole="button" onPress={() => updateMonth(1)}><Text style={styles.compactArrowText}>›</Text></TouchableOpacity>
+      </View>
+      {monthPickerOpen && <View style={styles.card}>
+        <Text style={styles.label}>Choisir un mois (AAAA-MM)</Text>
+        <TextInput style={styles.input} value={monthDraft} onChangeText={setMonthDraft} autoCorrect={false} keyboardType="numbers-and-punctuation" onSubmitEditing={applyMonthDraft} />
+        <TouchableOpacity style={styles.secondaryButton} onPress={applyMonthDraft}><Text style={styles.secondaryButtonText}>Appliquer</Text></TouchableOpacity>
+      </View>}
+      {tab !== 'dashboard' && <NavigationActions route={tab} onNavigate={setTab} />}
+  </>);
+
   if (bootLoading) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView style={styles.safe}><StatusBar style="light" /></SafeAreaView>
+        <SafeAreaView style={styles.safe}><StatusBar style="dark" /></SafeAreaView>
       </SafeAreaProvider>
     );
   }
@@ -885,7 +894,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   if (!isSessionValid()) {
     return (
       <SafeAreaProvider>
-        {renderAuthGate()}
+        {showGlance ? (
+          <DuoGlanceScreen
+            onSignIn={() => setShowGlance(false)}
+            onCreateAccount={() => setShowGlance(false)}
+          />
+        ) : renderAuthGate()}
       </SafeAreaProvider>
     );
   }
@@ -893,59 +907,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>S&S Budget</Text>
-          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
-          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
-        </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
-      </View>
+      <StatusBar style="dark" />
+      {!largeText && tab !== 'dashboard' && renderMainControls()}
 
-      <View style={styles.monthRow}>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
-        <TextInput
-          style={styles.monthLabel}
-          value={monthDraft}
-          onChangeText={setMonthDraft}
-          onSubmitEditing={applyMonthDraft}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
-          placeholder="AAAA-MM"
-        />
-        <TouchableOpacity style={styles.monthOkButton} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
-      </View>
-
-      <View style={styles.tabsOuter}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-          {[
-            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
-            ['activity', unreadActivityCount > 0 ? `Journal • ${unreadActivityCount}` : 'Journal'],
-          ].map(([key, label]) => (
-            <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
-              <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        {(largeText || tab === 'dashboard') && renderMainControls()}
         {tab === 'dashboard' && (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
-              <View style={styles.metricGrid}>
-                <Metric label="Report précédent" value={formatEuro(totals.carryOver)} dark />
-                <Metric label="Budget du mois" value={formatEuro(totals.monthlyBudget)} dark />
-                <Metric label="Versé ce mois" value={formatEuro(totals.paidIn)} dark />
-                <Metric label="Dépensé ce mois" value={formatEuro(totals.spent)} dark />
-                <Metric label="Solde réel" value={formatEuro(totals.cashBalance)} dark />
-                <Metric label="Solde prévisionnel" value={formatEuro(forecastCashBalance)} dark />
-              </View>
-            </View>
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} personState={personState} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
@@ -954,11 +923,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                 <Text style={styles.muted}>Solde après actions prévues : {formatEuro(forecastCashBalance)}</Text>
               </View>
             )}
-            <TouchableOpacity style={styles.primaryButton} onPress={() => updateMonth(1)}><Text style={styles.primaryButtonText}>Nouveau mois</Text></TouchableOpacity>
-            <Text style={styles.sectionTitle}>État par membre</Text>
-            {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
-            <Text style={styles.sectionTitle}>Situation des caisses</Text>
-            {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+            <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => updateMonth(1)}><Text style={styles.secondaryButtonText}>Mois suivant ›</Text></TouchableOpacity>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Détail des enveloppes</Text>
+              {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+              {!summary.length && <Text style={styles.muted}>Aucune enveloppe configurée.</Text>}
+            </View>
           </>
         )}
 
@@ -976,11 +946,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Dépenses du mois</Text>
             {monthExpenseRows.map((expense) => (
               <View key={expense.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
                 <Text style={styles.muted}>{expense.date}</Text>
                 {canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditExpense(expense)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1018,10 +988,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Versements du mois</Text>
             {monthContributionRows.map((contribution) => (
               <View key={contribution.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
                 {canEditRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditContribution(contribution)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1039,13 +1009,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             {isAdmin && <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>}
             {summary.map((category) => (
               <View key={category.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
                 <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
                 <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)} · Disponible budget : {formatEuro(category.availableBudget)}</Text>
                 <Text style={styles.muted}>Versé ce mois : {formatEuro(category.paidIn)} · Dépensé : {formatEuro(category.spent)}</Text>
                 <Text style={styles.muted}>Solde caisse réel : {formatEuro(category.cashBalance)}</Text>
-                {isAdmin && <View style={styles.rowGap}>
+                {isAdmin && <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                 </View>}
@@ -1063,14 +1033,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>}
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
               <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
             </View>
             <Text style={styles.help}>Le changement de profil demande le PIN du profil cible. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
-            {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
+            {members.map((member) => <View key={member.id} style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
 
@@ -1082,7 +1052,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
               <Text style={styles.muted}>{unreadActivityCount > 0 ? `${unreadActivityCount} activité${unreadActivityCount > 1 ? 's' : ''} non lue${unreadActivityCount > 1 ? 's' : ''} pour vous.` : 'Tout est à jour pour vous.'}</Text>
               {unreadActivityCount > 0 && (
-                <View style={styles.rowGap}>
+                <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={markAllActivityRead}><Text style={styles.smallButtonText}>Tout marquer comme lu</Text></TouchableOpacity>
                 </View>
               )}
@@ -1094,7 +1064,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               const unread = isLogUnread(log, currentUserId);
               return (
                 <View key={log.id} style={styles.card}>
-                  <View style={styles.rowBetween}>
+                  <View style={[styles.rowBetween, largeText && styles.stacked]}>
                     <Text style={styles.cardTitle}>{activityLabel(log.action)}</Text>
                     <View style={styles.badgeRow}>
                       {unread && <Text style={styles.badgeWarn}>Nouveau</Text>}
@@ -1107,7 +1077,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                   {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
                   <Text style={styles.lockedText}>Action réalisée par : {log.actorName || 'Système'} · {formatActivityDate(log.createdAt)}</Text>
                   {unread && (
-                    <View style={styles.rowGap}>
+                    <View style={[styles.rowGap, largeText && styles.stacked]}>
                       <TouchableOpacity style={styles.smallButton} onPress={() => markActivityRead(log.id)}><Text style={styles.smallButtonText}>Marquer comme lu</Text></TouchableOpacity>
                     </View>
                   )}
@@ -1117,11 +1087,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
           </>
         )}
       </ScrollView>
-
+      <BottomNavigation route={tab} onNavigate={setTab} unreadCount={unreadActivityCount} />
 
       <Modal visible={!!editingExpense} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingExpense(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier dépense</Text>
             <TouchableOpacity onPress={saveExpenseEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1139,7 +1109,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={!!editingContribution} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingContribution(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier versement</Text>
             <TouchableOpacity onPress={saveContributionEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1156,7 +1126,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <TextInput style={styles.input} placeholder="Nom" value={editingCategory?.name || ''} onChangeText={(name) => setEditingCategory((c) => ({ ...c, name }))} />
             <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String(editingCategory?.monthlyPerPerson || '')} onChangeText={(monthlyPerPerson) => setEditingCategory((c) => ({ ...c, monthlyPerPerson }))} />
@@ -1173,7 +1143,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={settingsModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.label}>URL API maison</Text>
             <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
@@ -1181,11 +1151,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
-              <View style={styles.rowGap}>
+              <View style={[styles.rowGap, largeText && styles.stacked]}>
                 <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.smallButton} onPress={() => setPinManageModal(true)}><Text style={styles.smallButtonText}>Modifier mon PIN</Text></TouchableOpacity>
               </View>
@@ -1210,7 +1180,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={profileModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setProfileModal(false); setPinStage(null); }}><Text style={styles.modalAction}>Fermer</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Changer de profil</Text>
             <Text style={styles.modalAction}> </Text>
@@ -1223,7 +1193,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={pinManageModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setPinManageModal(false); setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' }); }}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier mon PIN</Text>
             <TouchableOpacity onPress={submitPinManage}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1244,14 +1214,17 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   );
 }
 
-function Metric({ label, value }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
-function PersonCard({ state }) { return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
+function Metric({ label, value }) { const {fontScale,width}=useWindowDimensions(); return <View style={[styles.metric, (fontScale >= 1.3 || width < 340) && styles.fullWidth]}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
+function PersonCard({ state }) { const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340; return <View style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={dashboardModel.presentedAmount(state.missing) <= 0 ? styles.badgeOk : styles.badgeWarn}>{dashboardModel.presentedAmount(state.missing) <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
 function CategorySummary({ category }) {
+  const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340;
   const pct = category.availableBudget ? Math.min(100, Math.max(0, (category.spent / category.availableBudget) * 100)) : 0;
-  const badgeStyle = category.needsFunding ? styles.badgeWarn : category.overBudget ? styles.badgeWarn : styles.badgeOk;
-  const badgeText = category.needsFunding ? 'À alimenter' : category.overBudget ? 'Dépassement' : 'OK';
+  // F-01: badge follows the displayed cents (same labels and priority as before).
+  const envelopeStatus = dashboardModel.envelopePresentation(category).status;
+  const badgeStyle = envelopeStatus ? styles.badgeWarn : styles.badgeOk;
+  const badgeText = envelopeStatus || 'OK';
   return <View style={styles.card}>
-    <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
+    <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
     <View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
     <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
     <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)}</Text>
@@ -1261,14 +1234,19 @@ function CategorySummary({ category }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F3F4F6' },
+  safe: { flex: 1, backgroundColor: palette.background },
+  compactHeader: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:8, padding:8, backgroundColor:palette.background },
+  brandRow: { flexDirection:'row', alignItems:'center', flexShrink:1, gap:8 }, brandMark:{width:32,height:32}, brandName:{fontSize:19,fontWeight:'700',color:palette.midnight,flexShrink:1}, compactConfig:{minHeight:44,justifyContent:'center',paddingHorizontal:12,borderRadius:12,backgroundColor:palette.lightBlue}, compactConfigText:{color:'#304DB2',fontWeight:'600',textAlign:'center'}, compactMonth:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8,paddingHorizontal:8,paddingBottom:12}, compactArrow:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',backgroundColor:palette.surface,borderRadius:12}, compactArrowText:{fontSize:26,color:palette.midnight},monthWrap:{flexWrap:'wrap'},monthCenter:{flex:1,minWidth:0,flexShrink:1,padding:8,minHeight:44,justifyContent:'center'},monthCaption:{fontSize:16,fontWeight:'600',color:palette.midnight,textAlign:'center'},
+  stacked: { flexDirection: 'column', alignItems: 'stretch' },
+  fullWidth: { width: '100%', flex: 0 },
+  headerCopy: { flexShrink: 1, minWidth: 0 },
   header: { backgroundColor: '#0F172A', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: 'white', fontSize: 31, fontWeight: '900' }, subtitle: { color: '#CBD5E1', fontSize: 16, marginTop: 2 }, syncText: { fontSize: 12, marginTop: 6, fontWeight: '700' }, online: { color: '#86EFAC' }, offline: { color: '#FCA5A5' },
-  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { color: 'white', fontWeight: '900' },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', width: 48, height: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', height: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
+  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { textAlign: 'center', color: 'white', fontWeight: '900' },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', minWidth: 48, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', minHeight: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
-  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
-  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
+  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flexShrink: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { textAlign: 'center', color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { textAlign: 'center', color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
+  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { flexWrap: 'wrap', gap: 8, backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });

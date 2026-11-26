@@ -1,0 +1,7 @@
+# Reviewed false positives only — exact fingerprints, never whole rules or paths.
+# 543381d server/test/config.test.cjs:58-59 — deliberately INVALID 19-character test
+# value used to prove that the server refuses short secrets. Not a credential.
+# The literal was removed from the source in the following commit; the fingerprints
+# remain because published history is never rewritten (no force-push).
+543381df0b01fb75644d61f4923dd17b20ad14e3:server/test/config.test.cjs:generic-api-key:58
+543381df0b01fb75644d61f4923dd17b20ad14e3:server/test/config.test.cjs:generic-api-key:59

@@ -6,10 +6,19 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { openDb, absoluteDbPath } = require('./db');
+const { validateAppSecret, secretsEqual, GENERATE_HINT } = require('./config');
+
+// R-01 : démarrage sécurisé par défaut, sans clé de secours ni dépendance à NODE_ENV.
+const secretCheck = validateAppSecret(process.env.APP_SECRET);
+if (!secretCheck.ok) {
+  // Ne jamais journaliser la valeur du secret.
+  console.error(`[S&S Budget] Démarrage refusé : APP_SECRET ${secretCheck.reason}. Définissez dans server/.env un secret aléatoire d'au moins 32 caractères, par exemple : ${GENERATE_HINT}`);
+  process.exit(1);
+}
 
 const app = express();
 const port = Number(process.env.PORT || 3001);
-const appSecret = process.env.APP_SECRET || '';
+const appSecret = process.env.APP_SECRET;
 const DELETE_WINDOW_DAYS = Number(process.env.DELETE_WINDOW_DAYS || 5);
 const serverRoot = path.join(__dirname, '..');
 const backupsDir = path.join(serverRoot, 'backups');
@@ -18,13 +27,8 @@ const backupsDir = path.join(serverRoot, 'backups');
 const PIN_MAX_ATTEMPTS = Number(process.env.PIN_MAX_ATTEMPTS || 5);
 const PIN_LOCK_MINUTES = Number(process.env.PIN_LOCK_MINUTES || 15);
 const AUTH_TOKEN_TTL_HOURS = Number(process.env.AUTH_TOKEN_TTL_HOURS || 12);
-const DEV_FALLBACK_AUTH_SECRET = 'ss-budget-dev-insecure-secret-changez-moi';
-const authSigningSecret = appSecret && appSecret !== 'change-moi-avec-une-phrase-longue' ? appSecret : DEV_FALLBACK_AUTH_SECRET;
-if (authSigningSecret === DEV_FALLBACK_AUTH_SECRET) {
-  console.warn(
-    "[S&S Budget] APP_SECRET non défini (ou laissé à sa valeur d'exemple) : les jetons de connexion sont signés avec une clé de développement non sécurisée et prévisible. Définissez APP_SECRET dans server/.env avant tout usage réel."
-  );
-}
+// Plus aucune clé de secours : les jetons sont toujours signés avec APP_SECRET validé.
+const authSigningSecret = appSecret;
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json({ limit: '2mb' }));
@@ -274,14 +278,63 @@ async function buildExportPayload() {
   };
 }
 
+// Le secret API est toujours exigé (plus de contournement si APP_SECRET est absent).
 function requireSecret(req, res, next) {
-  if (!appSecret || appSecret === 'change-moi-avec-une-phrase-longue') return next();
   const provided = req.headers['x-ss-budget-secret'];
-  if (provided !== appSecret) return res.status(401).json({ error: 'Secret API invalide.' });
+  if (typeof provided !== 'string' || !secretsEqual(provided, appSecret)) return res.status(401).json({ error: 'Secret API invalide.' });
   next();
 }
 
 app.use('/api', requireSecret);
+
+// Intégrité : le serveur partage UNE seule connexion SQLite. Sans sérialisation, un
+// BEGIN..COMMIT (versements automatiques, journal "tout lu") capture les écritures
+// d'autres requêtes concurrentes, puis peut les annuler par ROLLBACK alors qu'elles
+// ont déjà été acquittées (201). Aucune règle métier n'est modifiée.
+//
+// Le verrou suit la fin RÉELLE du traitement applicatif (promesse du gestionnaire de
+// route, transaction et ROLLBACK compris), jamais la durée de vie de la réponse HTTP :
+// une déconnexion du client ne libère rien. Une requête dont le client s'est
+// déconnecté AVANT son tour n'est pas exécutée (aucune écriture non acquittée).
+// Toute issue (succès, erreur, exception) libère le verrou : pas de blocage permanent.
+let writeChain = Promise.resolve();
+function withWriteLock(task) {
+  const run = writeChain.then(task);
+  writeChain = run.catch(() => {});
+  return run;
+}
+
+// NB : req.destroyed n'est PAS un signal de déconnexion (le flux de requête est
+// auto-détruit dès que express.json a lu le corps). On observe la réponse et la socket.
+function trackClientDisconnect(res) {
+  const state = { gone: false };
+  res.once('close', () => { if (!res.writableEnded) state.gone = true; });
+  return state;
+}
+
+// Dernier gestionnaire d'une route mutante, exécuté sous le verrou d'écriture.
+function underWriteLock(handler) {
+  return (req, res, next) => {
+    const client = trackClientDisconnect(res);
+    withWriteLock(async () => {
+      if (client.gone || (req.socket && req.socket.destroyed)) {
+        console.warn(`[S&S Budget] ${req.method} ${req.path} abandonnée : client déconnecté avant exécution.`);
+        return;
+      }
+      await handler(req, res, next);
+    }).catch(next);
+  };
+}
+
+// Toutes les routes POST/PUT/PATCH/DELETE déclarées après ce point passent par le
+// verrou (y compris celles ajoutées plus tard) : on enveloppe leur dernier gestionnaire.
+for (const method of ['post', 'put', 'patch', 'delete']) {
+  const register = app[method].bind(app);
+  app[method] = (routePath, ...handlers) => {
+    const last = handlers.pop();
+    return register(routePath, ...handlers, underWriteLock(last));
+  };
+}
 
 let db;
 
@@ -312,7 +365,8 @@ async function getState() {
 }
 
 app.get('/api/health', async (req, res) => {
-  res.json({ ok: true, name: 'S&S Budget Server', dbPath: absoluteDbPath, time: new Date().toISOString() });
+  // R-04 : pas de chemin de fichier ni de détail d'infrastructure dans la réponse publique.
+  res.json({ ok: true, name: 'S&S Budget Server', time: new Date().toISOString() });
 });
 
 app.get('/api/state', requireAuth, async (req, res, next) => {
@@ -986,9 +1040,24 @@ app.post('/api/reset', requireAuth, requireAdminRole, async (req, res, next) => 
   } catch (error) { next(error); }
 });
 
+// R-05 : réponses génériques au client, journaux utiles mais sans données sensibles.
+// Ne JAMAIS journaliser l'objet d'erreur entier : pour un JSON invalide, body-parser y
+// attache le corps brut (qui peut contenir un PIN) et le message de JSON.parse en cite
+// un extrait.
 app.use((error, req, res, next) => {
-  console.error(error);
-  res.status(500).json({ error: error.message || 'Erreur serveur.' });
+  if (res.headersSent) return next(error);
+  const where = `${req.method} ${req.path}`;
+  if (error && error.type === 'entity.parse.failed') {
+    console.warn(`[S&S Budget] ${where} : corps JSON invalide (contenu non journalisé).`);
+    return res.status(400).json({ error: 'Requête invalide : JSON mal formé.', code: 'INVALID_JSON' });
+  }
+  if (error && error.type === 'entity.too.large') {
+    console.warn(`[S&S Budget] ${where} : corps trop volumineux.`);
+    return res.status(413).json({ error: 'Requête trop volumineuse.', code: 'PAYLOAD_TOO_LARGE' });
+  }
+  const code = error && error.code ? ` [${error.code}]` : '';
+  console.error(`[S&S Budget] Erreur interne ${where}${code} : ${error && error.stack ? error.stack : String(error)}`);
+  res.status(500).json({ error: 'Erreur interne du serveur. Réessayez plus tard.', code: 'INTERNAL_ERROR' });
 });
 
 openDb()

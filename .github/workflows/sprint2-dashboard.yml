@@ -1,0 +1,29 @@
+name: Sprint 2 — dashboard checks
+on:
+  push:
+    branches: [feat/v3-sprint2-dashboard]
+  pull_request:
+    branches: [feature/duo-budget-v3-glance-first-screen, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/navigation.test.cjs scripts/dashboard.test.cjs scripts/preview.test.cjs
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/check-glance.js
+      - run: npx expo export --platform web --output-dir dist
+      - run: npx expo export --platform web --output-dir dist-preview
+        env:
+          EXPO_PUBLIC_DUO_PREVIEW: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duo-dashboard-qa-lab
+          path: dist-preview
+          retention-days: 7
