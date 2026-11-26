@@ -155,3 +155,7 @@ Toutes ces PR sont encore ouvertes et en brouillon. Aucune fusion de ce lot aujo
 
 ### Collaboration
 ChatGPT pilote la revue indépendante, les critères de sortie et l'intégration ; Claude peut travailler sur des lots isolés, sans concurrence d'écriture. L'automatisation quotidienne doit consulter ce point de pilotage lorsqu'il est accessible, sans présumer sa fusion ni son propre changement de configuration. Aucun nouveau gros chantier ce soir. Le prochain livrable est un GO/NO GO motivé de consolidation, pas un pourcentage de progrès.
+
+
+## Consolidation validée — 26 novembre 2026
+Les arbitrages A-01–A-12 sont approuvés. Voir [décisions](CONSOLIDATION_DECISIONS_2026-11-26.md), [audits consolidés](CONSOLIDATED_AUDITS_2026-11-26.md) et [état actuel](PROJECT_STATUS.md). Cette section prévaut sur les snapshots historiques pour l'état des PR et les priorités, sans changer les dates indicatives ni les règles métier. Priorité P0 : intégration mobile S1/S2 unique, corrections REV-01–08, couverture historique et neutralisation du harnais DEV obsolète. P1 : Figma/S3 sur fixtures, gestion G-A à G-E, qualification cloud séquentielle après autorisations distinctes. S1 non clôturé ; aucun couple externe avant Alpha Cloud qualifiée. Pas de paywall. Pas de fusion backend ni migration implicite. Score officiel 48,96 %, réévaluation sur preuves comparables.
