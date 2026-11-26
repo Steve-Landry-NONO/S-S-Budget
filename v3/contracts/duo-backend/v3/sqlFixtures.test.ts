@@ -66,7 +66,9 @@ test('10 · Enveloppe personnelle : lisible par son titulaire seul', () => {
 test('11 · Opérations futures : contributions attendues selon la répartition convenue (R-B3) ; dépenses prévues non modélisées = état explicite', () => {
   const s = load('future_operations'), e = env(s, 'Courses');
   assert.equal(s.household.expectedContributionsState, 'agreed');
-  assert.deepEqual([v(s.household.expectedContributions), v(s.household.realizedContributions), v(s.household.forecastTreasury)], [E(400), E(300), E(500)]);
+  assert.deepEqual([v(s.household.expectedContributions), v(s.household.realizedContributions)], [E(400), E(300)]);
+  // v3.2 (REV-05) : 500 € = trésorerie + contributions attendues restantes, SANS dépenses prévues → valeur PARTIELLE qualifiée.
+  assert.deepEqual(s.household.forecastTreasury, { state: 'partial', value: E(500), basis: 'contributions_only', missing: ['planned_expenses'] });
   assert.deepEqual(s.household.expectedByMember.map(m => [m.expected, m.realized]).sort(), [[E(200), '0'], [E(200), E(300)]].sort());
   assert.deepEqual(e.forecastBalance, { state: 'not_available', reason: 'planned_expenses_not_modeled' });
 });
@@ -82,7 +84,8 @@ test('13 · 006 révisée seule : aucun montant budgétaire présenté comme dis
   assert.equal(s.household.realTreasury, E(180)); assert.equal(s.household.realizedContributions.state, 'not_available');
 });
 test('Invariant : trésorerie = non affecté + affecté sur chaque fixture du modèle hybride', () => {
-  for (const n of ['partial_funding', 'full_funding', 'real_deficit', 'budget_overrun', 'unassigned_real_reserve', 'carry_positive_negative', 'internal_transfer', 'protected_envelope', 'future_operations', 'cancellation_step2_restored']) {
+  for (const n of ['partial_funding', 'full_funding', 'real_deficit', 'budget_overrun', 'unassigned_real_reserve', 'carry_positive_negative', 'internal_transfer', 'protected_envelope', 'future_operations', 'cancellation_step2_restored',
+                   'protection_lift_pending', 'xaf_large_amounts', 'usd_cents']) {   // v3.2
     const s = load(n); assert.equal(BigInt(s.household.realTreasury), BigInt(v(s.household.unassignedRealFunds)) + BigInt(v(s.household.assignedRealFunds)), n);
     assert.equal(raw(n).household.invariantHolds, true, n);
   }

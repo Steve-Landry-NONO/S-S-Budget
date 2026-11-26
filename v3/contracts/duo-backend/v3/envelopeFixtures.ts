@@ -28,7 +28,7 @@ export function buildEnvelope(r: EnvelopeRow): EnvelopeReadModel {
   if (r.assignedRealFunds < r.target) flags.push('unfunded_target');
   if (real < 0n) flags.push('real_deficit');
   if (remaining < 0n) flags.push('budget_overrun');
-  if (r.protectionState === 'protected') flags.push('protected');
+  if (r.protectionState === 'protected' || r.protectionState === 'lift_pending') flags.push('protected');   // REV-06 : en attente de levée = toujours protégée
   if (r.status === 'archived') flags.push('archived');
   const unfunded = r.target - r.assignedRealFunds;
   return {
@@ -45,7 +45,7 @@ export function buildEnvelope(r: EnvelopeRow): EnvelopeReadModel {
 }
 
 export function buildSnapshot(args: {
-  scope: EnvelopeScope; duoId: Uuid; ownerUserId: Uuid | null; currency: CurrencyCode; rows: EnvelopeRow[];
+  scope: EnvelopeScope; duoId: Uuid; ownerUserId: Uuid | null; viewerUserId?: Uuid; currency: CurrencyCode; rows: EnvelopeRow[];
   unassigned: bigint | null; budgetReserve?: bigint; asOf: string; version: string;
   periodId?: Uuid; periodStartsOn?: string; periodEndsBefore?: string;
 }): EnvelopeListSnapshot {
@@ -58,7 +58,7 @@ export function buildSnapshot(args: {
   const unassigned = args.scope === 'common' ? args.unassigned ?? 0n : 0n;
   const treasury = (realAll.state === 'available' ? BigInt(realAll.value) : 0n) + unassigned;
   return {
-    contractVersion: ENVELOPE_CONTRACT_VERSION,
+    contractVersion: ENVELOPE_CONTRACT_VERSION, integrity: 'ok', viewerUserId: args.viewerUserId ?? args.ownerUserId ?? 'fixture-viewer',
     scope: args.scope, duoId: args.duoId, ownerUserId: args.scope === 'personal' ? args.ownerUserId : null,
     periodId: args.periodId ?? 'fixture-period-2026-12', periodStartsOn: args.periodStartsOn ?? '2026-12-01', periodEndsBefore: args.periodEndsBefore ?? '2027-01-01',
     currency: args.currency, minorDigits: MINOR_DIGITS[args.currency], asOf: args.asOf, version: args.version, syncStatus: 'fresh',

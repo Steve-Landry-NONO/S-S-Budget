@@ -8,11 +8,13 @@
 import { DuoError, MINOR_DIGITS } from './duoBackend.contract.ts';
 import { buildSnapshot, SPRINT3_COMMON_ROWS, SPRINT3_PERSONAL_ROWS } from './envelopeFixtures.ts';
 import type { EnvelopeRow } from './envelopeFixtures.ts';
-import type { EnvelopeListSnapshot, EnvelopeScope } from './envelopeRead.contract.ts';
+import { available } from './envelopeRead.contract.ts';
+import type { EnvelopeListSnapshot, EnvelopeScope, ProtectionState } from './envelopeRead.contract.ts';
 import type {
   DuoBackend, Uuid, Money, CurrencyCode, CommandResult, DuoSnapshot, DuoSummary, MemberView, OperationView,
   PostExpenseCmd, PostContributionCmd, TransferCmd, EditOperationCmd, CancelOperationCmd, CreateDuoCmd,
   CreateInvitationCmd, ProposeSplitCmd, SyncEvent, Warning, InvitationView, Me,
+  ReallocateBudgetCmd, MoveRealFundsCmd, SetEnvelopeProtectionCmd, CurrencyCode as Ccy,
 } from './duoBackend.contract.ts';
 
 export interface MockOptions {
@@ -53,6 +55,10 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
   const commonRows = new Map<Uuid, EnvelopeRow[]>();
   const personalRows = new Map<string, EnvelopeRow[]>();
   let envelopeVersion = 0;
+  const unassigned = new Map<Uuid, bigint>();                 // fonds réels non affectés de l'espace commun (fictif)
+  const unassignedOf = (duoId: Uuid) => unassigned.get(duoId) ?? 0n;
+  const liftRequests = new Map<Uuid, Uuid>();                 // enveloppe → demandeur de la levée (R-B6)
+  const personalSpaces = new Map<Uuid, Uuid>();               // utilisateur → espace personnel (G9)
   const emit = (duoId: Uuid, e: SyncEvent) => listeners.get(duoId)?.forEach(fn => fn(e));
 
   async function gate(method: string, key: string) {
@@ -91,9 +97,10 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
     return v;
   }
 
-  /** Idempotence : même clientOperationId + même charge → même résultat ; charge différente → erreur. */
+  /** Idempotence (REV-02, aligné sur le serveur : portée = duo × AUTEUR AUTHENTIFIÉ × clé) : même clé + même charge → même
+   *  résultat ; charge différente → IDEMPOTENCY_MISMATCH. La même clé utilisée par l'AUTRE membre est une opération distincte. */
   function replay(duoId: Uuid, clientOperationId: Uuid, fingerprint: string): Op | null {
-    const prev = ops.find(o => o.duoId === duoId && o.clientOperationId === clientOperationId);
+    const prev = ops.find(o => o.duoId === duoId && o.authorUserId === me.userId && o.clientOperationId === clientOperationId);
     if (!prev) return null;
     if (prev.fingerprint !== fingerprint) throw new DuoError('IDEMPOTENCY_MISMATCH', 'Idempotency key reused for different operation', { sqlstate: '23505' });
     return prev;
@@ -116,6 +123,18 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
     _switchUser(u: Me) { me = u; },
     _seed: undefined as unknown as MockSeed,
     async me() { return me; },
+    async signOut() { for (const [, set] of listeners) set.forEach(fn => fn({ type: 'session.revoked' })); },
+    async mySpaces() {
+      const duo = [...duos.values()].find(d => d.members.some(m => m.userId === me.userId && m.status === 'active'));
+      return { duoId: duo?.duoId ?? null, personalSpaceId: personalSpaces.get(me.userId) ?? null };
+    },
+    async createPersonalSpace(cmd: { clientOperationId: Uuid; currency: Ccy }) {
+      return commit('createPersonalSpace', cmd.clientOperationId, () => {
+        const existing = personalSpaces.get(me.userId);
+        if (existing) return { data: { personalSpaceId: existing }, warnings: [], replayed: true };
+        const id = uuid(); personalSpaces.set(me.userId, id); return { data: { personalSpaceId: id }, warnings: [], replayed: false };
+      });
+    },
     async listSessions() { return [{ sessionId: 'mock-session', deviceLabel: 'iPhone (démo)', lastActiveAt: stamp(), current: true }]; },
     async revokeSession() { /* sans effet en démo */ },
     async requestAccountDeletion() { return { exportUrl: null, effectiveAt: stamp() }; },
@@ -192,8 +211,9 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
       const privPlanned = mine.filter(o => o.status === 'planned').reduce((a, o) => a + big(o.amount.minor), ZERO);
       return {
         asOf: stamp(), periodId: 'mock-period', periodStartsOn: '2026-12-01', periodEndsBefore: '2027-01-01',
-        real: money(real, c), forecast: money(real + contribPlanned - expPlanned, c),
-        upcomingContributions: money(contribPlanned, c), plannedExpenses: money(expPlanned, c),
+        // Données fictives : l'adaptateur fictif modélise le prévu ; l'adaptateur Supabase renverra `not_available` (REV-07).
+        real: money(real, c), forecast: available(money(real + contribPlanned - expPlanned, c)),
+        upcomingContributions: available(money(contribPlanned, c)), plannedExpenses: available(money(expPlanned, c)),
         contributionsDone: money(contribDone, c), budgetTarget: money(d.budgetTarget, c), reserve: money(reserveOf(d), c),
         fundingGap: money(allocTotal > contribDone ? allocTotal - contribDone : ZERO, c),
         envelopes: [...d.envelopes.entries()].map(([envelopeId, e]) => ({
@@ -210,8 +230,8 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
       const d = duoOf(duoId);
       const rows = scope === 'common' ? (commonRows.get(duoId) ?? []) : (personalRows.get(`${duoId}:${me.userId}`) ?? []);
       // Copie profonde : aucune référence partagée entre espaces ou utilisateurs (ENV-10).
-      return structuredClone(buildSnapshot({ scope, duoId, ownerUserId: scope === 'personal' ? me.userId : null, currency: d.currency,
-        rows, unassigned: scope === 'common' ? 0n : null, budgetReserve: scope === 'common' ? reserveOf(d) : 0n, asOf: stamp(), version: String(envelopeVersion) }));
+      return structuredClone(buildSnapshot({ scope, duoId, ownerUserId: scope === 'personal' ? me.userId : null, viewerUserId: me.userId, currency: d.currency,
+        rows, unassigned: scope === 'common' ? unassignedOf(duoId) : null, budgetReserve: scope === 'common' ? reserveOf(d) : 0n, asOf: stamp(), version: String(envelopeVersion) }));
     },
     async listOperations(duoId, q) {
       duoOf(duoId);
@@ -222,7 +242,7 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
     },
     async getOperationStatus(duoId, clientOperationId) {
       duoOf(duoId);
-      const o = ops.find(x => x.duoId === duoId && x.clientOperationId === clientOperationId && visible(x));
+      const o = ops.find(x => x.duoId === duoId && x.authorUserId === me.userId && x.clientOperationId === clientOperationId);
       return o ? { found: true, operationId: o.operationId, status: o.status, version: o.version } : { found: false };
     },
 
@@ -263,8 +283,9 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
         return { data: { operationId: o.operationId }, warnings: [], replayed: false };
       });
     },
-    async transfer(cmd: TransferCmd) {
-      return commit('transfer', cmd.clientOperationId, () => {
+    async transfer(cmd: TransferCmd) { return api.reallocateBudget(cmd); },
+    async reallocateBudget(cmd: ReallocateBudgetCmd) {
+      return commit('reallocateBudget', cmd.clientOperationId, () => {
         const d = duoOf(cmd.duoId); const amount = requirePositiveMinor(cmd.amountMinor);
         const fromId = cmd.from.kind === 'envelope' ? cmd.from.envelopeId : null;
         const toId = cmd.to.kind === 'envelope' ? cmd.to.envelopeId : null;
@@ -283,6 +304,49 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
           authorUserId: me.userId, payerUserId: null, label: 'Transfert', occurredOn: stamp().slice(0, 10), fingerprint: fp });
         return { data: { operationId: o.operationId }, warnings: [], replayed: false };
       });
+    },
+    async moveRealFunds(cmd: MoveRealFundsCmd) {
+      return commit('moveRealFunds', cmd.clientOperationId, () => {
+        const d = duoOf(cmd.duoId); const amount = requirePositiveMinor(cmd.amountMinor);
+        const fromId = cmd.from.kind === 'envelope' ? cmd.from.envelopeId : null, toId = cmd.to.kind === 'envelope' ? cmd.to.envelopeId : null;
+        const fp = JSON.stringify(['funds_move', fromId, toId, cmd.amountMinor]);
+        const prev = replay(d.duoId, cmd.clientOperationId, fp);
+        if (prev) return { data: { operationId: prev.operationId }, warnings: [], replayed: true };
+        if (fromId === toId) throw new DuoError('VALIDATION', 'Source et destination identiques', { sqlstate: '22023' });
+        const rows = commonRows.get(d.duoId) ?? [];
+        const row = (id: Uuid) => { const r = rows.find(x => x.envelopeId === id); if (!r) throw new DuoError('NOT_FOUND', 'Enveloppe introuvable', { sqlstate: '23503' }); return r; };
+        const src = fromId ? row(fromId) : null, dst = toId ? row(toId) : null;
+        if (src && (src.protectionState ?? 'none') !== 'none') throw new DuoError('ENVELOPE_PROTECTED', 'Enveloppe protégée (R-B6)', { sqlstate: '23514' });
+        const srcReal = src ? (src.realCarryOver ?? 0n) + src.assignedRealFunds - src.realizedExpenses : unassignedOf(d.duoId);
+        if (srcReal < amount) throw new DuoError('INSUFFICIENT_REAL_FUNDS', 'Fonds réels insuffisants', { sqlstate: '23514' });
+        if (src) src.assignedRealFunds -= amount; else unassigned.set(d.duoId, unassignedOf(d.duoId) - amount);
+        if (dst) dst.assignedRealFunds += amount; else unassigned.set(d.duoId, unassignedOf(d.duoId) + amount);
+        envelopeVersion += 1;
+        const o = addOp(d, { clientOperationId: cmd.clientOperationId, kind: 'funds_move', status: 'done', visibility: 'shared',
+          amount: money(amount, d.currency), envelopeId: toId, fromEnvelopeId: fromId, toEnvelopeId: toId,
+          authorUserId: me.userId, payerUserId: null, label: 'Mouvement de fonds réels', occurredOn: stamp().slice(0, 10), fingerprint: fp });
+        return { data: { operationId: o.operationId }, warnings: [], replayed: false };
+      });
+    },
+    async setEnvelopeProtection(cmd: SetEnvelopeProtectionCmd) {
+      return commit('setEnvelopeProtection', cmd.envelopeId + String(cmd.protected), () => {
+        const d = duoOf(cmd.duoId); const r = (commonRows.get(d.duoId) ?? []).find(x => x.envelopeId === cmd.envelopeId);
+        if (!r) throw new DuoError('NOT_FOUND', 'Enveloppe introuvable', { sqlstate: '23503' });
+        const cur: ProtectionState = r.protectionState ?? 'none'; let next: ProtectionState = cur;
+        if (cmd.protected) { next = 'protected'; liftRequests.delete(r.envelopeId); }                       // protéger : immédiat
+        else if (cur === 'protected') { next = 'lift_pending'; liftRequests.set(r.envelopeId, me.userId); }  // demande de levée
+        else if (cur === 'lift_pending') {
+          if (liftRequests.get(r.envelopeId) !== me.userId) { next = 'none'; liftRequests.delete(r.envelopeId); } // second accord
+        }
+        r.protectionState = next; envelopeVersion += 1;
+        emit(d.duoId, { type: 'snapshot.stale', duoId: d.duoId, reason: 'allocation' });
+        return { data: { protectionState: next }, warnings: [], replayed: false };
+      });
+    },
+    async getContributionReleasePlan(duoId: Uuid, operationId: Uuid) {
+      duoOf(duoId);
+      if (!ops.some(o => o.duoId === duoId && o.operationId === operationId && o.kind === 'contribution')) throw new DuoError('NOT_FOUND', 'Opération introuvable');
+      return { operationId, cancellable: true, items: [] };
     },
     async editOperation(cmd: EditOperationCmd) {
       return commit('editOperation', cmd.clientOperationId, () => {
@@ -349,6 +413,7 @@ export function createMockBackend(currentUser: Me, opts: MockOptions = {}): DuoB
       if (scope === 'common') commonRows.set(duoId, rows); else personalRows.set(`${duoId}:${owner}`, rows);
       envelopeVersion += 1;
     },
+    unassignedFunds(duoId, minor) { unassigned.set(duoId, BigInt(minor)); envelopeVersion += 1; },
     reserve(duoId, minor) {
       const d = duos.get(duoId)!;
       addOp(d, { clientOperationId: null, kind: 'carry', status: 'done', visibility: 'shared', amount: money(BigInt(minor), d.currency),
@@ -364,6 +429,8 @@ export interface MockSeed {
   target(duoId: Uuid, minor: string): void;
   archive(duoId: Uuid, envelopeId: Uuid): void;
   reserve(duoId: Uuid, minor: string): void;
+  /** Fonds réels non affectés de l'espace commun (fictif). */
+  unassignedFunds(duoId: Uuid, minor: string): void;
   /** Charge les fixtures de la PR #17 ; `personalOwner` reçoit l'exemple personnel « Lecture ». */
   sprint3(duoId: Uuid, personalOwner?: Uuid): void;
   envelopeRows(duoId: Uuid, scope: EnvelopeScope, owner: Uuid | null, rows: EnvelopeRow[]): void;

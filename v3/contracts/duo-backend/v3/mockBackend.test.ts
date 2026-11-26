@@ -22,7 +22,7 @@ test('BAL1–BAL3 : cinq notions de solde, l’objectif n’entre jamais dans le
   const { be, duoId } = await duoAToB();
   be._seed.target(duoId, '200000');
   let s = await be.getDuoSnapshot(duoId);
-  assert.deepEqual([s.real.minor, s.forecast.minor, s.budgetTarget.minor], ['0', '0', '200000']);          // BAL1
+  assert.deepEqual([s.real.minor, s.forecast.state === 'available' && s.forecast.value.minor, s.budgetTarget.minor], ['0', '0', '200000']);   // BAL1
   await be.postContribution({ clientOperationId: id(), duoId, amountMinor: '100000', status: 'done', occurredOn: '2026-12-01' });
   be._switchUser(alex);
   await be.postContribution({ clientOperationId: id(), duoId, amountMinor: '100000', status: 'planned', occurredOn: '2026-12-05' });
@@ -30,7 +30,9 @@ test('BAL1–BAL3 : cinq notions de solde, l’objectif n’entre jamais dans le
   const loyer = be._seed.envelope(duoId, 'Maison', '90000');
   await be.postExpense({ clientOperationId: id(), duoId, visibility: 'shared', envelopeId: loyer, amountMinor: '90000', status: 'planned', occurredOn: '2026-12-03', label: 'Loyer' });
   s = await be.getDuoSnapshot(duoId);
-  assert.deepEqual([s.real.minor, s.forecast.minor], ['100000', '110000']);                                // BAL2 : 1 000 + 1 000 − 900
+  // v3.2 (REV-07) : le prévisionnel est une capacité ; l'adaptateur fictif la fournit (`available`), le serveur actuel non.
+  assert.equal(s.forecast.state, 'available');
+  assert.deepEqual([s.real.minor, s.forecast.state === 'available' && s.forecast.value.minor], ['100000', '110000']);   // BAL2 : 1 000 + 1 000 − 900
 });
 
 test('Idempotence : rejeu identique = même opération ; charge modifiée = IDEMPOTENCY_MISMATCH', async () => {

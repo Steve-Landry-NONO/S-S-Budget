@@ -15,7 +15,7 @@
 //  * Toute lecture de soldes passe par UN appel (`getDuoSnapshot`) : un seul instantané serveur
 //    (qualification C04 : deux lectures successives peuvent se contredire).
 
-import type { EnvelopeListSnapshot, EnvelopeScope } from './envelopeRead.contract.ts';
+import type { Capability, EnvelopeListSnapshot, EnvelopeScope, ProtectionState } from './envelopeRead.contract.ts';
 
 export type Uuid = string;
 export type MinorUnits = string;            // /^-?(0|[1-9][0-9]*)$/
@@ -67,9 +67,12 @@ export interface EnvelopeBalance {
 export interface DuoSnapshot {
   asOf: IsoDateTime; periodId: Uuid; periodStartsOn: IsoDate; periodEndsBefore: IsoDate;
   real: Money;                    // versements réalisés − dépenses réalisées (seul argent disponible)
-  forecast: Money;                // réel + versements à venir − dépenses programmées ; jamais l'objectif
-  upcomingContributions: Money;   // planned
-  plannedExpenses: Money;         // planned
+  /** REV-07 : prévisions explicitement disponibles, partielles ou indisponibles. Le serveur (006r1 → fonds réels) ne modélise
+   *  pas les opérations programmées (R-B2, lot G-E) : l'adaptateur Supabase renvoie `not_available('planned_expenses_not_modeled')`,
+   *  jamais un zéro. Jamais l'objectif. */
+  forecast: Capability<Money>;
+  upcomingContributions: Capability<Money>;
+  plannedExpenses: Capability<Money>;
   contributionsDone: Money;       // sur la période
   budgetTarget: Money;            // objectif de versements par cycle : ni dette ni argent
   reserve: Money;                 // réserve BUDGÉTAIRE commune (D-014) ; ≠ fonds réels non affectés (HouseholdFundsView.unassignedRealFunds)
@@ -81,7 +84,8 @@ export interface DuoSnapshot {
 }
 
 // ---------------------------------------------------------------- opérations et journal
-export type OperationKind = 'expense' | 'contribution' | 'transfer' | 'carry' | 'allocation' | 'reversal';
+/** 'transfer' = réallocation BUDGÉTAIRE (duo_v3_post_transfer) ; 'funds_move' = mouvement de FONDS RÉELS (duo_v3_move_funds). G6. */
+export type OperationKind = 'expense' | 'contribution' | 'transfer' | 'funds_move' | 'carry' | 'allocation' | 'reversal';
 export type OperationStatus = 'planned' | 'done' | 'cancelled';
 export interface OperationView {
   operationId: Uuid; clientOperationId: Uuid | null; kind: OperationKind; status: OperationStatus;
@@ -107,11 +111,32 @@ export interface PostExpenseCmd extends CommandBase {
   status: 'planned' | 'done'; occurredOn: IsoDate; label: string; payerUserId?: Uuid;
   acknowledgeOverspend?: boolean;          // D-016 : avertissement non bloquant, confirmé par l'utilisateur
 }
-export interface PostContributionCmd extends CommandBase { duoId: Uuid; amountMinor: MinorUnits; status: 'planned' | 'done'; occurredOn: IsoDate }
-export interface TransferCmd extends CommandBase {
+export interface PostContributionCmd extends CommandBase {
+  duoId: Uuid; amountMinor: MinorUnits; status: 'planned' | 'done'; occurredOn: IsoDate;
+  /** G7 (duo_v3_post_contribution_assigned) : affectation immédiate de tout ou partie à des enveloppes ; le reste est non affecté. */
+  assignments?: Array<{ envelopeId: Uuid; amountMinor: MinorUnits }>;
+}
+/** G6 — Réallocation BUDGÉTAIRE entre réserve budgétaire et enveloppes (duo_v3_post_transfer). Ne déplace AUCUN argent réel. */
+export interface ReallocateBudgetCmd extends CommandBase {
   duoId: Uuid; from: { kind: 'reserve' } | { kind: 'envelope'; envelopeId: Uuid };
   to: { kind: 'reserve' } | { kind: 'envelope'; envelopeId: Uuid }; amountMinor: MinorUnits;
 }
+/** @deprecated Ambigu (G6) : utiliser `reallocateBudget` (budget) ou `moveRealFunds` (argent réel). */
+export type TransferCmd = ReallocateBudgetCmd;
+/** G6 — Mouvement de FONDS RÉELS (duo_v3_move_funds) : non affectés ↔ enveloppe, ou enveloppe → enveloppe. Ne change pas la trésorerie. */
+export interface MoveRealFundsCmd extends CommandBase {
+  duoId: Uuid; from: { kind: 'unassigned' } | { kind: 'envelope'; envelopeId: Uuid };
+  to: { kind: 'unassigned' } | { kind: 'envelope'; envelopeId: Uuid }; amountMinor: MinorUnits;
+}
+/** G7 — Protection (R-B6) : protéger = immédiat ; lever = double accord (le demandeur ne s'approuve pas). */
+export interface SetEnvelopeProtectionCmd { duoId: Uuid; envelopeId: Uuid; protected: boolean }
+/** G7 — Plan de libération avant annulation d'une contribution affectée (R-B5, duo_v3_contribution_release_plan). */
+export interface ContributionReleasePlan {
+  operationId: Uuid; cancellable: boolean;
+  items: Array<{ account: 'unassigned' | 'envelope'; envelopeId: Uuid | null; required: MinorUnits; available: MinorUnits; toRelease: MinorUnits; protected: boolean }>;
+}
+/** G9 — Espaces de l'utilisateur authentifié, résolus par le serveur (jamais saisis ni devinés par l'écran). */
+export interface MySpaces { duoId: Uuid | null; personalSpaceId: Uuid | null }
 export interface EditOperationCmd extends CommandBase { duoId: Uuid; operationId: Uuid; expectedVersion: number; changes: Partial<Pick<PostExpenseCmd, 'amountMinor' | 'envelopeId' | 'status' | 'occurredOn' | 'label'>> }
 export interface CancelOperationCmd extends CommandBase { duoId: Uuid; operationId: Uuid; expectedVersion: number }
 export interface ProposeSplitCmd extends CommandBase { duoId: Uuid; shares: Array<{ userId: Uuid; basisPoints: number }> } // 10000 = 100 %
@@ -134,7 +159,9 @@ export type DuoErrorCode =
   | 'REQUEST_ALREADY_PENDING' | 'RATE_LIMITED' | 'NETWORK' | 'UNKNOWN_OUTCOME' | 'SERVER'
   // v3 (26/11) : refus métier signalés par un indice SQL explicite (hint), jamais déduits du message
   | 'INSUFFICIENT_REAL_FUNDS' | 'RELEASE_FUNDS_FIRST' | 'ENVELOPE_PROTECTED' | 'SECOND_MEMBER_REQUIRED'
-  | 'ADMIN_CATCH_UP_REQUIRED' | 'HOUSEHOLD_ARCHIVED' | 'PERSONAL_SPACE';
+  | 'ADMIN_CATCH_UP_REQUIRED' | 'HOUSEHOLD_ARCHIVED' | 'PERSONAL_SPACE'
+  // v3.2 (26/11) : réponse serveur non conforme au contrat (validation d'exécution) ; espace sans période ouverte
+  | 'CONTRACT_VIOLATION' | 'SPACE_NOT_INITIALIZED';
 
 export class DuoError extends Error {
   readonly code: DuoErrorCode; readonly retryable: boolean; readonly sqlstate: string | null;
@@ -145,6 +172,24 @@ export class DuoError extends Error {
   }
 }
 
+/** Messages PUBLICS stables par code. Le message brut du serveur (noms de tables, contraintes, valeurs) n'est jamais exposé. */
+export const PUBLIC_MESSAGES: Readonly<Record<DuoErrorCode, string>> = Object.freeze({
+  UNAUTHENTICATED: 'Connexion requise.', SESSION_EXPIRED: 'Session expirée : reconnectez-vous.', FORBIDDEN: 'Accès non autorisé à cet espace.',
+  NOT_FOUND: 'Élément introuvable.', VALIDATION: 'Saisie invalide.', IDEMPOTENCY_MISMATCH: 'Opération déjà envoyée avec un contenu différent.',
+  VERSION_CONFLICT: 'Modifiée entre-temps : rechargez avant de réessayer.', DUO_FULL: 'Le duo compte déjà deux membres.',
+  ALREADY_MEMBER: 'Vous êtes déjà membre de ce duo.', ALREADY_IN_ANOTHER_DUO: 'Vous êtes déjà membre d\'un autre duo.',
+  INVITATION_INVALID: 'Invitation invalide ou expirée.', INSUFFICIENT_FUNDS: 'Montant supérieur au solde de la source.',
+  ENVELOPE_ARCHIVED: 'Enveloppe archivée : choisissez une enveloppe active.', PERIOD_CLOSED: 'Période clôturée.',
+  CURRENCY_MISMATCH: 'Devise incompatible avec cet espace.', REQUEST_ALREADY_PENDING: 'Une demande est déjà en attente.',
+  RATE_LIMITED: 'Trop de demandes : réessayez dans un instant.', NETWORK: 'Réseau indisponible.', UNKNOWN_OUTCOME: 'Résultat inconnu : vérification en cours.',
+  SERVER: 'Erreur serveur.', INSUFFICIENT_REAL_FUNDS: 'Fonds réels insuffisants.', RELEASE_FUNDS_FIRST: 'Libérez d\'abord les fonds affectés.',
+  ENVELOPE_PROTECTED: 'Enveloppe protégée : accord des deux membres requis.', SECOND_MEMBER_REQUIRED: 'Votre partenaire doit accepter.',
+  ADMIN_CATCH_UP_REQUIRED: 'Rattrapage administratif requis.', HOUSEHOLD_ARCHIVED: 'Duo archivé.', PERSONAL_SPACE: 'Un espace personnel ne se partage pas.',
+  CONTRACT_VIOLATION: 'Réponse serveur inattendue.', SPACE_NOT_INITIALIZED: 'Espace non initialisé.',
+});
+export const publicError = (code: DuoErrorCode, sqlstate: string | null = null, retryable?: boolean) =>
+  new DuoError(code, PUBLIC_MESSAGES[code], { sqlstate, retryable });
+
 /** Correspondance SQLSTATE → code métier, telle que les RPC 001-005 et le prototype lot 3 la produisent.
  *  Les RPC définitives devraient lever `using detail = '<CODE>'` pour lever toute ambiguïté (23514, 23503). */
 const HINTS: Record<string, DuoErrorCode> = {
@@ -152,23 +197,23 @@ const HINTS: Record<string, DuoErrorCode> = {
   second_member_required: 'SECOND_MEMBER_REQUIRED', admin_catch_up_required: 'ADMIN_CATCH_UP_REQUIRED', choose_active_envelope: 'ENVELOPE_ARCHIVED',
 };
 export function errorFromPostgrest(e: { code?: string; message?: string; details?: string | null; hint?: string | null }): DuoError {
-  const msg = e.message ?? 'Erreur serveur';
+  // Le message brut ne sert qu'à départager quelques SQLSTATE ambigus ; il n'est JAMAIS recopié dans l'erreur exposée.
+  const raw = e.message ?? '', code = e.code ?? null;
   const hinted = HINTS[(e.hint ?? '').trim()];
-  if (hinted) return new DuoError(hinted, msg, { sqlstate: e.code ?? null });
+  if (hinted) return publicError(hinted, code);
   const rawDetail = (e.details ?? '').trim();
-  if (rawDetail === 'PERSONAL_SPACE' || rawDetail === 'HOUSEHOLD_ARCHIVED') return new DuoError(rawDetail, msg, { sqlstate: e.code ?? null });
-  const detail = rawDetail as DuoErrorCode;
+  if (rawDetail === 'PERSONAL_SPACE' || rawDetail === 'HOUSEHOLD_ARCHIVED') return publicError(rawDetail, code);
   const known: DuoErrorCode[] = ['DUO_FULL', 'INSUFFICIENT_FUNDS', 'ENVELOPE_ARCHIVED', 'PERIOD_CLOSED', 'VERSION_CONFLICT', 'REQUEST_ALREADY_PENDING', 'ALREADY_IN_ANOTHER_DUO'];
-  if (known.includes(detail)) return new DuoError(detail, msg, { sqlstate: e.code ?? null });
+  if ((known as string[]).includes(rawDetail)) return publicError(rawDetail as DuoErrorCode, code);
   switch (e.code) {
-    case '42501': return new DuoError(/authentication required/i.test(msg) ? 'UNAUTHENTICATED' : 'FORBIDDEN', msg, { sqlstate: e.code });
-    case 'PGRST301': case 'PGRST303': return new DuoError('SESSION_EXPIRED', msg, { sqlstate: e.code });
-    case '22023': return new DuoError('VALIDATION', msg, { sqlstate: e.code });
-    case '23505': return new DuoError(/already a member/i.test(msg) ? 'ALREADY_MEMBER' : 'IDEMPOTENCY_MISMATCH', msg, { sqlstate: e.code });
-    case '23503': return new DuoError('NOT_FOUND', msg, { sqlstate: e.code });
-    case '23514': return new DuoError(/full/i.test(msg) ? 'DUO_FULL' : 'VALIDATION', msg, { sqlstate: e.code });
-    case 'P0002': return new DuoError('INVITATION_INVALID', msg, { sqlstate: e.code });
-    default: return new DuoError('SERVER', msg, { sqlstate: e.code ?? null });
+    case '42501': return publicError(/authentication required/i.test(raw) ? 'UNAUTHENTICATED' : 'FORBIDDEN', code);
+    case 'PGRST301': case 'PGRST303': return publicError('SESSION_EXPIRED', code);
+    case '22023': return publicError('VALIDATION', code);
+    case '23505': return publicError(/already a member/i.test(raw) ? 'ALREADY_MEMBER' : 'IDEMPOTENCY_MISMATCH', code);
+    case '23503': return publicError('NOT_FOUND', code);
+    case '23514': return publicError(/full/i.test(raw) ? 'DUO_FULL' : 'VALIDATION', code);
+    case 'P0002': return publicError('INVITATION_INVALID', code);
+    default: return publicError('SERVER', code);
   }
 }
 
@@ -206,6 +251,12 @@ export type OperationStatusLookup = { found: false } | { found: true; operationI
 export interface DuoBackend {
   // session (Supabase Auth côté adaptateur réel)
   me(): Promise<Me>;
+  /** Déconnexion : l'adaptateur émet `session.revoked` ; le client purge TOUT cache local (REV-04). */
+  signOut(): Promise<void>;
+  /** G9 : espaces de l'utilisateur authentifié (duo actif, espace personnel), résolus côté serveur. */
+  mySpaces(): Promise<MySpaces>;
+  /** G9 (duo_v3_create_personal_space) : idempotent ; renvoie l'espace existant le cas échéant. */
+  createPersonalSpace(cmd: { clientOperationId: Uuid; currency: CurrencyCode }): Promise<CommandResult<{ personalSpaceId: Uuid }>>;
   listSessions(): Promise<Array<{ sessionId: Uuid; deviceLabel: string; lastActiveAt: IsoDateTime; current: boolean }>>;
   revokeSession(sessionId: Uuid): Promise<void>;        // réauthentification récente exigée (R4)
   requestAccountDeletion(): Promise<{ exportUrl: string | null; effectiveAt: IsoDateTime }>; // R5, D-006 à trancher
@@ -222,7 +273,8 @@ export interface DuoBackend {
 
   // lectures
   getDuoSnapshot(duoId: Uuid): Promise<DuoSnapshot>;
-  /** Sprint 3 : instantané des enveloppes d'un espace (commun ou personnel), en une seule lecture serveur. */
+  /** Sprint 3 : instantané des enveloppes d'un espace (commun ou personnel), en une seule lecture serveur.
+   *  'personal' : l'adaptateur lit l'espace personnel DE LA SESSION (`mySpaces().personalSpaceId`), jamais un identifiant fourni par l'écran. */
   getEnvelopeSnapshot(duoId: Uuid, scope: EnvelopeScope): Promise<EnvelopeListSnapshot>;
   listOperations(duoId: Uuid, q: { cursor?: string; limit?: number; envelopeId?: Uuid; includeCancelled?: boolean }): Promise<Page<OperationView>>;
   getOperationStatus(duoId: Uuid, clientOperationId: Uuid): Promise<OperationStatusLookup>;
@@ -230,7 +282,15 @@ export interface DuoBackend {
   // commandes financières
   postExpense(cmd: PostExpenseCmd): Promise<CommandResult>;
   postContribution(cmd: PostContributionCmd): Promise<CommandResult>;
+  /** G6 : réallocation BUDGÉTAIRE (aucun argent réel ne bouge). */
+  reallocateBudget(cmd: ReallocateBudgetCmd): Promise<CommandResult>;
+  /** @deprecated G6 : alias de `reallocateBudget`, conservé pour les écrans existants. */
   transfer(cmd: TransferCmd): Promise<CommandResult>;
+  /** G6/G7 : mouvement de FONDS RÉELS (protection et fonds insuffisants refusés côté serveur). */
+  moveRealFunds(cmd: MoveRealFundsCmd): Promise<CommandResult>;
+  /** G7 : renvoie l'état de protection RÉSULTANT ('lift_pending' tant que le second membre n'a pas accepté). */
+  setEnvelopeProtection(cmd: SetEnvelopeProtectionCmd): Promise<CommandResult<{ protectionState: ProtectionState }>>;
+  getContributionReleasePlan(duoId: Uuid, operationId: Uuid): Promise<ContributionReleasePlan>;
   editOperation(cmd: EditOperationCmd): Promise<CommandResult<{ operationId: Uuid; version: number }>>;
   cancelOperation(cmd: CancelOperationCmd): Promise<CommandResult<{ operationId: Uuid; version: number }>>;
   restoreOperation(cmd: CancelOperationCmd): Promise<CommandResult<{ operationId: Uuid; version: number }>>;

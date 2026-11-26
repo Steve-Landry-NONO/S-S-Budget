@@ -1,1 +1,1 @@
-{ "type": "module", "private": true, "scripts": { "test": "node --test mockBackend.test.ts envelopeRead.test.ts sqlFixtures.test.ts errors.test.ts" } }
+{ "type": "module", "private": true, "scripts": { "test": "node --test mockBackend.test.ts envelopeRead.test.ts sqlFixtures.test.ts errors.test.ts hardening.test.ts" } }

@@ -16,7 +16,7 @@
 //    partenaire. Le serveur filtre ; clé de cache distincte par (duo, espace, utilisateur).
 import type { CurrencyCode, IsoDate, IsoDateTime, MinorUnits, Uuid } from './duoBackend.contract.ts';
 
-export const ENVELOPE_CONTRACT_VERSION = '3.1.0-candidate';
+export const ENVELOPE_CONTRACT_VERSION = '3.2.0-candidate';
 export type EnvelopeScope = 'common' | 'personal';
 export type SyncStatus = 'fresh' | 'stale' | 'offline_cache';
 
@@ -26,13 +26,20 @@ export type NotAvailableReason =
   | 'funds_not_activated'        // modèle hybride présent, duo non encore activé
   | 'planned_expenses_not_modeled'
   | 'protection_not_modeled'
-  | 'not_in_source';              // la réponse de la source ne contient pas cette notion
-/** Notion fournie, non fournie (avec raison), ou non déclarée par les membres. */
+  | 'not_in_source'               // la réponse de la source ne contient pas cette notion
+  | 'integrity_incident';         // REV-03 : invariant comptable rompu côté serveur ; aucun montant réel n'est affiché
+/** Composantes manquantes d'une valeur partielle (REV-05). */
+export type MissingComponent = 'planned_expenses' | 'planned_contributions';
+/** Base de calcul d'une valeur partielle : 'contributions_only' = trésorerie + contributions attendues restantes, SANS dépenses prévues. */
+export type PartialBasis = 'contributions_only';
+/** Notion fournie, fournie PARTIELLEMENT (base explicite, composantes manquantes), non fournie (avec raison), ou non déclarée. */
 export type Capability<T> =
   | { state: 'available'; value: T }
+  | { state: 'partial'; value: T; basis: PartialBasis; missing: MissingComponent[] }
   | { state: 'not_available'; reason: NotAvailableReason }
   | { state: 'not_declared' };
 export const available = <T>(value: T): Capability<T> => ({ state: 'available', value });
+export const partial = <T>(value: T, basis: PartialBasis, missing: MissingComponent[]): Capability<T> => ({ state: 'partial', value, basis, missing });
 export const notAvailable = <T>(reason: NotAvailableReason): Capability<T> => ({ state: 'not_available', reason });
 
 /** 'lift_pending' : levée demandée, en attente du second accord (R-B6) ; les fonds restent protégés. */
@@ -96,6 +103,12 @@ export interface HouseholdFundsView {
 
 export interface EnvelopeListSnapshot {
   contractVersion: typeof ENVELOPE_CONTRACT_VERSION;
+  /** REV-03 : 'incident' si le serveur signale un invariant rompu (trésorerie ≠ fonds affectés + non affectés). La répartition
+   *  des fonds réels (affectés, non affectés, disponibles, protégés) est alors `not_available('integrity_incident')` ; la trésorerie
+   *  (compte de caisse) et les montants budgétaires restent lisibles ; l'écran affiche un incident, jamais des fonds supposés justes. */
+  integrity: 'ok' | 'incident';
+  /** Utilisateur authentifié pour lequel l'instantané a été lu (session), jamais fourni par l'écran. */
+  viewerUserId: Uuid;
   scope: EnvelopeScope; duoId: Uuid;
   ownerUserId: Uuid | null;                     // personnel : utilisateur authentifié ; commun : null
   periodId: Uuid; periodStartsOn: IsoDate; periodEndsBefore: IsoDate;
@@ -109,21 +122,57 @@ export interface EnvelopeListSnapshot {
 }
 
 /** Montant mis en avant sur une carte (ENV-UX-03) : toujours « Disponible réel » ; jamais un montant budgétaire en repli. */
-export function primaryAmount(e: EnvelopeReadModel): { label: 'Disponible réel'; amount: MinorUnits | null; unavailable: NotAvailableReason | 'not_declared' | null } {
+export function primaryAmount(e: EnvelopeReadModel): { label: 'Disponible réel'; amount: MinorUnits | null; unavailable: NotAvailableReason | 'not_declared' | 'partial' | null } {
   const r = e.realAvailable;
   if (r.state === 'available') return { label: 'Disponible réel', amount: r.value, unavailable: null };
-  return { label: 'Disponible réel', amount: null, unavailable: r.state === 'not_available' ? r.reason : 'not_declared' };
+  return { label: 'Disponible réel', amount: null, unavailable: r.state === 'not_available' ? r.reason : r.state === 'partial' ? 'partial' : 'not_declared' };
 }
 
-export function envelopeCacheKey(s: Pick<EnvelopeListSnapshot, 'duoId' | 'scope'>, viewerUserId: Uuid): string {
-  return `envelopes:v3:${s.duoId}:${s.scope}:${s.scope === 'personal' ? viewerUserId : 'common'}`;
+/** REV-04 : clé de cache = (utilisateur authentifié, duo, espace, période). L'utilisateur figure TOUJOURS dans la clé, y compris
+ *  pour l'espace commun : un changement de compte sur le même appareil ne relit jamais le cache d'un autre compte. */
+export function envelopeCacheKey(s: Pick<EnvelopeListSnapshot, 'duoId' | 'scope' | 'periodId'>, viewerUserId: Uuid): string {
+  if (!viewerUserId) throw new Error('envelopeCacheKey : utilisateur authentifié requis');
+  return `envelopes:v3:${viewerUserId}:${s.duoId}:${s.scope}:${s.periodId}`;
 }
 
-/** Somme de capacités : disponible seulement si toutes le sont. */
+/** Cache client des instantanés (REV-04). Isolation par clé ; purge à la déconnexion et à la révocation ; un évènement
+ *  « snapshot.stale » marque les entrées du duo comme à revalider (affichées `stale`, jamais `fresh`). */
+export class EnvelopeCache {
+  private readonly entries = new Map<string, { snapshot: EnvelopeListSnapshot; stale: boolean }>();
+  put(s: EnvelopeListSnapshot): void {
+    if (s.integrity !== 'ok') return;                               // un instantané en incident n'est jamais mis en cache
+    this.entries.set(envelopeCacheKey(s, s.viewerUserId), { snapshot: structuredClone(s), stale: false });
+  }
+  get(viewerUserId: Uuid, duoId: Uuid, scope: EnvelopeScope, periodId: Uuid): EnvelopeListSnapshot | null {
+    const e = this.entries.get(envelopeCacheKey({ duoId, scope, periodId }, viewerUserId)); if (!e) return null;
+    const copy = structuredClone(e.snapshot); copy.syncStatus = e.stale ? 'stale' : 'offline_cache'; return copy;
+  }
+  /** Revalidation : toutes les entrées du duo (tous espaces, toutes périodes) deviennent `stale`. */
+  invalidateDuo(duoId: Uuid): void { for (const [, e] of this.entries) if (e.snapshot.duoId === duoId) e.stale = true; }
+  /** Départ ou révocation d'appartenance : suppression des entrées de CET utilisateur pour ce duo. */
+  purgeMembership(viewerUserId: Uuid, duoId: Uuid): void {
+    for (const [k, e] of this.entries) if (e.snapshot.viewerUserId === viewerUserId && e.snapshot.duoId === duoId) this.entries.delete(k);
+  }
+  /** Déconnexion, suppression de compte, session révoquée : purge totale. */
+  purgeAll(): void { this.entries.clear(); }
+  get size(): number { return this.entries.size; }
+  /** Branchement sur `DuoBackend.subscribe` (événements sans montant). */
+  onSyncEvent(viewerUserId: Uuid, e: { type: string; duoId?: Uuid; userId?: Uuid; status?: string }): void {
+    if (e.type === 'session.revoked') return this.purgeAll();
+    if (e.type === 'member.changed' && e.status === 'left' && e.userId === viewerUserId && e.duoId) return this.purgeMembership(viewerUserId, e.duoId);
+    if ((e.type === 'snapshot.stale' || e.type === 'operation.changed' || e.type === 'member.changed') && e.duoId) this.invalidateDuo(e.duoId);
+  }
+}
+
+/** Somme de capacités : disponible si toutes le sont ; partielle si au moins une est partielle (et aucune absente) ; sinon la première absence. */
 export function sumCapabilities(xs: Capability<MinorUnits>[]): Capability<MinorUnits> {
-  let t = 0n;
-  for (const x of xs) { if (x.state !== 'available') return x; t += BigInt(x.value); }
-  return available(t.toString());
+  let t = 0n; let part: Extract<Capability<MinorUnits>, { state: 'partial' }> | null = null;
+  for (const x of xs) {
+    if (x.state === 'not_available' || x.state === 'not_declared') return x;
+    if (x.state === 'partial') part = part ?? x;
+    t += BigInt(x.value);
+  }
+  return part ? partial(t.toString(), part.basis, part.missing) : available(t.toString());
 }
 
 /** Identités de définition (tests et recette uniquement ; l'application affiche les valeurs reçues). */
