@@ -1,0 +1,48 @@
+{
+ "asOf": "2026-11-26T16:36:18.699327+01:00",
+ "currency": "XAF",
+ "envelopes": [
+  {
+   "assignedRealFunds": "9007199254740993",
+   "assignedRealFundsCumulative": "9007199254740993",
+   "budgetAllocation": "150000",
+   "budgetBalance": "0",
+   "carryOver": "0",
+   "envelopeId": "be7e10e8-2f39-4bb5-b91e-7b0ed8ba0faa",
+   "flags": [],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Loyer",
+   "protectionState": "none",
+   "realAvailable": "9007199254590993",
+   "realCarryOver": "0",
+   "realizedExpenses": "150000",
+   "remainingBudget": "0",
+   "status": "active",
+   "target": "150000",
+   "unfundedTarget": "0"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "9007199254590993",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "18014398509331987",
+  "realizedContributions": "18014398509481987",
+  "unassignedRealFunds": "9007199254740994"
+ },
+ "householdId": "8541e744-2aa5-43a5-9527-2548dc64373e",
+ "ledgerVersion": "3",
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "971f78cf-d9ab-41db-98ce-85f8f75af365",
+  "startsOn": "2026-11-01"
+ },
+ "scope": "common"
+}

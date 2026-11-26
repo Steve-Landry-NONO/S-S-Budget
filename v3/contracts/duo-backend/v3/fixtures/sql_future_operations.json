@@ -1,5 +1,5 @@
 {
- "asOf": "2026-11-26T10:47:59.719796+01:00",
+ "asOf": "2026-11-26T16:36:18.033803+01:00",
  "currency": "EUR",
  "envelopes": [
   {
@@ -8,7 +8,7 @@
    "budgetAllocation": "40000",
    "budgetBalance": "40000",
    "carryOver": "0",
-   "envelopeId": "5bd02fb4-3d81-409e-bc1a-e9a1ac3e24f2",
+   "envelopeId": "474301c8-8218-4c7e-9272-bcc30c40a80f",
    "flags": [
     "unfunded_target"
    ],
@@ -32,13 +32,13 @@
   "expectedByMember": [
    {
     "expected": "20000",
-    "realized": "30000",
-    "userId": "a9b00362-fb5e-4d8a-a72b-b80b843f48cc"
+    "realized": "0",
+    "userId": "08b136ab-f618-456b-b9fd-5e81f8f39a50"
    },
    {
     "expected": "20000",
-    "realized": "0",
-    "userId": "efb30fcb-de32-49b8-aac0-e62052dc4bbd"
+    "realized": "30000",
+    "userId": "8bf5beec-804a-4518-98a9-e2714a1f2304"
    }
   ],
   "expectedContributions": "40000",
@@ -50,11 +50,12 @@
   "realizedContributions": "30000",
   "unassignedRealFunds": "0"
  },
- "householdId": "02d6c37a-6753-444b-b7df-b6fd560e2ad1",
- "ledgerVersion": 2,
+ "householdId": "76daf1ca-6fb9-4375-9c8f-4a1e7bef0bf1",
+ "ledgerVersion": "2",
  "period": {
   "endsBefore": "2026-12-01",
-  "periodId": "1232f21e-89b7-48ae-8ca9-2d897317b7de",
+  "periodId": "0a05bded-f7d8-4cdd-b5fe-bf4f77e13292",
   "startsOn": "2026-11-01"
- }
+ },
+ "scope": "common"
 }

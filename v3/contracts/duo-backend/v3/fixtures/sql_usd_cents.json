@@ -1,0 +1,50 @@
+{
+ "asOf": "2026-11-26T16:36:18.907289+01:00",
+ "currency": "USD",
+ "envelopes": [
+  {
+   "assignedRealFunds": "30001",
+   "assignedRealFundsCumulative": "30001",
+   "budgetAllocation": "52599",
+   "budgetBalance": "40254",
+   "carryOver": "0",
+   "envelopeId": "953af4ef-2b13-42ae-8879-c56082b8199b",
+   "flags": [
+    "unfunded_target"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Groceries",
+   "protectionState": "none",
+   "realAvailable": "17656",
+   "realCarryOver": "0",
+   "realizedExpenses": "12345",
+   "remainingBudget": "40254",
+   "status": "active",
+   "target": "52599",
+   "unfundedTarget": "22598"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "17656",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "87656",
+  "realizedContributions": "100001",
+  "unassignedRealFunds": "70000"
+ },
+ "householdId": "ee42f007-fb82-4785-a797-9d597c63bd16",
+ "ledgerVersion": "3",
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "d2393640-5284-41d8-bfb3-78aecf036397",
+  "startsOn": "2026-11-01"
+ },
+ "scope": "common"
+}

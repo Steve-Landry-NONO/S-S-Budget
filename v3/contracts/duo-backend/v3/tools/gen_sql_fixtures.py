@@ -2,10 +2,14 @@
 """Lot D — génère les fixtures du contrat mobile À PARTIR DU PROTOTYPE (gabarit s3 = 006 r1 + lot 3 + fonds réels, migrations candidates finales) :
 chaque fichier est la réponse JSON réelle de duo_v3_get_funds_snapshot (ou de duo_v3_get_envelope_snapshot pour la
 variante 006 seule), lue sous le rôle authenticated. Aucune valeur n'est écrite à la main dans ces fichiers.
-Usage : python3 gen_sql_fixtures.py   -> ../mobile-contract/fixtures/sql_*.json"""
-import json, uuid, pathlib, datetime
+Usage : python3 gen_sql_fixtures.py [gabarit=s3]   -> ../fixtures/sql_*.json
+v3.2 (26/11) : régénérées depuis les migrations CORRIGÉES (REV-01 chaînes d'entiers, REV-06 lift_pending, portée d'espace) ;
+ajouts : levée de protection en attente, XAF au-delà de 2^53, USD. Les réponses publiées (df41563) sont conservées dans
+fixtures/legacy-published-df41563/ comme preuves de reproduction (nombres JSON)."""
+import json, uuid, pathlib, datetime, sys
 import psycopg
 HOST, PORT, DB = "/tmp", 54317, "lotd_fixtures"
+TEMPLATE = sys.argv[1] if len(sys.argv) > 1 else "s3"
 OUT = pathlib.Path(__file__).resolve().parent.parent / "fixtures"; OUT.mkdir(exist_ok=True)
 E = lambda euros: int(round(euros * 100))
 def adm(sql, db="postgres"):
@@ -21,10 +25,10 @@ def user():
     u = str(uuid.uuid4())
     with ac() as c: c.execute("insert into auth.users(id,aud,role,email,email_confirmed_at) values (%s,'authenticated','authenticated',%s,now())", (u, f"{u[:8]}@example.invalid"))
     return u
-def duo(envs, kind="duo", activate=True):
+def duo(envs, kind="duo", activate=True, currency="EUR"):
     a, b = user(), user(); h = str(uuid.uuid4())
     with ac() as c:
-        c.execute("insert into public.duo_v3_households(id,kind) values (%s,%s)", (h, kind))
+        c.execute("insert into public.duo_v3_households(id,kind,currency) values (%s,%s,%s)", (h, kind, currency))
         c.execute("insert into public.duo_v3_members(household_id,user_id,role) values (%s,%s,'owner')", (h, a))
         if kind == "duo": c.execute("insert into public.duo_v3_members(household_id,user_id,role) values (%s,%s,'partner')", (h, b))
         c.execute("select duo_v3_private.bootstrap_household(%s)", (h,))
@@ -43,7 +47,7 @@ def spend(u, h, e, amt): return call(u, "select public.duo_v3_post_expense(%s,%s
 def snap(u, h, fn="duo_v3_get_funds_snapshot"): return call(u, f"select public.{fn}(%s)", (h,))
 def save(name, payload): (OUT / f"sql_{name}.json").write_text(json.dumps(payload, indent=1, ensure_ascii=False, sort_keys=True))
 
-adm(f'drop database if exists "{DB}" with (force)'); adm(f'create database "{DB}" template s3 owner postgres')
+adm(f'drop database if exists "{DB}" with (force)'); adm(f'create database "{DB}" template "{TEMPLATE}" owner postgres')
 F = {}
 a, b, h, i = duo([("Courses", E(500), True)]); F["target_no_funding"] = snap(b, h)
 a, b, h, i = duo([("Courses", E(525), True)]); contrib(a, h, E(1000)); move(b, h, None, i["Courses"], E(325)); spend(a, h, i["Courses"], E(275)); F["partial_funding"] = snap(a, h)
@@ -58,6 +62,7 @@ F["carry_positive_negative"] = snap(a, h)
 a, b, h, i = duo([("Courses", E(200), True), ("Loisirs", E(100), True)]); contrib(a, h, E(300), ((i["Courses"], E(200)), (i["Loisirs"], E(100)))); move(b, h, i["Courses"], i["Loisirs"], E(20)); F["internal_transfer"] = snap(a, h)
 a, b, h, i = duo([("Vacances", E(300), True), ("Courses", E(100), True)]); contrib(a, h, E(250), ((i["Vacances"], E(150)), (i["Courses"], E(100))))
 call(b, "select public.duo_v3_set_envelope_protection(%s,%s,true)", (h, i["Vacances"])); F["protected_envelope"] = snap(a, h)
+call(a, "select public.duo_v3_set_envelope_protection(%s,%s,false)", (h, i["Vacances"])); F["protection_lift_pending"] = snap(b, h)   # REV-06
 pa, pb, hp, pi = duo([("Lecture", E(60), True)], kind="personal"); contrib(pa, hp, E(50), ((pi["Lecture"], E(50)),)); spend(pa, hp, pi["Lecture"], E(15))
 F["personal_envelope_owner"] = snap(pa, hp); F["personal_envelope_other_user"] = snap(pb, hp)
 a, b, h, i = duo([("Courses", E(400), True)]); contrib(a, h, E(300), ((i["Courses"], E(300)),))
@@ -69,6 +74,11 @@ F["cancellation_step1_cancelled"] = snap(a, h); call(a, "select public.duo_v3_re
 F["cancellation_step2_restored"] = snap(a, h)
 a, b, h, i = duo([("Courses", E(400), True)], activate=False); contrib(a, h, E(300)); spend(a, h, i["Courses"], E(120))
 F["budget_only_006"] = snap(a, h, "duo_v3_get_envelope_snapshot")
+BIG = 2 ** 53 + 1                                                     # REV-01 : non représentable en double IEEE 754
+a, b, h, i = duo([("Loyer", 150000, True)], currency="XAF"); contrib(a, h, 2 * BIG + 1, ((i["Loyer"], BIG),)); spend(a, h, i["Loyer"], 150000)
+F["xaf_large_amounts"] = snap(a, h)
+a, b, h, i = duo([("Groceries", 52599, True)], currency="USD"); contrib(a, h, 100001, ((i["Groceries"], 30001),)); spend(b, h, i["Groceries"], 12345)
+F["usd_cents"] = snap(a, h)
 for k, v in F.items(): save(k, v)
 adm(f'drop database if exists "{DB}" with (force)')
 print(len(F), "fixtures écrites dans", OUT)

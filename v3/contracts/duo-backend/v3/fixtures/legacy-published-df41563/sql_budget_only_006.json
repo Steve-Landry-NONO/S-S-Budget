@@ -1,0 +1,43 @@
+{
+ "asOf": "2026-11-26T10:48:00.162144+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "allocated": "40000",
+   "budgetBalance": "28000",
+   "carryOver": "0",
+   "carryPositive": true,
+   "envelopeId": "c98fbfbb-01d3-4a16-a024-67a7cc4acf0c",
+   "forecastBalance": null,
+   "name": "Courses",
+   "netInternalMovements": "0",
+   "plannedContributions": null,
+   "plannedExpenses": null,
+   "protectionState": "unsupported",
+   "realAvailable": null,
+   "realAvailableState": "not_available",
+   "realizedExpenses": "12000",
+   "remainingBudget": "28000",
+   "status": "active",
+   "target": "40000"
+  }
+ ],
+ "householdId": "b561da25-e6f6-47b8-a4d5-adbf3dbe95b2",
+ "ledgerVersion": 3,
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "498a2824-361d-4a64-a237-e01e59d6b020",
+  "startsOn": "2026-11-01"
+ },
+ "position": {
+  "allocated_minor": 40000,
+  "cash_minor": 18000,
+  "envelopes_minor": 28000,
+  "funding_alert": true,
+  "funding_gap_minor": -10000,
+  "net_external_minor": 18000,
+  "reserve_minor": 0,
+  "spent_minor": 12000
+ },
+ "scope": "common"
+}

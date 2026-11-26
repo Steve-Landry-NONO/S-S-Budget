@@ -1,5 +1,5 @@
 {
- "asOf": "2026-11-26T10:47:58.744741+01:00",
+ "asOf": "2026-11-26T16:36:17.004129+01:00",
  "currency": "EUR",
  "envelopes": [
   {
@@ -8,7 +8,7 @@
    "budgetAllocation": "10000",
    "budgetBalance": "-5000",
    "carryOver": "0",
-   "envelopeId": "1e53d9d1-3417-49bb-844b-d908c0f12612",
+   "envelopeId": "25022af5-5ab0-4c88-8b9c-99ef79f17ad2",
    "flags": [
     "budget_overrun"
    ],
@@ -39,11 +39,12 @@
   "realizedContributions": "20000",
   "unassignedRealFunds": "0"
  },
- "householdId": "4f8dc1da-0bcd-4c3b-b01e-348654794b4c",
- "ledgerVersion": 3,
+ "householdId": "fb568076-8833-4db6-b238-13649243fd25",
+ "ledgerVersion": "3",
  "period": {
   "endsBefore": "2026-12-01",
-  "periodId": "0fd54736-1a03-454d-966a-f2a41fbb75fc",
+  "periodId": "6403a26c-7c5c-460d-9ff2-811c8ca133fe",
   "startsOn": "2026-11-01"
- }
+ },
+ "scope": "common"
 }

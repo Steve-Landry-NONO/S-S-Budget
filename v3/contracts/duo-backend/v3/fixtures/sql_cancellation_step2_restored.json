@@ -1,5 +1,5 @@
 {
- "asOf": "2026-11-26T10:48:00.047699+01:00",
+ "asOf": "2026-11-26T16:36:18.401629+01:00",
  "currency": "EUR",
  "envelopes": [
   {
@@ -8,7 +8,7 @@
    "budgetAllocation": "10000",
    "budgetBalance": "7000",
    "carryOver": "0",
-   "envelopeId": "e201c3e1-82de-4491-8fe1-9eb944d02c3a",
+   "envelopeId": "63c7a2e0-fe66-4c9a-95f6-9c2555271ca8",
    "flags": [],
    "forecastBalance": null,
    "forecastState": "not_available",
@@ -37,11 +37,12 @@
   "realizedContributions": "10000",
   "unassignedRealFunds": "0"
  },
- "householdId": "53805dca-38fa-412d-8940-8a0482c9c97f",
- "ledgerVersion": 5,
+ "householdId": "e1730f03-659c-4687-a223-935b1ad25bb3",
+ "ledgerVersion": "5",
  "period": {
   "endsBefore": "2026-12-01",
-  "periodId": "0c2f092f-9880-479c-a7cd-791e45aacd29",
+  "periodId": "58e4a086-b13f-4112-95d9-9823e7e906d9",
   "startsOn": "2026-11-01"
- }
+ },
+ "scope": "common"
 }
