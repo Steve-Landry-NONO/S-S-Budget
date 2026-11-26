@@ -1,0 +1,161 @@
+13a14,23
+> COL|public.duo_v3_contribution_splits.accepted_at|timestamp with time zone|YES|
+> COL|public.duo_v3_contribution_splits.accepted_by|uuid|YES|
+> COL|public.duo_v3_contribution_splits.default_shares|jsonb|NO|
+> COL|public.duo_v3_contribution_splits.effective_from|date|YES|
+> COL|public.duo_v3_contribution_splits.envelope_shares|jsonb|NO|'{}'::jsonb
+> COL|public.duo_v3_contribution_splits.household_id|uuid|NO|
+> COL|public.duo_v3_contribution_splits.id|uuid|NO|gen_random_uuid()
+> COL|public.duo_v3_contribution_splits.proposed_at|timestamp with time zone|NO|clock_timestamp()
+> COL|public.duo_v3_contribution_splits.proposed_by|uuid|NO|
+> COL|public.duo_v3_contribution_splits.status|text|NO|'proposed'::text
+27a38,43
+> COL|public.duo_v3_envelope_protection_events.changed_at|timestamp with time zone|NO|now()
+> COL|public.duo_v3_envelope_protection_events.changed_by|uuid|NO|
+> COL|public.duo_v3_envelope_protection_events.envelope_id|uuid|NO|
+> COL|public.duo_v3_envelope_protection_events.household_id|uuid|NO|
+> COL|public.duo_v3_envelope_protection_events.id|uuid|NO|gen_random_uuid()
+> COL|public.duo_v3_envelope_protection_events.protected|boolean|NO|
+32a49
+> COL|public.duo_v3_envelopes.funds_account_id|uuid|YES|
+35a53
+> COL|public.duo_v3_envelopes.protected|boolean|NO|false
+50a69
+> COL|public.duo_v3_households.funds_tracking|boolean|NO|false
+110a130,137
+> COL|public.duo_v3_protection_lift_requests.decided_at|timestamp with time zone|YES|
+> COL|public.duo_v3_protection_lift_requests.decided_by|uuid|YES|
+> COL|public.duo_v3_protection_lift_requests.envelope_id|uuid|NO|
+> COL|public.duo_v3_protection_lift_requests.household_id|uuid|NO|
+> COL|public.duo_v3_protection_lift_requests.id|uuid|NO|gen_random_uuid()
+> COL|public.duo_v3_protection_lift_requests.requested_at|timestamp with time zone|NO|clock_timestamp()
+> COL|public.duo_v3_protection_lift_requests.requested_by|uuid|NO|
+> COL|public.duo_v3_protection_lift_requests.status|text|NO|'pending'::text
+125a153
+> COL|public.duo_v3_transactions.restores_transaction_id|uuid|YES|
+131c159
+< CON|duo_v3_accounts|duo_v3_accounts_kind_check|CHECK ((kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'envelope'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text])))
+---
+> CON|duo_v3_accounts|duo_v3_accounts_kind_check|CHECK ((kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'envelope'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text, 'funds_external'::text, 'funds_unassigned'::text, 'funds_envelope'::text])))
+137a166,171
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_check1|CHECK ((accepted_by IS DISTINCT FROM proposed_by))
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_check|CHECK (((status = 'active'::text) = ((accepted_by IS NOT NULL) AND (effective_from IS NOT NULL))))
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_household_id_proposed_by_fkey|FOREIGN KEY (household_id, proposed_by) REFERENCES duo_v3_members(household_id, user_id) ON DELETE RESTRICT
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_pkey|PRIMARY KEY (id)
+> CON|duo_v3_contribution_splits|duo_v3_contribution_splits_status_check|CHECK ((status = ANY (ARRAY['proposed'::text, 'active'::text, 'withdrawn'::text])))
+142a177,179
+> CON|duo_v3_envelope_protection_events|duo_v3_envelope_protection_events_envelope_id_household_id_fkey|FOREIGN KEY (envelope_id, household_id) REFERENCES duo_v3_envelopes(id, household_id) ON DELETE RESTRICT
+> CON|duo_v3_envelope_protection_events|duo_v3_envelope_protection_events_household_id_changed_by_fkey|FOREIGN KEY (household_id, changed_by) REFERENCES duo_v3_members(household_id, user_id) ON DELETE RESTRICT
+> CON|duo_v3_envelope_protection_events|duo_v3_envelope_protection_events_pkey|PRIMARY KEY (id)
+145a183,184
+> CON|duo_v3_envelopes|duo_v3_envelopes_funds_account_fkey|FOREIGN KEY (funds_account_id, household_id, currency) REFERENCES duo_v3_accounts(id, household_id, currency) ON UPDATE CASCADE ON DELETE RESTRICT
+> CON|duo_v3_envelopes|duo_v3_envelopes_funds_account_id_key|UNIQUE (funds_account_id)
+200a240,244
+> CON|duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_check1|CHECK (((status <> 'approved'::text) OR (decided_by IS DISTINCT FROM requested_by)))
+> CON|duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_check|CHECK (((status = 'pending'::text) = (decided_at IS NULL)))
+> CON|duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_envelope_id_household_id_fkey|FOREIGN KEY (envelope_id, household_id) REFERENCES duo_v3_envelopes(id, household_id) ON DELETE RESTRICT
+> CON|duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_pkey|PRIMARY KEY (id)
+> CON|duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_status_check|CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'cancelled'::text])))
+208c252
+< CON|duo_v3_transactions|duo_v3_transactions_kind_check|CHECK ((kind = ANY (ARRAY['expense'::text, 'income'::text, 'contribution'::text, 'transfer'::text, 'allocation'::text, 'carry'::text, 'reversal'::text])))
+---
+> CON|duo_v3_transactions|duo_v3_transactions_kind_check|CHECK ((kind = ANY (ARRAY['expense'::text, 'income'::text, 'contribution'::text, 'transfer'::text, 'allocation'::text, 'carry'::text, 'reversal'::text, 'assignment'::text, 'funds_opening'::text, 'funds_sweep'::text])))
+213a258
+> CON|duo_v3_transactions|duo_v3_transactions_restores_transaction_id_fkey|FOREIGN KEY (restores_transaction_id) REFERENCES duo_v3_transactions(id) ON DELETE RESTRICT
+215c260,261
+< CON|duo_v3_transactions|duo_v3_transactions_system_kinds|CHECK (((origin = 'member'::text) OR (kind = ANY (ARRAY['allocation'::text, 'carry'::text]))))
+---
+> CON|duo_v3_transactions|duo_v3_transactions_system_kinds|CHECK (((origin = 'member'::text) OR (kind = ANY (ARRAY['allocation'::text, 'carry'::text, 'funds_opening'::text, 'funds_sweep'::text]))))
+> CON|duo_v3_transactions|duo_v3_validate_funds|TRIGGER DEFERRABLE INITIALLY DEFERRED
+220a267
+> IDX|public.duo_v3_contribution_splits_pkey|CREATE UNIQUE INDEX duo_v3_contribution_splits_pkey ON public.duo_v3_contribution_splits USING btree (id)
+223a271
+> IDX|public.duo_v3_envelope_protection_events_pkey|CREATE UNIQUE INDEX duo_v3_envelope_protection_events_pkey ON public.duo_v3_envelope_protection_events USING btree (id)
+224a273
+> IDX|public.duo_v3_envelopes_funds_account_id_key|CREATE UNIQUE INDEX duo_v3_envelopes_funds_account_id_key ON public.duo_v3_envelopes USING btree (funds_account_id)
+238a288,289
+> IDX|public.duo_v3_one_pending_lift|CREATE UNIQUE INDEX duo_v3_one_pending_lift ON public.duo_v3_protection_lift_requests USING btree (envelope_id) WHERE (status = 'pending'::text)
+> IDX|public.duo_v3_one_pending_split|CREATE UNIQUE INDEX duo_v3_one_pending_split ON public.duo_v3_contribution_splits USING btree (household_id) WHERE (status = 'proposed'::text)
+240c291
+< IDX|public.duo_v3_one_system_account|CREATE UNIQUE INDEX duo_v3_one_system_account ON public.duo_v3_accounts USING btree (household_id, kind, currency) WHERE (kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text]))
+---
+> IDX|public.duo_v3_one_system_account|CREATE UNIQUE INDEX duo_v3_one_system_account ON public.duo_v3_accounts USING btree (household_id, kind, currency) WHERE (kind = ANY (ARRAY['cash'::text, 'clearing'::text, 'reserve'::text, 'budget_source'::text, 'budget_spent'::text, 'funds_external'::text, 'funds_unassigned'::text]))
+246a298,299
+> IDX|public.duo_v3_protection_lift_requests_pkey|CREATE UNIQUE INDEX duo_v3_protection_lift_requests_pkey ON public.duo_v3_protection_lift_requests USING btree (id)
+> IDX|public.duo_v3_single_restore|CREATE UNIQUE INDEX duo_v3_single_restore ON public.duo_v3_transactions USING btree (restores_transaction_id) WHERE (restores_transaction_id IS NOT NULL)
+253a307
+> TRG|duo_v3_contribution_splits|duo_v3_contribution_splits_no_delete|O|CREATE TRIGGER duo_v3_contribution_splits_no_delete BEFORE DELETE ON public.duo_v3_contribution_splits FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+257a312,313
+> TRG|duo_v3_envelope_protection_events|duo_v3_protection_events_immutable|O|CREATE TRIGGER duo_v3_protection_events_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_envelope_protection_events FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+> TRG|duo_v3_envelopes|duo_v3_envelopes_guard_funds|O|CREATE TRIGGER duo_v3_envelopes_guard_funds BEFORE UPDATE ON public.duo_v3_envelopes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_envelope_funds()
+271a328
+> TRG|duo_v3_period_closes|duo_v3_period_closes_sweep|O|CREATE TRIGGER duo_v3_period_closes_sweep AFTER INSERT ON public.duo_v3_period_closes FOR EACH ROW EXECUTE FUNCTION duo_v3_private.sweep_real_funds()
+280a338
+> TRG|duo_v3_transactions|duo_v3_validate_funds|O|CREATE CONSTRAINT TRIGGER duo_v3_validate_funds AFTER INSERT ON public.duo_v3_transactions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION duo_v3_private.validate_funds()
+283a342
+> POL|public.duo_v3_contribution_splits|duo_v3_contribution_splits_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+286a346
+> POL|public.duo_v3_envelope_protection_events|duo_v3_protection_events_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+295a356
+> POL|public.duo_v3_protection_lift_requests|duo_v3_protection_lift_requests_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+298a360
+> RLS|public.duo_v3_contribution_splits|true|false
+299a362
+> RLS|public.duo_v3_envelope_protection_events|true|false
+309a373
+> RLS|public.duo_v3_protection_lift_requests|true|false
+312a377
+> TACL|public.duo_v3_contribution_splits|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+314a380
+> TACL|public.duo_v3_envelope_protection_events|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+326a393
+> TACL|public.duo_v3_protection_lift_requests|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+338a406,407
+> FN|duo_v3_private.activate_funds(p_household uuid)|secdef=true|{postgres=X/postgres}|search_path=""|d4b32fc39eb3b5b5e0de3a66ab7f935d
+> FN|duo_v3_private.active_envelope(p_household uuid, p_envelope uuid)|secdef=true|{postgres=X/postgres}|search_path=""|074772c4861879108c205303b4898f09
+340a410
+> FN|duo_v3_private.balance(p_account uuid)|secdef=true|{postgres=X/postgres}|search_path=""|b3931fc54ebdbe258b445acde18e5a8d
+342a413
+> FN|duo_v3_private.check_internal_debits(p_tx uuid)|secdef=true|{postgres=X/postgres}|search_path=""|8b07007223a6af35b1e46c412154d3ad
+345c416
+< FN|duo_v3_private.create_envelope(p_household uuid, p_name text, p_carry_positive boolean)|secdef=true|{postgres=X/postgres}|search_path=""|b5e51113ae2a846a45ed0ddd255dbf9b
+---
+> FN|duo_v3_private.create_envelope(p_household uuid, p_name text, p_carry_positive boolean)|secdef=true|{postgres=X/postgres}|search_path=""|684cf8c37ec9c375deb6b80368b56712
+352a424,425
+> FN|duo_v3_private.ensure_funds_account(p_envelope uuid)|secdef=true|{postgres=X/postgres}|search_path=""|19fa4795750a9ac9c1cb4fd572849782
+> FN|duo_v3_private.expected_contributions(p_household uuid)|secdef=true|{postgres=X/postgres}|search_path=""|bad043a3f643e8f3cd41405d89330a06
+353a427
+> FN|duo_v3_private.funds_snapshot_all(p_household uuid)|secdef=true|{postgres=X/postgres}|search_path=""|bf053d17dd80cbc563c85ec5e121d849
+355a430
+> FN|duo_v3_private.guard_envelope_funds()|secdef=true|{postgres=X/postgres}|search_path=""|8c8a04c0c55f2b8fcdafbfe3f57a060f
+365a441
+> FN|duo_v3_private.member_preamble(p_household uuid, p_key text, p_hash bytea, OUT v_user uuid, OUT v_existing uuid)|secdef=true|{postgres=X/postgres}|search_path=""|fb7e5d1e8ce39ae3cfb9d9fbeff89e15
+367a444
+> FN|duo_v3_private.post_opening_balance(p_household uuid, p_envelope uuid, p_amount numeric, p_key text)|secdef=true|{postgres=X/postgres}|search_path=""|a852725573e4966eb4422f56848dc657
+375a453
+> FN|duo_v3_private.sweep_real_funds()|secdef=true|{postgres=X/postgres}|search_path=""|d419c586ad36b7ee4e9a2e88259a31bd
+376a455,456
+> FN|duo_v3_private.valid_shares(p_household uuid, p_shares jsonb)|secdef=true|{postgres=X/postgres}|search_path=""|ecce9592c73571035edb70113186dc55
+> FN|duo_v3_private.validate_funds()|secdef=true|{postgres=X/postgres}|search_path=""|047692aa81c1d3ee526bbe8e0c33a006
+384a465
+> FN|public.duo_v3_accept_contribution_split(p_household uuid, p_split uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|e172aba5d9e1cf45261142165ac6a179
+385a467,468
+> FN|public.duo_v3_cancel_transaction(p_household uuid, p_transaction uuid, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|da67bc2cafa83485024333d74c7ff0c5
+> FN|public.duo_v3_contribution_release_plan(p_household uuid, p_transaction uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|d5f6fefabf2a9bfce75edf33093f2d43
+389a473
+> FN|public.duo_v3_get_funds_snapshot(p_household uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|7df5f868349b0ea3a2f7705676948f5b
+392,393c476,479
+< FN|public.duo_v3_post_contribution(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|f4f1082081a4d681577288a9cfb875d7
+< FN|public.duo_v3_post_expense(p_household uuid, p_envelope uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3ab2d3e89cca223b7dc73eaed26ddee8
+---
+> FN|public.duo_v3_move_funds(p_household uuid, p_from_envelope uuid, p_to_envelope uuid, p_amount_minor numeric, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|d0f687a0caf45d58c7ddde6b18494182
+> FN|public.duo_v3_post_contribution(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|02959afcca97badace36168f8215b7a5
+> FN|public.duo_v3_post_contribution_assigned(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text, p_assignments jsonb)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|017d68f60feab608e1cdf40c01cf106a
+> FN|public.duo_v3_post_expense(p_household uuid, p_envelope uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|4318dd39a8baca3ccb4e07e33fa5b516
+394a481
+> FN|public.duo_v3_propose_contribution_split(p_household uuid, p_default_shares jsonb, p_envelope_shares jsonb)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3d426f89a64cfce6752f1ac869b9e542
+395a483
+> FN|public.duo_v3_restore_transaction(p_household uuid, p_reversal uuid, p_idempotency_key text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|6ecde8d6e7c6b982f88f3975cea158e2
+396a485
+> FN|public.duo_v3_set_envelope_protection(p_household uuid, p_envelope uuid, p_protected boolean)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|cd782e485f36c840d6db656d71019624

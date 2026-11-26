@@ -1,0 +1,309 @@
+{
+ "label": "final_s3_funds_run1",
+ "template": "s3",
+ "resume": {
+  "Réussi": 30
+ },
+ "resultats": [
+  {
+   "id": "FB-01",
+   "famille": "Activation et invariants",
+   "regle": "Activation d'un duo 006 existant : la trésorerie existante devient fonds réels NON affectés ; idempotente",
+   "action": "contribution 1000 € avant activation ; activate_funds ×2",
+   "attendu": "trésorerie 1000 ; non affectés 1000 ; affectés 0 ; 1 ouverture",
+   "observe": "100000/100000/0 ouvertures=1 inv={'cash': 100000, 'fonds': 100000, 'livre_funds': 0, 'non_affectes': 100000, 'ok': True}",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-02",
+   "famille": "Fixtures PR #19 (financement explicite)",
+   "regle": "Cible 525, financé 325, dépensé 275 → réel 50, reste budgétaire 250, non financé 200",
+   "action": "contribution 1000 ; affectation ; dépense",
+   "attendu": "réel 50 ; reste 250 ; non financé 200 ; drapeau unfunded_target",
+   "observe": "réel=5000 reste=25000 non_financé=20000 flags=['unfunded_target']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-03",
+   "famille": "Fixtures PR #19 (financement explicite)",
+   "regle": "Cible 400, financé 300, dépensé 185 → réel 115, reste budgétaire 215, non financé 100",
+   "action": "contribution 1000 ; affectation ; dépense",
+   "attendu": "réel 115 ; reste 215 ; non financé 100 ; drapeau unfunded_target",
+   "observe": "réel=11500 reste=21500 non_financé=10000 flags=['unfunded_target']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-04",
+   "famille": "Affectation : jamais une recette",
+   "regle": "Affecter / transférer des fonds ne modifie ni la trésorerie, ni le monde extérieur, ni les contributions ; affecter plus que le non-affecté est refusé",
+   "action": "contribution 100 ; affecter 60 → A ; A → B 20 ; affecter 41 (reste 40)",
+   "attendu": "trésorerie, clearing et contributions inchangés ; 23514 pour 41 ; A 40, B 20, non affecté 40",
+   "observe": "m1=True m2=True m3=23514 Insufficient real funds: an internal movement cannot create a deficit trésorerie=10000 non_affectés=4000 clearing -10000→-10000",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-05",
+   "famille": "Affectation : jamais une recette",
+   "regle": "Contribution affectée dès la saisie : la somme affectée ne peut dépasser le montant versé",
+   "action": "contribution 50 affectée 30+30 ; puis 50 affectée 30",
+   "attendu": "23514 puis accepté (20 non affectés de plus)",
+   "observe": "r1=23514 Assignments exceed the contribution: assignment never creates revenue r2=True non_affectés=6000",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-05b",
+   "famille": "Affectation : jamais une recette",
+   "regle": "Désaffectation : les fonds reviennent au non-affecté",
+   "action": "A → non affecté 10",
+   "attendu": "A 60, non affecté 70",
+   "observe": "ok=True A=6000 non_affectés=7000",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-06",
+   "famille": "Concurrence",
+   "regle": "8 affectations simultanées de 30 sur 100 non affectés : exactement 3 réussissent, jamais de non-affecté négatif",
+   "action": "8 sessions A/B",
+   "attendu": "3 ok ; 5 × 23514 ; non affecté 10",
+   "observe": "ok=3 erreurs=['23514'] inv={'cash': 10000, 'fonds': 10000, 'livre_funds': 0, 'non_affectes': 1000, 'ok': True}",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-06b",
+   "famille": "Concurrence",
+   "regle": "Dépenses et désaffectations simultanées : les dépenses passent toujours ; une désaffectation ne crée jamais de déficit",
+   "action": "4 dépenses de 20 et 4 désaffectations de 20 sur une enveloppe à 90",
+   "attendu": "4 dépenses acceptées ; réel = 90 − 20 × (dépenses + désaffectations acceptées) ; invariant",
+   "observe": "dépenses=4 désaffectations=2 réel=-3000 inv=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-07",
+   "famille": "Déficit réel, dépassement budgétaire, réserve non affectée",
+   "regle": "Dépense au-delà du réel : acceptée (fait réel), déficit réel visible ; aucun mouvement interne depuis l'enveloppe en déficit",
+   "action": "A financée 50, dépense 80, puis A → B 1",
+   "attendu": "dépense acceptée ; réel −30, drapeau real_deficit ; 23514 ; invariant",
+   "observe": "dépense=True réel=-3000 flags=['unfunded_target', 'real_deficit'] move=23514 Insufficient real funds: an internal movement cannot create a deficit inv=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-08",
+   "famille": "Déficit réel, dépassement budgétaire, réserve non affectée",
+   "regle": "Dépassement budgétaire distinct du déficit réel",
+   "action": "B cible 100, non financée, dépense 150",
+   "attendu": "reste −50 (budget_overrun) ; réel −150 (real_deficit)",
+   "observe": "reste=-5000 réel=-15000 flags=['unfunded_target', 'real_deficit', 'budget_overrun']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-09",
+   "famille": "Déficit réel, dépassement budgétaire, réserve non affectée",
+   "regle": "Réserve réelle non affectée ≠ réserve budgétaire : deux notions distinctes",
+   "action": "lecture",
+   "attendu": "fonds non affectés 150 ; réserve budgétaire 0 ; trésorerie −30",
+   "observe": "non_affectés=15000 réserve_budget=0 trésorerie=-3000 inv=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-10",
+   "famille": "Protection (R-B6)",
+   "regle": "Espace commun : protéger = immédiat ; lever = double accord (le demandeur ne s'approuve pas) ; journalisé",
+   "action": "B protège ; transfert / désaffectation ; alimentation, dépense ; A demande ×2 ; transfert ; B approuve ; transfert",
+   "attendu": "protected ; 23514 ×2 ; ok ×2 ; lift_pending ×2 ; 23514 ; none ; ok ; 2 évènements ; demande approved (A→B) ; réel 145",
+   "observe": "protected 23514 23514 True True lift_pending lift_pending 23514 none True évènements=2 demande=approved:true:true réel=14500",
+   "statut": "Réussi",
+   "note": "Écart explicite avec le prototype : la levée par un seul membre (ancien FB-10) est désormais refusée (R-B6)."
+  },
+  {
+   "id": "FB-10b",
+   "famille": "Protection (R-B6)",
+   "regle": "Espace personnel : protection posée et levée par son propriétaire seul",
+   "action": "C protège puis lève ; désaffectation",
+   "attendu": "protected ; none ; ok",
+   "observe": "protected none True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-11",
+   "famille": "Annulation réversible et restauration",
+   "regle": "Annuler une affectation la contre-passe exactement ; double annulation refusée ; restauration = nouvelle écriture, unique",
+   "action": "affecter 70 ; annuler ; annuler ; restaurer ; restaurer",
+   "attendu": "non affecté 100 / A 0 ; 23505 ; A 70 ; 23505",
+   "observe": "annul=True non_aff=10000 A=0 2e=23505 restaur=True A=7000 2e=23505",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-11b",
+   "famille": "Annulation réversible et restauration",
+   "regle": "R-B5 : annulation d'une contribution affectée refusée tant que les fonds ne sont pas libérés ; parcours guidé ; puis annulation acceptée",
+   "action": "annuler (70 affectés) ; plan ; désaffecter 70 ; plan ; annuler",
+   "attendu": "23514 hint release_funds_first ; à libérer 70 ; annulable ; accepté ; invariant",
+   "observe": "23514 plan=[('unassigned', '10000', '3000', '7000')] annulable=False→True désaff=True annulation=True inv=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-12",
+   "famille": "Annulation réversible et restauration",
+   "regle": "Annuler puis restaurer une dépense : réel et dépenses réalisées suivent ; la restauration peut recréer un déficit réel",
+   "action": "dépense 90 (réel 70) ; annuler ; restaurer",
+   "attendu": "réel −20 → 70 (dépenses 0) → −20 (dépenses 90) ; invariant",
+   "observe": "-2000 → 7000 (0) → -2000 (9000) inv=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-12b",
+   "famille": "Annulation réversible et restauration",
+   "regle": "Annuler une contribution affectée à une enveloppe protégée : refusé ; le plan signale la protection",
+   "action": "contribution 100 → P ; protéger P ; annuler ; plan",
+   "attendu": "23514 ; plan non annulable, protected=true",
+   "observe": "23514 plan=[('envelope', True)] annulable=False",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-13",
+   "famille": "Reports",
+   "regle": "Clôture : reliquat réel positif sans report → non affecté (R-B1) ; reports réels conservés ailleurs ; déficits conservés",
+   "action": "rattrapage de 2 cycles ; opérations ; clôture de la période courante",
+   "attendu": "R-B1 : NonRep réel 60 balayé vers le non-affecté (1 écriture funds_sweep) ; Rep 80 conservé ; déficit Def −30 conservé ; non affecté 210",
+   "observe": "Rep réel=8000 reporté=8000 | NonRep réel=0 budget=10000 | Def réel=-3000 | non_affectés=21000 balayages=1",
+   "statut": "Réussi",
+   "note": "Écart explicite avec le prototype (aucun balayage) : R-B1 appliqué."
+  },
+  {
+   "id": "FB-14",
+   "famille": "Contournements et isolation",
+   "regle": "Écriture privilégiée (postgres) qui ajoute de la trésorerie sans fonds réels : refusée à la validation",
+   "action": "INSERT direct cash/clearing dans un duo activé",
+   "attendu": "23514",
+   "observe": "23514 Real funds must follow treasury (Δcash = Δfunds)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-14b",
+   "famille": "Contournements et isolation",
+   "regle": "Livre funds utilisé dans un duo non activé : refusé",
+   "action": "INSERT privilégié",
+   "attendu": "23514",
+   "observe": "23514 Funds book is not activated for this household",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-15",
+   "famille": "Contournements et isolation",
+   "regle": "Isolation : un non-membre ne lit rien et n'agit pas ; anon refusé",
+   "action": "C lit / affecte dans le duo A ; anon lit",
+   "attendu": "vide ; 42501 ; 42501",
+   "observe": "C enveloppes=[] foyer=None anon=42501 C_move=42501",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-16",
+   "famille": "Contournements et isolation",
+   "regle": "Paramètres et idempotence des mouvements",
+   "action": "montant 0 ; rejeu même charge ; même clé autre montant",
+   "attendu": "22023 ; même uuid ; 23505",
+   "observe": "22023 ; même=True ; 23505",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-17",
+   "famille": "Contournements et isolation",
+   "regle": "Archivage d'une enveloppe qui détient des fonds réels : refusé",
+   "action": "archive_envelope (A détient 5 c réels, budget ≠ 0)",
+   "attendu": "23514",
+   "observe": "23514 Envelope balance must be exactly zero to archive (D-023)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-18",
+   "famille": "Migration V2 → V3 (base V2 synthétique, fixtures PR #17)",
+   "regle": "Plan V2 : REAL → centimes exacts ; valeur non exprimable rejetée (jamais arrondie) ; opération non réalisée non migrée",
+   "action": "base V2 synthétique + 0.1+0.2 + une dépense 'planned'",
+   "attendu": "5 enveloppes ; cible = mensuel × 2 ; 1 rejet (x-flottant) ; 1 non migrée (x-prevue)",
+   "observe": "enveloppes=[('alimentation', 40000, False), ('logement', 90000, False), ('loisirs', 20000, False), ('transport', 20000, False), ('vacances', 30000, True)] rejets=['x-flottant'] non_migrées=['x-prevue']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-19",
+   "famille": "Migration V2 → V3 (base V2 synthétique, fixtures PR #17)",
+   "regle": "R-B4 : soldes d'ouverture par enveloppe (idempotents) ; rapprochement Σ ouvertures = Σ versé − Σ dépensé V2 ; détail archivé (empreinte) ; sauvegarde (empreinte)",
+   "action": "plan V2 synthétique → 5 ouvertures ×2 (rejeu), protection",
+   "attendu": "réel par enveloppe = V2 ; total réel 640 ; protégé 150 ; trésorerie 640 ; 5 écritures ; rapprochement équilibré",
+   "observe": "erreurs=[] cible=200000 réel=64000 protégé=15000 trésorerie=64000 ouvertures=5 rapprochement={'v2_net_minor': 64000, 'openings_total_minor': 64000, 'balanced': True} archive=5f7b7b233620",
+   "statut": "Réussi",
+   "note": "Écart explicite avec le prototype (rejeu des contributions et dépenses V2) : R-B4 retient des soldes d'ouverture ; le détail 1600/960 reste dans l'archive."
+  },
+  {
+   "id": "FB-19b",
+   "famille": "Migration V2 → V3 (base V2 synthétique, fixtures PR #17)",
+   "regle": "Prévisionnel par enveloppe non modélisé (R-B2, lot distinct) : état explicite, jamais un zéro",
+   "action": "lecture",
+   "attendu": "forecastBalance null ; forecastState not_available ; contributions attendues not_configured",
+   "observe": "[None, None] not_available not_configured",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-20",
+   "famille": "Contributions attendues (R-B3)",
+   "regle": "Répartition globale 60/40, exception Vacances 50/50, accord mutuel ; 1re répartition sur le cycle courant (CF-10) ; attendu ≠ argent",
+   "action": "proposition invalide ; proposition A ; lecture ; A accepte sa propre proposition ; B accepte",
+   "attendu": "22023 ; provisoire ; 42501 ; effet au début du cycle courant ; A 1170, B 830 (total 2000) ; trésorerie prévue 2640",
+   "observe": "22023 provisional 42501 effet=2026-11-01 A=117000 B=83000 total=200000 prévu=264000",
+   "statut": "Réussi",
+   "note": "Écart explicite avec le prototype (contributions prévues déclarées) : R-B3 calcule l'attendu depuis la répartition convenue."
+  },
+  {
+   "id": "FB-20b",
+   "famille": "Contributions attendues (R-B3)",
+   "regle": "Modification acceptée : effet au cycle suivant, jamais rétroactive (D-010)",
+   "action": "nouvelle proposition 50/50 (B), acceptée par A",
+   "attendu": "effet = fin du cycle courant ; attendu courant inchangé (1170 / 830)",
+   "observe": "effet=2026-12-01 fin=2026-12-01 A=117000 B=83000",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-20c",
+   "famille": "Contributions attendues (R-B3)",
+   "regle": "Versements réels libres : A verse 300 ; l'attendu ne change pas, la prévision baisse d'autant",
+   "action": "contribution A 300",
+   "attendu": "A attendu 1170, réalisé 300 ; prévision trésorerie 2640",
+   "observe": "A={'userId': '10000000-0000-4000-8000-000000000001', 'expected': '117000', 'realized': '30000'} prévu=264000",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "FB-21",
+   "famille": "Invariant global",
+   "regle": "Sur tous les duos activés du banc : Σ fonds = trésorerie ; livre funds équilibré ; non-affecté ≥ 0",
+   "action": "requête globale",
+   "attendu": "0 duo en défaut",
+   "observe": "duos activés=13 en défaut=0",
+   "statut": "Réussi",
+   "note": ""
+  }
+ ]
+}
