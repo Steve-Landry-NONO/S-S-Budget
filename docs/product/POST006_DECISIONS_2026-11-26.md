@@ -1,0 +1,20 @@
+# Duo Budget V3 — Arbitrages post-006
+26 novembre 2026 — feu vert conversationnel du propriétaire (« allons y » après présentation des sept recommandations, toutes sélectionnées). Portée : orientations de conception, pas autorisation de déployer ni de migrer.
+Références : PR #17 UX enveloppes, #18 CF-01–CF-12, rapport de qualification post-006 du 25 novembre. 
+| ID | Orientation retenue |
+|---|---|
+| POST006-01 | Préparer 006 révisée intégrant F1–F6 ; conserver originale, empreintes, résultats et historique ; requalifier rollback. |
+| POST006-02 | Même solde commun actuel pour les deux membres actifs après réintégration autorisée ; pas d'accès automatique aux détails de l'absence ; divulgation indirecte des agrégats communs explicitée. |
+| POST006-03 | Conserver les deux livres 006 et concevoir l'affectation explicite des fonds réels aux enveloppes, distincte des objectifs et allocations. |
+| POST006-04 | Prévisionnel/protection non modélisés : non disponible, jamais zéro fictif. |
+| POST006-05 | Suppression Auth contrôlée, révocation effective, réconciliation des appartenances orphelines, conservation comptable et minimisation des données. |
+| POST006-06 | Continuité du duo pour membre restant, transfert administratif encadré ; aucun membre restant : archivage sans destruction automatique. |
+| POST006-07 | Conserver tests historiques, ajouter variantes documentées pour F3, CF-05, CF-06 ; ne pas masquer les divergences. |
+## Séparation des lots
+A : 006 révisée strictement correctifs de qualification ; pas d'introduction implicite du nouveau financement. B : spécification et prototype séparés pour POST006-03 ; impacts sur reports, réserve, transferts, corrections, prévisions, protection et migration V2. C : prototype lot 3 et autorisations, séparation des historiques et agrégats après retour. Les modalités détaillées nécessitent revue.
+## Invariants candidats du financement
+Distinguer trésorerie réelle, budget objectif, allocation budgétaire et affectation réelle. Une allocation ne crée pas de trésorerie. Un mouvement interne de financement conserve le total réel, sans nouvelle contribution. La somme des soldes réels affectés (y compris déficits) et des fonds réels non affectés doit égaler la trésorerie du même périmètre ; éviter de compter la réserve budgétaire comme fonds réels. Les objectifs, attentes et opérations futures ne sont pas des fonds réalisés. Une dépense réalisée impacte le réel exactement une fois ; annulation/restauration symétriques et historisées. Définir la politique de financement d'une dépense non couverte sans masquer le déficit, selon D-016 et restrictions protégées à réconcilier. Aucun transfert automatique de réserve sans règle validée. Devises et unités mineures exactes. Aucun agrégat privé dans le commun.
+Fixture isolée sans report : objectif 525 EUR, fonds réels affectés 325 EUR, dépense réalisée 275 EUR ; disponible réel 50 EUR, budget restant 250 EUR, objectif non financé 200 EUR (indicateur de financement initial, pas solde). Autre fixture : objectif 400, financement 300, dépense 185 => réel 115, budget restant 215. Contrat à définir pour les mouvements et reports, ne pas extrapoler la formule simplifiée.
+## Porte de qualification
+F1 rattrapage multi-cycle, F2 clés système/auteur, F3 devise, F4 précision, F5 scellement explicite ou preuve transactionnelle robuste, F6 instantané atomique. Tester révocation sous verrou, retries, concurrence, clôtures, absence de données, rollback vide et refus avec données. Conserver résultats 006 originale et identifier écarts d'attentes CF-06. Test réel Auth/Supabase restant à autoriser séparément.
+Aucune migration DEV/prod, aucun push backend 1/2, aucune fusion majeure, aucun changement Figma gelé ni données réelles. NO GO couples réels. PR documentaire seulement. Ne pas considérer les orientations comme implémentées.
