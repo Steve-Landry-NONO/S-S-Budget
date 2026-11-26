@@ -1,4 +1,7 @@
 'use strict';
+// DÉPRÉCIÉ (G13, 26/11/2026) : transfert générique de compte à compte antérieur à la 006 révisée. Sous la 006r1,
+// duo_v3_post_transfer n'accepte que des comptes envelope/reserve (budget) ; les fonds réels passent par
+// duo_v3_move_funds (M2). Ne pas raccorder à l'application ; remplacé par le contrat v3 (v3/contracts/duo-backend/v3).
 
 // Duo Budget V3 — transport-neutral finance service.
 // Inject an authenticated Supabase client. Never embed a service-role key here.
