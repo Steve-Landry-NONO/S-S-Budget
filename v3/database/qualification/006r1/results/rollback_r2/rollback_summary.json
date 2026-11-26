@@ -1,0 +1,45 @@
+{
+ "catalog_b005": "f96ec8f20c37a955",
+ "catalog_r006": "4412d3d70bb9fcf9",
+ "RB1_run1": {
+  "down_rc": 0,
+  "catalog": "f96ec8f20c37a955",
+  "identique_005": true
+ },
+ "RB1_run2": {
+  "down_rc": 0,
+  "catalog": "f96ec8f20c37a955",
+  "identique_005": true
+ },
+ "RB1_run3": {
+  "down_rc": 0,
+  "catalog": "f96ec8f20c37a955",
+  "identique_005": true
+ },
+ "RB4": {
+  "catalog": "4412d3d70bb9fcf9",
+  "identique_r006": true
+ },
+ "RB2": {
+  "down_rc": 3,
+  "attendu": "refusé (55000)",
+  "message": "006r1 down : données du modèle 006 ou paramètres de duo présents ; retour arrière refusé",
+  "schema_inchange": true,
+  "conforme": true
+ },
+ "RB3": {
+  "down_rc": 3,
+  "attendu": "refusé (55000)",
+  "message": "006r1 down : données du modèle 006 ou paramètres de duo présents ; retour arrière refusé",
+  "schema_inchange": true,
+  "conforme": true
+ },
+ "RB5": {
+  "down_rc": 0,
+  "attendu": "accepté",
+  "message": "",
+  "schema_inchange": false,
+  "conforme": true
+ },
+ "verdict": true
+}

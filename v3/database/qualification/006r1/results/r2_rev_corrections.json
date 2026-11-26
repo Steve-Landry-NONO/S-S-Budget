@@ -1,0 +1,122 @@
+{
+ "label": "r2_rev_corrections",
+ "publie": "pub_s1",
+ "corrige": "s1",
+ "bilan": {
+  "Réussi": 14
+ },
+ "resultats": [
+  {
+   "id": "REV01-R-EUR",
+   "nature": "reproduction",
+   "regle": "REV-01 : la position et ledgerVersion sont des NOMBRES JSON dans la version publiée",
+   "attendu": "nombres JSON présents ; 2^53+1 non représentable en double",
+   "observe": "nombres=['9007199254740995', '9007199254740992', '0', '100'] cash=9007199254740995 (attendu 9007199254740995) perte_en_double=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV01-R-XAF",
+   "nature": "reproduction",
+   "regle": "REV-01 : la position et ledgerVersion sont des NOMBRES JSON dans la version publiée",
+   "attendu": "nombres JSON présents ; 2^53+1 non représentable en double",
+   "observe": "nombres=['9007199254740995', '9007199254740992', '0', '100'] cash=9007199254740995 (attendu 9007199254740995) perte_en_double=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV01-R-USD",
+   "nature": "reproduction",
+   "regle": "REV-01 : la position et ledgerVersion sont des NOMBRES JSON dans la version publiée",
+   "attendu": "nombres JSON présents ; 2^53+1 non représentable en double",
+   "observe": "nombres=['9007199254740995', '9007199254740992', '0', '100'] cash=9007199254740995 (attendu 9007199254740995) perte_en_double=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV01-C-EUR",
+   "nature": "correction",
+   "regle": "REV-01 : aucun nombre JSON ; montants et compteurs en chaînes d'entiers exactes (positifs, négatifs)",
+   "attendu": "0 nombre ; cash='9007199254740995' ; budgetBalance='-9007199254740892' ; ledgerVersion chaîne",
+   "observe": "nombres=[] cash='9007199254740995' budgetBalance='-9007199254740892' ledgerVersion='3'",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV01-C-XAF",
+   "nature": "correction",
+   "regle": "REV-01 : aucun nombre JSON ; montants et compteurs en chaînes d'entiers exactes (positifs, négatifs)",
+   "attendu": "0 nombre ; cash='9007199254740995' ; budgetBalance='-9007199254740892' ; ledgerVersion chaîne",
+   "observe": "nombres=[] cash='9007199254740995' budgetBalance='-9007199254740892' ledgerVersion='3'",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV01-C-USD",
+   "nature": "correction",
+   "regle": "REV-01 : aucun nombre JSON ; montants et compteurs en chaînes d'entiers exactes (positifs, négatifs)",
+   "attendu": "0 nombre ; cash='9007199254740995' ; budgetBalance='-9007199254740892' ; ledgerVersion chaîne",
+   "observe": "nombres=[] cash='9007199254740995' budgetBalance='-9007199254740892' ledgerVersion='3'",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV08-R",
+   "nature": "reproduction",
+   "regle": "REV-08 : « begin; \\i migration; rollback; » NE l'annule PAS (le COMMIT du fichier valide)",
+   "attendu": "catalogue modifié ; tables 006 présentes",
+   "observe": "rc=0 catalogue f96ec8f20c37a955→4412d3d70bb9fcf9 duo_v3_periods=1 avertissement=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV08-C",
+   "nature": "correction",
+   "regle": "REV-08 : dry_run_migration.sh exécute le corps puis ROLLBACK ; catalogue et versions inchangés",
+   "attendu": "rc 0 ; « ESSAI À BLANC OK » ; catalogue identique ; aucune table 006",
+   "observe": "rc=0 ESSAI À BLANC OK : aucune modification persistante catalogue f96ec8f20c37a955→f96ec8f20c37a955 duo_v3_periods=0",
+   "statut": "Réussi"
+  },
+  {
+   "id": "REV08-C2",
+   "nature": "correction",
+   "regle": "REV-08 : fichier à plusieurs transactions refusé avant toute exécution",
+   "attendu": "rc 2 ; REFUS",
+   "observe": "rc=2 REFUS : 2 « begin; » / 2 « commit; » de premier niveau (exactement 1 et 1 attendus)",
+   "statut": "Réussi"
+  },
+  {
+   "id": "G13-R",
+   "nature": "reproduction",
+   "regle": "G13 : le scénario du harnais historique (cash → envelope, duo sans période) est refusé par la 006r1",
+   "attendu": "transfert refusé (55000 ou 23503)",
+   "observe": "fixture installée ; transfert=55000 Household has no open accounting period (bootstrap required)",
+   "statut": "Réussi"
+  },
+  {
+   "id": "G13-C",
+   "nature": "correction",
+   "regle": "G13 / A-05 : workflow sans environnement ni secret ; script arrêté au démarrage (code 3) ; fixture s'arrête avant tout SQL",
+   "attendu": "0 « secrets. » ; 0 « environment: » ; script rc=3 ; fixture sans effet",
+   "observe": "secrets=0 environment=0 script_rc=3 fixture_rc=0 sortie='fixture obsolete (A-05/G13)'",
+   "statut": "Réussi"
+  },
+  {
+   "id": "INT-01",
+   "nature": "état intermédiaire",
+   "regle": "Fonds réels sans lot 3",
+   "attendu": "—",
+   "observe": "sans objet sur cette branche (migration fonds absente)",
+   "statut": "Réussi"
+  },
+  {
+   "id": "INT-02",
+   "nature": "état intermédiaire",
+   "regle": "Lot 3 sans 006r1",
+   "attendu": "—",
+   "observe": "sans objet sur cette branche (migration lot 3 absente)",
+   "statut": "Réussi"
+  },
+  {
+   "id": "INT-03",
+   "nature": "état intermédiaire",
+   "regle": "006r1 rejouée sur une base qui l'a déjà : échec atomique, catalogue inchangé",
+   "attendu": "échec ; catalogue identique",
+   "observe": "rc=3 catalogue 4412d3d70bb9fcf9→4412d3d70bb9fcf9",
+   "statut": "Réussi"
+  }
+ ]
+}

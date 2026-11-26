@@ -1,0 +1,332 @@
+{
+ "label": "r2_b006_deep",
+ "template": "b006",
+ "revision1": false,
+ "resume": {
+  "Réussi": 12,
+  "Échoué": 14,
+  "Sans objet": 6
+ },
+ "resultats": [
+  {
+   "id": "RAT-01",
+   "famille": "RAT — rattrapage multi-cycles",
+   "regle": "Écriture membre après 1 cycle(s) échu(s) : rattrapage complet dans la même transaction (D6-01 / F1)",
+   "action": "contribution RPC (A), COMMIT ; duo amorcé il y a 1 cycle(s)",
+   "attendu": "ok ; 2 périodes contiguës, 1 ouverte, 1 clôtures ; soldes {'Plus': 20000, 'VersReserve': 5000, 'Deficit': -1000} ; réserve 5000",
+   "observe": "ok=True  {'periodes': 2, 'ouvertes': 1, 'contigues': True, 'soldes': {'Plus': 20000, 'VersReserve': 5000, 'Deficit': -1000}, 'reserve': 5000, 'doublons_systeme': 0, 'clotures': 1, 'clotures_env': 3, 'transactions': 9}",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RAT-02",
+   "famille": "RAT — rattrapage multi-cycles",
+   "regle": "Écriture membre après 2 cycle(s) échu(s) : rattrapage complet dans la même transaction (D6-01 / F1)",
+   "action": "contribution RPC (A), COMMIT ; duo amorcé il y a 2 cycle(s)",
+   "attendu": "ok ; 3 périodes contiguës, 1 ouverte, 2 clôtures ; soldes {'Plus': 30000, 'VersReserve': 5000, 'Deficit': 0} ; réserve 10000",
+   "observe": "ok=False 23514 Accounting period is closed {'periodes': 1, 'ouvertes': 1, 'contigues': True, 'soldes': {'Plus': 10000, 'VersReserve': 5000, 'Deficit': -2000}, 'reserve': 0, 'doublons_systeme': 0, 'clotures': 0, 'clotures_env': 0, 'transactions': 4}",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "RAT-03",
+   "famille": "RAT — rattrapage multi-cycles",
+   "regle": "Écriture membre après 3 cycle(s) échu(s) : rattrapage complet dans la même transaction (D6-01 / F1)",
+   "action": "contribution RPC (A), COMMIT ; duo amorcé il y a 3 cycle(s)",
+   "attendu": "ok ; 4 périodes contiguës, 1 ouverte, 3 clôtures ; soldes {'Plus': 40000, 'VersReserve': 5000, 'Deficit': 1000} ; réserve 15000",
+   "observe": "ok=False 23514 Accounting period is closed {'periodes': 1, 'ouvertes': 1, 'contigues': True, 'soldes': {'Plus': 10000, 'VersReserve': 5000, 'Deficit': -2000}, 'reserve': 0, 'doublons_systeme': 0, 'clotures': 0, 'clotures_env': 0, 'transactions': 4}",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "RAT-13",
+   "famille": "RAT — rattrapage multi-cycles",
+   "regle": "Écriture membre après 13 cycle(s) échu(s) : rattrapage complet dans la même transaction (D6-01 / F1)",
+   "action": "contribution RPC (A), COMMIT ; duo amorcé il y a 13 cycle(s)",
+   "attendu": "ok ; 14 périodes contiguës, 1 ouverte, 13 clôtures ; soldes {'Plus': 140000, 'VersReserve': 5000, 'Deficit': 1000} ; réserve 75000",
+   "observe": "ok=False 23514 Accounting period is closed {'periodes': 1, 'ouvertes': 1, 'contigues': True, 'soldes': {'Plus': 10000, 'VersReserve': 5000, 'Deficit': -2000}, 'reserve': 0, 'doublons_systeme': 0, 'clotures': 0, 'clotures_env': 0, 'transactions': 4}",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "ERR-catchup_tests",
+   "famille": "Exécution",
+   "regle": "Erreur du banc",
+   "action": "catchup_tests",
+   "attendu": "aucune",
+   "observe": "CheckViolation: Accounting period is closed\nCONTEXT:  PL/pgSQL function public.duo_v3_validate_posting() line 46 at RAISE",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "ERR-key_tests",
+   "famille": "Exécution",
+   "regle": "Erreur du banc",
+   "action": "key_tests",
+   "attendu": "aucune",
+   "observe": "CheckViolation: Accounting period is closed\nCONTEXT:  PL/pgSQL function public.duo_v3_validate_posting() line 46 at RAISE",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "SCE-01",
+   "famille": "SCE — scellement des écritures validées",
+   "regle": "F5 : une écriture validée ne reçoit plus de lignes, même équilibrées (postgres)",
+   "action": "transaction ultérieure : +50/−50 sur la contribution validée",
+   "attendu": "23514 ; 2 lignes",
+   "observe": "accepté lignes=4",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "SCE-02",
+   "famille": "SCE — scellement des écritures validées",
+   "regle": "Lignes ajoutées dans une sous-transaction (SAVEPOINT) de la même transaction : acceptées",
+   "action": "en-tête puis lignes sous SAVEPOINT, COMMIT",
+   "attendu": "accepté ; 2 lignes",
+   "observe": "ok=True lignes=2 ",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "SCE-03",
+   "famille": "SCE — scellement des écritures validées",
+   "regle": "SAVEPOINT annulé puis lignes réécrites : seules les lignes conservées comptent",
+   "action": "lignes ±99 annulées, ±40 écrites",
+   "attendu": "accepté ; lignes [-40, 40]",
+   "observe": "ok=True lignes=[-40, 40]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "SCE-04",
+   "famille": "SCE — scellement des écritures validées",
+   "regle": "posting_xid fourni par l'appelant",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne absente de la 006 originale",
+   "statut": "Sans objet",
+   "note": ""
+  },
+  {
+   "id": "SCE-05",
+   "famille": "SCE — scellement des écritures validées",
+   "regle": "Descellement par mise à jour",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne absente de la 006 originale",
+   "statut": "Sans objet",
+   "note": ""
+  },
+  {
+   "id": "AUT-01",
+   "famille": "AUT — autorisation sous verrou",
+   "regle": "F7 : départ de B validé pendant que sa contribution attend le verrou du duo → refus 42501, aucune écriture",
+   "action": "session 1 : verrou du duo + retrait de B, COMMIT après 0,8 s ; session 2 : RPC de B (contrôle initial passé)",
+   "attendu": "42501 ; 0 transaction de B",
+   "observe": "23503 insert or update on table \"duo_v3_transactions\" violates foreign key constraint \"duo_v3_transactions_household_id_created_by_fkey\" ; transactions de B=0",
+   "statut": "Échoué",
+   "note": "Sur la 006 originale, l'appartenance n'est vérifiée qu'avant le verrou : le refus éventuel provient d'une clé étrangère (23503), pas de l'autorisation."
+  },
+  {
+   "id": "AUT-02",
+   "famille": "AUT — autorisation sous verrou",
+   "regle": "F7 : départ de B validé pendant que sa dépense attend le verrou du duo → refus 42501, aucune écriture",
+   "action": "session 1 : verrou du duo + retrait de B, COMMIT après 0,8 s ; session 2 : RPC de B (contrôle initial passé)",
+   "attendu": "42501 ; 0 transaction de B",
+   "observe": "23503 insert or update on table \"duo_v3_transactions\" violates foreign key constraint \"duo_v3_transactions_household_id_created_by_fkey\" ; transactions de B=0",
+   "statut": "Échoué",
+   "note": "Sur la 006 originale, l'appartenance n'est vérifiée qu'avant le verrou : le refus éventuel provient d'une clé étrangère (23503), pas de l'autorisation."
+  },
+  {
+   "id": "UNI-01",
+   "famille": "UNI — unités monétaires",
+   "regle": "F4 étendu : toutes les colonnes monétaires stockées utilisent le domaine sans échelle",
+   "action": "catalogue : colonnes *minor* des tables duo_v3_*",
+   "attendu": "8 colonnes, toutes duo_v3_private.minor_units",
+   "observe": "8 colonnes ; hors domaine=['duo_v3_allocation_versions.amount_minor:numeric(38,0)', 'duo_v3_entries.amount_minor:numeric(38,0)', 'duo_v3_period_allocations.amount_minor:numeric(38,0)', 'duo_v3_period_closes.allocations_total_minor:numeric(38,0)', 'duo_v3_period_closes.to_reserve_total_minor:numeric(38,0)', 'duo_v3_period_envelope_closes.carried_minor:numeric(38,0)', 'duo_v3_period_envelope_closes.closing_balance_minor:numeric(38,0)', 'duo_v3_period_envelope_closes.to_reserve_minor:numeric(38,0)']",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "UNI-02",
+   "famille": "UNI — unités monétaires",
+   "regle": "Allocation fractionnaire refusée",
+   "action": "set_allocation(10.5)",
+   "attendu": "22023",
+   "observe": "22023 Invalid allocation amount",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "UNI-03",
+   "famille": "UNI — unités monétaires",
+   "regle": "Écriture privilégiée 100,6 centimes : refusée avant tout arrondi",
+   "action": "INSERT ±100.6 (postgres)",
+   "attendu": "23514 (domaine)",
+   "observe": "accepté (arrondi silencieux)",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "UNI-04a",
+   "famille": "UNI — unités monétaires",
+   "regle": "RPC : montant non entier, nul, négatif ou hors bornes refusé",
+   "action": "contribution 1.5",
+   "attendu": "22023",
+   "observe": "22023 Invalid contribution parameters",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "UNI-04b",
+   "famille": "UNI — unités monétaires",
+   "regle": "RPC : montant non entier, nul, négatif ou hors bornes refusé",
+   "action": "contribution 0",
+   "attendu": "22023",
+   "observe": "22023 Invalid contribution parameters",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "UNI-04c",
+   "famille": "UNI — unités monétaires",
+   "regle": "RPC : montant non entier, nul, négatif ou hors bornes refusé",
+   "action": "contribution -5",
+   "attendu": "22023",
+   "observe": "22023 Invalid contribution parameters",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "UNI-04d",
+   "famille": "UNI — unités monétaires",
+   "regle": "RPC : montant non entier, nul, négatif ou hors bornes refusé",
+   "action": "contribution 1e40",
+   "attendu": "22023",
+   "observe": "22023 Invalid contribution parameters",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "DEV-01",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "Devise modifiable avant toute opération ; comptes et enveloppes suivent (aucune conversion)",
+   "action": "UPDATE currency EUR→XAF, duo amorcé sans écriture",
+   "attendu": "accepté ; comptes et enveloppes en XAF",
+   "observe": "ok=False 23514 Calendar and currency are frozen once periods exist (D-005, D-011) devises=[('EUR',)]",
+   "statut": "Échoué",
+   "note": "Sur la 006 originale : refus dès la 1re période (L14c) — écart CF-11 documenté."
+  },
+  {
+   "id": "DEV-02",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "Devise figée dès la première opération",
+   "action": "contribution puis UPDATE currency",
+   "attendu": "23514",
+   "observe": "accepté",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "DEV-03",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "Devise figée dès qu'une allocation non nulle existe",
+   "action": "allocation 50,00 puis UPDATE currency",
+   "attendu": "23514",
+   "observe": "23514 Calendar and currency are frozen once periods exist (D-005, D-011)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "DEV-04",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "F3 : compte d'une autre devise refusé à la création",
+   "action": "INSERT compte USD dans un duo EUR",
+   "attendu": "23503",
+   "observe": "accepté",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "DEV-05",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "Changement de devise concurrent d'une première écriture : l'écriture attend et utilise la nouvelle devise",
+   "action": "session 1 : UPDATE XAF (0,6 s) ; session 2 : contribution",
+   "attendu": "écriture acceptée en XAF ; duo XAF",
+   "observe": "changement=23514 Calendar and currency are frozen once periods exist (D-005, D-011) écriture=True devises_lignes=[('EUR',)] duo=EUR",
+   "statut": "Échoué",
+   "note": ""
+  },
+  {
+   "id": "DEV-06",
+   "famille": "DEV — verrouillage de la devise (CF-11)",
+   "regle": "Première écriture concurrente d'un changement de devise : le changement attend puis est refusé",
+   "action": "session 1 : contribution (0,6 s) ; session 2 : UPDATE XAF",
+   "attendu": "23514 ; duo EUR",
+   "observe": "23514 Calendar and currency are frozen once periods exist (D-005, D-011) duo=EUR",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "CON-01",
+   "famille": "CON — compatibilité concurrente",
+   "regle": "12 écritures mêlées (dépenses/contributions, A et B, clés partagées) : aucune double écriture par (auteur, clé)",
+   "action": "12 sessions simultanées",
+   "attendu": "aucune ligne en double ; rejeux de même charge = même uuid ; charge différente sous même clé = 23505",
+   "observe": "résultats=['ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok', 'ok'] doublons=[]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "CON-02",
+   "famille": "CON — compatibilité concurrente",
+   "regle": "Invariant après concurrence : chaque livre est équilibré",
+   "action": "somme par livre",
+   "attendu": "0 pour cash et budget",
+   "observe": "[('budget', Decimal('0')), ('cash', Decimal('0'))]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "ORD-01",
+   "famille": "ORD — ordre sous verrou (R-A3)",
+   "regle": "R-A3 / R-A2",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne posted_at / fonction admin_catch_up absentes",
+   "statut": "Sans objet",
+   "note": ""
+  },
+  {
+   "id": "ORD-02",
+   "famille": "ORD — ordre sous verrou (R-A3)",
+   "regle": "R-A3 / R-A2",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne posted_at / fonction admin_catch_up absentes",
+   "statut": "Sans objet",
+   "note": ""
+  },
+  {
+   "id": "RA2-01",
+   "famille": "RA2 — plafond et récupération",
+   "regle": "R-A3 / R-A2",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne posted_at / fonction admin_catch_up absentes",
+   "statut": "Sans objet",
+   "note": ""
+  },
+  {
+   "id": "RA2-02",
+   "famille": "RA2 — plafond et récupération",
+   "regle": "R-A3 / R-A2",
+   "action": "—",
+   "attendu": "—",
+   "observe": "sans objet : colonne posted_at / fonction admin_catch_up absentes",
+   "statut": "Sans objet",
+   "note": ""
+  }
+ ]
+}
