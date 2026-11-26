@@ -747,6 +747,7 @@ realized as (select coalesce(sum(mv.amount_minor), 0) as v from mv, p, acc
              where mv.account_id = acc.id and acc.kind = 'cash' and mv.period_id = p.id and mv.nature = 'contribution'),
 lines as (
   select e.id, e.name, e.status, e.protected, e.carry_positive,
+    exists (select 1 from public.duo_v3_protection_lift_requests r where r.envelope_id = e.id and r.status = 'pending') as lift_pending,   -- REV-06
     coalesce((select v.amount_minor from public.duo_v3_allocation_versions v, p where v.envelope_id = e.id and v.effective_from <= p.starts_on
               order by v.effective_from desc limit 1), 0) as target,
     coalesce((select sum(amount_minor) from mv, p where mv.account_id = e.account_id and mv.period_id = p.id and mv.kind = 'allocation'), 0) as allocated,
@@ -761,7 +762,7 @@ lines as (
 select pg_catalog.jsonb_build_object(
   'householdId', p_household, 'asOf', pg_catalog.now(), 'currency', (select currency from h),
   'fundsTracking', (select funds_tracking from h),
-  'ledgerVersion', (select pg_catalog.count(*) from public.duo_v3_transactions t where t.household_id = p_household),
+  'ledgerVersion', (select pg_catalog.count(*)::text from public.duo_v3_transactions t where t.household_id = p_household),   -- REV-01
   'period', (select pg_catalog.jsonb_build_object('periodId', p.id, 'startsOn', p.starts_on, 'endsBefore', p.ends_on) from p),
   'household', pg_catalog.jsonb_build_object(
      'realTreasury',          (select b::text from bal where kind = 'cash'),
@@ -778,7 +779,7 @@ select pg_catalog.jsonb_build_object(
                                   else ((select b from bal where kind = 'cash') + coalesce((select sum(greatest(xm.amount - coalesce((select v from realized_m r where r.member_id = xm.member_id), 0), 0)) from xm), 0))::text end from xc),
      'forecastState',         (select case when xc.j ->> 'state' = 'not_configured' then 'not_available' else 'contributions_only' end from xc)),
   'envelopes', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-      'envelopeId', l.id, 'name', l.name, 'status', l.status, 'protectionState', case when l.protected then 'protected' else 'none' end,
+      'envelopeId', l.id, 'name', l.name, 'status', l.status, 'protectionState', case when l.protected and l.lift_pending then 'lift_pending' when l.protected then 'protected' else 'none' end,
       'target', l.target::text, 'budgetAllocation', l.allocated::text, 'carryOver', l.carry_over::text,
       'realizedExpenses', l.spent::text, 'remainingBudget', (l.carry_over + l.target - l.spent)::text, 'budgetBalance', l.budget_balance::text,
       'assignedRealFunds', l.assigned_period::text, 'assignedRealFundsCumulative', l.assigned_cumulative::text,
