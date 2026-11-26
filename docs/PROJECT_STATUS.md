@@ -17,26 +17,25 @@ Maturité = somme des poids × scores / 100. Poids total 100. Scores estimés pa
 | S8+ Bêta publique | 7 | 8 | 0,56 | préparation distribution ; aucune publication |
 | Total | 100 | | 48,96 | ~49 % de maturité, non disponibilité |
 
-## État des preuves et portes
-- main : V2 historique, marque et fondations initiales ; ne pas présenter V3 comme disponible. Pas de pourcentage intégré vérifié.
-- PR #3, #4, #6–#9, #11, #12, #14–#20 ouvertes et brouillons à l'instant de l'audit (14). #16–#20 documents repris dans la PR de consolidation ; ne pas fermer avant comparaison et intégration vérifiée.
-- #15 hardening : CI historique verte rapportée au SHA cb31618 ; recette native complémentaire et décisions L2 non clôturées. #4 ne fermer qu'après remplacement effectif.
-- Claude, archive Foundation Finalization 26/11 : 006 originale NO GO ; 006r1 F1–F7 candidate, 72/72 historiques et 34/34 approfondis rapportés, rollback qualifié sur réplique ; exceptions C01/C07a et fixture historique USD documentées. M2 27/27, lot 3 20/20 + 22/22, contrat 33/33 rapportés. Pas de nouvelle exécution indépendante ici.
-- DEV 001–005 selon rapport Claude, non revérifié dans ce chantier. Aucune migration autorisée. R-A1 = préparation PR et revue, non autorisation d'application.
-- Figma page 14 : dix écrans créés, 16 liens configurés ; finitions, grande police et recette exhaustive restantes. V3.0.7 gelée. Ne pas assimiler prototype à implémentation.
-- Gemini : dossier QA et dix scénarios Maestro candidats ; identifiants provisoires, aucun test E2E exécuté, tarifs et exigences stores non vérifiés ici.
-- Dates roadmap inchangées. S1 non clôturé ; S2 commence le 26/11. Porte cloud avant tout couple externe ; recalage officiel restant à valider.
-- Prévisionnel non disponible tant que dépenses prévues non modélisées. Les fixtures UX illustratives ne prouvent pas une capacité backend.
+## État des preuves et portes — actualisé après les trois audits
+- Main reste V2 historique ; aucune V3 disponible. #21 fusionnée, #16–20 closes. #23–26 publiées aux SHA originaux vérifiés ; #26 CI verte. #27 consolide les documents et les décisions.
+- #15 CI verte au SHA cb31618 (six catégories) ; recette native complémentaire et L2 restent ouverts. Intégration S1/S2 unique proposée et approuvée, sans exposer de version intermédiaire.
+- Claude rapporte un rejeu depuis les SHA publiés : 006r1 72/72 et 38/38, rollback sur réplique OK ; lot3 10/10, 20/20 et 22/22 ; M2 30/30 ; contrat 35/35. Exceptions historiques conservées. DEV 001–005 concordantes et vide selon lecture Claude du 26/11 ; à revérifier avant autorisation. Aucune migration autorisée.
+- REV-01–08 et G1–14 : transport exact, mock/idempotence, cache, invariants, capacités, procédure DEV et fonctions de gestion manquantes. #23 NO GO DEV en l'état ; #26 fixtures uniquement. Harnais Auth E2E historique obsolète à neutraliser avant #23.
+- Figma page 14 : dix écrans et 16 liens rapportés ; finitions et recette responsive/accessible restantes. Baseline V3.0.7 gelée.
+- Gemini : huit documents de qualification, dix scénarios Maestro à adapter ; aucun test natif exécuté. Recette corrigée : protection commune visible aux deux partenaires, confidentialité personnelle, contributions distinctes des affectations, annulation tracée, prévision indisponible.
+- Dates historiques inchangées ; S1 non clôturé ; score 48,96 % conservé jusqu'à réévaluation documentée. Aucun couple externe autorisé.
+- Voir [consolidation des audits](CONSOLIDATED_AUDITS_2026-11-26.md) et [arbitrages validés](CONSOLIDATION_DECISIONS_2026-11-26.md).
 
 ## Registre et priorité en cas de contradiction
 Les textes originaux des PR #16–#20 sont conservés. Les décisions explicites les plus récentes (Foundation Finalization, #20) complètent et, sur leur périmètre précis, remplacent les restrictions ou options historiques contradictoires : préparation/publication de PR backend après audit autorisée ; aucune migration ni fusion majeure autorisée ; M2 à trois livres adopté ; contrat mobile candidat. La roadmap ancienne décrit des états datés, non l'état actuel. Les exemples de prévisionnel du Sprint 3 sont fictifs ; ne pas substituer budgetBalance à realAvailable. Les décisions non couvertes (L2, ONB, réconciliation D-021–029) ne sont pas réputées validées. Voir les documents product et demander un arbitrage en cas de contradiction non résolue.
 
 ## Prochain jalon Alpha Cloud
-1. Revue et intégration maîtrisée #15/#14/#3, après recette et vérification protections.
-2. Restauration historique lots backend, PR 006r1, revue indépendante ; demander autorisation distincte DEV.
-3. M2 et membres en PR séparées ; qualification Auth et isolation réelle.
-4. Sprint 3 mobile sur fixtures, puis raccordement cloud ; prévisions lot distinct.
-5. Adaptation Maestro, builds autonomes et recette iOS/Android ; aucune publication implicite.
+1. Intégration documentaire, préservation des sources historiques, puis archivage des PR obsolètes après vérification de couverture.
+2. En parallèle : branche mobile S1/S2 unique depuis main, CI, recette native ; finaliser Figma et Sprint 3 sur fixtures.
+3. Corriger REV-01–08 et écarts G1–14, harnais obsolète et recovery ; revue indépendante ; contrat #26 avant connexion.
+4. #23 reciblée main, merge commit et fenêtre DEV distinctement autorisée ; #12 jamais fusionnée seule. #24 puis #25 dans leurs fenêtres respectives. Aucune migration implicite.
+5. Gestion G-A à G-E, Auth, isolation, prévisions R-B2, intégration mobile-cloud et recette autonome avant Alpha externe.
 
 ## Mise à jour quotidienne
 Rapport : livré / preuve SHA et test / en cours / bloqué / décisions / prochain livrable. Séparer preuves GitHub, rapports externes, tests locaux et tests réels. Ne pas augmenter un score uniquement parce qu'une PR est ouverte. Réviser la pondération uniquement en expliquant la rupture de comparabilité. Objectif interne indicatif suivant : 60 %, non prévision garantie.
