@@ -1,0 +1,17 @@
+# 2026-11-21T04:50:43Z · branche feat/v3-ledger-schema-dev @ 4d41286 · v22.23.5
+# Subtest: validates and maps transfer without floating point
+ok 1 - validates and maps transfer without floating point
+# Subtest: rejects invalid and unsafe transfer requests
+ok 2 - rejects invalid and unsafe transfer requests
+# Subtest: calls authenticated RPC with validated parameters
+ok 3 - calls authenticated RPC with validated parameters
+# Subtest: propagates RPC errors without retrying a financial write
+ok 4 - propagates RPC errors without retrying a financial write
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 57.304124
