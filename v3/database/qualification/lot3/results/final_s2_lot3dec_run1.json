@@ -1,0 +1,99 @@
+{
+ "label": "final_s2_lot3dec_run1",
+ "template": "s2",
+ "bilan": {
+  "Réussi": 10
+ },
+ "resultats": [
+  {
+   "id": "RD-01",
+   "regle": "R-A3 : écriture commencée avant un départ mais inscrite après → appartient à l'absence (invisible au retour)",
+   "action": "A ouvre sa transaction, B part, A inscrit sa dépense, B revient",
+   "attendu": "dépense acceptée ; created_at < left_at < posted_at ; invisible pour B",
+   "observe": "A=ok created<left=True left<posted=True visible_B=False",
+   "statut": "Réussi",
+   "note": "Avant R-A3, la frontière comparait created_at (début de transaction) : l'opération aurait été visible."
+  },
+  {
+   "id": "RD-02",
+   "regle": "R-C1 : les deux partenaires sont informés (soldes communs visibles, opérations intermédiaires non visibles)",
+   "action": "A et B lisent les avis après le retour ; un tiers aussi",
+   "attendu": "1 avis RETURN_VISIBILITY_NOTICE chacun (partner / returning_member) ; tiers : []",
+   "observe": "A=[('RETURN_VISIBILITY_NOTICE', 'partner')] B=[('RETURN_VISIBILITY_NOTICE', 'returning_member')] tiers=[]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-03",
+   "regle": "R-C2 : compte supprimé hors déclencheurs — appartenance encore « active » en base, mais aucune autorisation effective",
+   "action": "suppression replica ; B (jeton encore valide) écrit et lit",
+   "attendu": "statut active (non réconcilié) ; écriture 42501 ; 0 ligne ; instantané vide",
+   "observe": "statut=active écriture=42501 lignes=0 enveloppes=[]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-04",
+   "regle": "R-C2 : réconciliation horaire fournie hors migration (opt-in, pg_cron gratuit), sans effet tant qu'elle n'est pas planifiée",
+   "action": "inspection du script",
+   "attendu": "appelle reconcile_orphan_memberships ; cron horaire ; hors supabase/migrations",
+   "observe": "contient_appel=True cron_horaire=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-05",
+   "regle": "R-C3 : duo archivé — aucun accès applicatif des anciens membres ; export réservé aux rôles serveur ; pas de réouverture",
+   "action": "A lit ; A appelle l'export ; export par postgres",
+   "attendu": "0 ; instantané vide ; 42501 ; export complet (2 membres, évènements, somme de contrôle)",
+   "observe": "lecture=0 enveloppes=[] export_client=42501 export_membres=2 évènements=4",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-06",
+   "regle": "R-C4 : aucune mutation entre l'espace commun et l'espace personnel (dépense commune sur enveloppe personnelle, transfert réserve commune → enveloppe personnelle)",
+   "action": "2 tentatives par le titulaire des deux espaces",
+   "attendu": "23503 ; 23503",
+   "observe": "23503 ; 23503",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-07",
+   "regle": "R-C5 : can_read_at — SECURITY DEFINER, STABLE, search_path vide, paramètres (duo, instant), anon exclu",
+   "action": "catalogue",
+   "attendu": "secdef ; s ; search_path=\"\" ; anon non ; authenticated oui (nécessaire à la RLS)",
+   "observe": "(True, 's', ['search_path=\"\"'], 'p_household uuid, p_at timestamp with time zone', False, True)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-08",
+   "regle": "R-C5 : aucun oracle pour un non-membre — même réponse (false) pour un duo existant ou inexistant, à tout instant",
+   "action": "tiers interroge can_read_at sur 2 duos × 3 instants",
+   "attendu": "6 × false",
+   "observe": "[False]",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "RD-09",
+   "regle": "R-C5 : pour un membre, la réponse ne dépend que de SES épisodes (aucune information sur l'autre membre)",
+   "action": "B interroge deux instants ; épisodes de A inchangés",
+   "attendu": "réponses déterminées par l'épisode de B uniquement",
+   "observe": "B(2000)=True B(2100)=True épisodes_A=1",
+   "statut": "Réussi",
+   "note": "2000 : antérieur à toute arrivée de B = histoire commune (CF-07) ; 2100 : épisode ouvert."
+  },
+  {
+   "id": "X18b",
+   "regle": "R-C5 : fonctions privées exécutables — liste fermée {is_current_member, can_read_at} ; is_member reste retirée (005, constat R19) ; X18 historique conservé tel quel",
+   "action": "catalogue",
+   "attendu": "exactement 2 fonctions, aucune pour anon",
+   "observe": "['can_read_at', 'is_current_member']",
+   "statut": "Réussi",
+   "note": ""
+  }
+ ]
+}
