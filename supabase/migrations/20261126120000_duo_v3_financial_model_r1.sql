@@ -1286,10 +1286,15 @@ lines as (
   from env)
 select pg_catalog.jsonb_build_object(
   'householdId', p_household, 'scope', 'common', 'asOf', pg_catalog.now(),
-  'ledgerVersion', (select pg_catalog.count(*) from public.duo_v3_transactions t where t.household_id = p_household),
+  -- REV-01 (26/11) : tout montant et tout compteur sont transportés en CHAÎNES d'entiers (aucune perte au-delà de 2^53 côté JavaScript).
+  'ledgerVersion', (select pg_catalog.count(*)::text from public.duo_v3_transactions t where t.household_id = p_household),
   'period', (select pg_catalog.jsonb_build_object('periodId', p.id, 'startsOn', p.starts_on, 'endsBefore', p.ends_on) from p),
   'currency', (select h.currency from public.duo_v3_households h where h.id = p_household),
-  'position', (select pg_catalog.to_jsonb(pos) - 'household_id' - 'currency' from public.duo_v3_household_position pos
+  'position', (select pg_catalog.jsonb_build_object(
+                 'cash_minor', pos.cash_minor::text, 'envelopes_minor', pos.envelopes_minor::text, 'reserve_minor', pos.reserve_minor::text,
+                 'allocated_minor', pos.allocated_minor::text, 'spent_minor', pos.spent_minor::text, 'net_external_minor', pos.net_external_minor::text,
+                 'funding_gap_minor', pos.funding_gap_minor::text, 'funding_alert', pos.funding_alert)
+               from public.duo_v3_household_position pos
                join public.duo_v3_households h on h.id = pos.household_id and h.currency = pos.currency where pos.household_id = p_household),
   'envelopes', coalesce((select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
       'envelopeId', l.envelope_id, 'name', l.name, 'status', l.status, 'carryPositive', l.carry_positive,
