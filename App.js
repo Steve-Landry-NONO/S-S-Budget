@@ -29,6 +29,8 @@ const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
 const USER_KEY = 'SS_BUDGET_V2_CURRENT_USER_ID';
 const AUTH_TOKEN_KEY = 'SS_BUDGET_V2_AUTH_TOKEN';
 const AUTH_EXPIRES_KEY = 'SS_BUDGET_V2_AUTH_EXPIRES_AT';
+const AUTH_SESSION_KEY = 'SS_BUDGET_V2_AUTH_SESSION_V2';
+const PENDING_MUTATION_PREFIX = 'SS_BUDGET_V2_PENDING_MUTATION:';
 const DELETE_WINDOW_DAYS = 5;
 const defaultStartMonth = '2026-07';
 
@@ -189,6 +191,7 @@ export default function App() {
 
 function AuthenticatedApp() {
   const sessionStorage = require('./src/features/session/sessionBoundary.cjs');
+  const mutationStorage = require('./src/features/session/mutationBoundary.cjs');
   const {fontScale, width} = useWindowDimensions();
   const largeText = fontScale >= 1.3 || width < 340;
   const [showGlance, setShowGlance] = useState(true);
@@ -197,7 +200,7 @@ function AuthenticatedApp() {
   const [editingServer, setEditingServer] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('steve');
   const [connected, setConnected] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('Mode local');
+  const [syncMessage, setSyncMessage] = useState('Non synchronisé');
   const [members, setMembers] = useState(initialState.members);
   const [categories, setCategories] = useState(initialState.categories);
   const [expenses, setExpenses] = useState([]);
@@ -220,6 +223,8 @@ function AuthenticatedApp() {
   const [bootLoading, setBootLoading] = useState(true);
   const [authToken, setAuthToken] = useState('');
   const [authTokenExpiresAt, setAuthTokenExpiresAt] = useState('');
+  const [sessionId,setSessionId]=useState('');
+  const [appActive,setAppActive]=useState(Platform.OS==='web'||AppState.currentState==null||AppState.currentState==='active');
   const [authMembers, setAuthMembers] = useState([]);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -229,17 +234,26 @@ function AuthenticatedApp() {
   const [pinManageDraft, setPinManageDraft] = useState({ currentPin: '', newPin: '', newPin2: '' });
 
   const boundaryRef=useRef(null);
-  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage,{cache:CACHE_KEY,api:API_KEY,secret:SECRET_KEY,user:USER_KEY,token:AUTH_TOKEN_KEY,expires:AUTH_EXPIRES_KEY});
+  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage,{cache:CACHE_KEY,api:API_KEY,secret:SECRET_KEY,user:USER_KEY,token:AUTH_TOKEN_KEY,expires:AUTH_EXPIRES_KEY,auth:AUTH_SESSION_KEY});
   const boundary=boundaryRef.current;
   const epoch=boundary.current();
-  const session={api:apiUrl,secret:apiSecret,user:currentUserId,token:authToken,expires:authTokenExpiresAt};
+  const session={api:apiUrl,secret:apiSecret,user:currentUserId,token:authToken,expires:authTokenExpiresAt,sessionId};
+  const journalRef=useRef(null), readFenceRef=useRef(null);
+  if(!journalRef.current)journalRef.current=mutationStorage.createMutationJournal(AsyncStorage,PENDING_MUTATION_PREFIX);
+  if(!readFenceRef.current)readFenceRef.current=mutationStorage.createReadFence();
+  const journal=journalRef.current,readFence=readFenceRef.current;
+  const mutationRef=useRef({kind:'checking',marker:null});
+  const [mutationState,setMutationState]=useState(mutationRef.current);
+  const setMutation=(kind,marker=null)=>{const next={kind,marker};mutationRef.current=next;setMutationState(next);};
+  const currentSession=()=>boundary.isCurrent(epoch)&&sessionStorage.valid(session);
   const isSessionValid=()=>sessionStorage.valid(session);
   const [dataReady,setDataReady]=useState(false);
   const [storageError,setStorageError]=useState(false);
   const reportStorageError=()=>setStorageError(true);
   const resetSession=()=>{
     const purge=boundary.purge();
-    setAuthToken('');setAuthTokenExpiresAt('');setCurrentUserId('');
+    readFence.invalidate();setMutation('checking');
+    setAuthToken('');setAuthTokenExpiresAt('');setSessionId('');setCurrentUserId('');
     setMembers([]);setCategories([]);setExpenses([]);setContributions([]);setActivityLogs([]);
     setDataReady(false);setConnected(false);setSyncMessage('Session fermée');
     setSelectedMonth(currentMonthKey());setMonthDraft(currentMonthKey());setMonthPickerOpen(false);setTab('dashboard');
@@ -267,6 +281,16 @@ function AuthenticatedApp() {
   },[authToken,authTokenExpiresAt,currentUserId,epoch]);
 
   useEffect(() => { loadLocal(); }, []);
+  useEffect(()=>{
+    const sub=AppState.addEventListener('change',state=>setAppActive(Platform.OS==='web'||state==='active'));
+    return()=>sub.remove();
+  },[]);
+  useEffect(()=>{
+    if(bootLoading||!currentSession())return;
+    let cancelled=false;
+    journal.read(session).then(marker=>{if(!cancelled&&currentSession())setMutation(marker?'unknown':'idle',marker);}).catch(()=>{if(!cancelled&&currentSession())setMutation('storage-error');});
+    return()=>{cancelled=true;};
+  },[bootLoading,epoch,sessionId]);
 
   useEffect(() => {
     if (bootLoading) return;
@@ -275,7 +299,7 @@ function AuthenticatedApp() {
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, bootLoading, dataReady, epoch]);
+  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, sessionId, bootLoading, dataReady, epoch]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -286,11 +310,11 @@ function AuthenticatedApp() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    if (bootLoading || !apiUrl || !isSessionValid()) return;
+    if (bootLoading || !apiUrl || !isSessionValid() || mutationState.kind!=='idle' || !appActive) return;
     syncFromServer(false);
     const timer = setInterval(() => { if (isSessionValid()) syncFromServer(false); }, 15000);
     return () => clearInterval(timer);
-  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, bootLoading, epoch]);
+  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, sessionId, bootLoading, epoch, mutationState.kind, appActive]);
 
   useEffect(() => {
     if (!bootLoading && apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
@@ -298,36 +322,42 @@ function AuthenticatedApp() {
 
   const request = async (path, options = {}) => {
     if (!boundary.isCurrent(epoch)) throw stale();
-    if (authToken && !isSessionValid()) { resetSession(); throw stale(); }
+    if (boundary.requestStatus(epoch,session)==='expired') { resetSession(); throw stale(); }
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
     const url = `${apiUrl.replace(/\/$/, '')}${path}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
-        ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
-        ...(authToken ? { 'x-ss-budget-auth-token': authToken } : {}),
-        ...(options.headers || {}),
-      },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!boundary.isCurrent(epoch)) throw stale();
-    if (authToken && !isSessionValid()) { resetSession(); throw stale(); }
-    if (!response.ok) {
-      const error = new Error(data.error || `Erreur serveur ${response.status}`);
-      error.code = data.code;
-      if (response.status === 401 && data.code === 'AUTH_REQUIRED') {
-        resetSession();
-        setSyncMessage('Session expirée');
+    const controller=new AbortController();
+    // Timeout is a transport failure, never proof that a write was rejected.
+    const timer=setTimeout(()=>controller.abort(),20000);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal:controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
+          ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
+          ...(authToken ? { 'x-ss-budget-auth-token': authToken } : {}),
+          ...(options.headers || {}),
+        },
+      });
+      const data = await response.json().catch(() => null);
+      if (!boundary.isCurrent(epoch)) throw stale();
+      if (boundary.requestStatus(epoch,session)==='expired') { resetSession(); throw stale(); }
+      if (!response.ok) {
+        const error = mutationStorage.httpError(response.status,data);
+        if (response.status === 401 && data?.code === 'AUTH_REQUIRED') {
+          resetSession();
+          setSyncMessage('Session expirée');
+        }
+        throw error;
       }
-      throw error;
-    }
-    return data;
+      if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Réponse serveur invalide');
+      return data;
+    } finally {clearTimeout(timer);}
   };
 
   const applyServerState = (data) => {
-    if (!boundary.isCurrent(epoch) || !isSessionValid()) return;
+    if (!currentSession() || !sessionStorage.isSnapshot(data)) return;
     setDataReady(true);
     setMembers((data.members || []).map((m) => ({ ...m, role: currentMemberRole(m) })));
     setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
@@ -338,41 +368,93 @@ function AuthenticatedApp() {
     setSyncMessage(`Synchronisé ${new Date().toLocaleTimeString('fr-FR').slice(0, 5)}`);
   };
 
-  const syncFromServer = async (showAlert = true) => {
+  const syncFromServer = async (showAlert = true, reconcile = false) => {
+    if(!currentSession())return false;
+    const kind=mutationRef.current.kind;
+    if(kind!=='idle'&&!(reconcile&&(kind==='unknown'||kind==='review'))){
+      if(showAlert)Alert.alert('Synchronisation suspendue','Utilise la vérification de l’opération en attente.');
+      return false;
+    }
+    if(reconcile&&kind==='review')setMutation('unknown',mutationRef.current.marker);
+    const readId=readFence.start();
     try {
       const data = await request('/api/state');
-      if (!boundary.isCurrent(epoch)) return;
+      if(!currentSession()||!readFence.isCurrent(readId))return false;
+      if(!sessionStorage.isSnapshot(data))throw new Error('Instantané serveur invalide');
       applyServerState(data);
-      if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
+      if(reconcile){
+        setMutation('review',mutationRef.current.marker);
+        Alert.alert('Instantané serveur chargé','Vérifie les opérations et le journal. Si l’écriture est absente ou ambiguë, demande au responsable du serveur de confirmer sa fin. Un instantané seul ne prouve pas un refus.');
+      }else if(showAlert)Alert.alert('Synchronisation réussie','Les données du serveur ont été chargées.');
+      return true;
     } catch (error) {
-      if (staleError(error)) return;
+      if(staleError(error)||!readFence.isCurrent(readId))return false;
       setConnected(false);
-      if (error.code === 'AUTH_REQUIRED') {
-        setSyncMessage('Session expirée');
-        if (showAlert) Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
-        return;
-      }
-      setSyncMessage(`Hors ligne : ${error.message}`);
-      if (showAlert) Alert.alert('Synchronisation impossible', error.message);
+      setSyncMessage('Synchronisation indisponible — dernier état confirmé');
+      if(showAlert)Alert.alert('Synchronisation impossible','Aucune donnée locale n’a été modifiée.');
+      return false;
     }
   };
 
-  const mutate = async (path, method, body, fallback) => {
-    try {
-      const data = await request(path, { method, body: JSON.stringify(body || {}) });
-      applyServerState(data);
-    } catch (error) {
-      if (staleError(error)) return;
-      setConnected(false);
-      if (error.code === 'AUTH_REQUIRED') {
-        setSyncMessage('Session expirée');
-        Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
-        return;
-      }
-      setSyncMessage(`Mode local : ${error.message}`);
-      fallback?.();
-      Alert.alert('Serveur non disponible', `Action appliquée en local uniquement.\n\n${error.message}`);
+  const mutate = async (path, method, body, onConfirmed) => {
+    if(!currentSession())return;
+    if(mutationRef.current.kind!=='idle'){
+      Alert.alert('Action suspendue','Une vérification ou une opération est en cours. Ne renvoie pas cette action.');
+      return;
     }
+    readFence.invalidate();setMutation('pending');
+    const result=await mutationStorage.executeMutation({
+      journal,session,id:sessionStorage.newSessionId(),current:currentSession,
+      send:()=>request(path,{method,body:JSON.stringify(body||{})}),apply:applyServerState
+    });
+    if(!currentSession()||result.kind==='stale')return;
+    if(result.kind==='confirmed')onConfirmed?.();
+    if(result.kind==='storage-error'){
+      setMutation('storage-error');setConnected(false);
+      Alert.alert('Stockage indisponible','Aucune nouvelle action n’a été envoyée. Vérification du stockage requise.');
+      return;
+    }
+    if(result.marker||result.kind==='unknown'||result.kind==='blocked'){
+      setMutation('unknown',result.marker);setConnected(false);
+      setSyncMessage('Opération à vérifier — dernier état confirmé');
+      Alert.alert('Opération à vérifier','Ne renvoie pas l’action. Ferme le formulaire si nécessaire, puis vérifie l’état du serveur et le journal.');
+      return;
+    }
+    setMutation('idle');
+    if(result.kind==='refused')Alert.alert('Action refusée',result.error.message);
+  };
+
+  const acknowledgeMutation=()=>{
+    if(!currentSession()||mutationRef.current.kind!=='review')return;
+    const marker=mutationRef.current.marker;
+    Alert.alert('Vérification manuelle','As-tu établi le résultat de l’opération, au besoin avec le responsable du serveur ? Si le résultat reste incertain, ne débloque pas. Les brouillons d’opération seront réinitialisés.',[
+      {text:'Annuler',style:'cancel'},
+      {text:'Vérification effectuée',onPress:async()=>{
+        if(!currentSession()||mutationRef.current.kind!=='review'||mutationRef.current.marker?.id!==marker?.id)return;
+        readFence.invalidate();setMutation('pending',marker);
+        try{
+          if(!marker||!await journal.clear(session,marker.id,currentSession)){if(currentSession())setMutation('unknown',marker);return;}
+          if(currentSession()){
+            setExpenseDraft(d=>({...d,label:'',amount:''}));setContributionDraft(d=>({...d,amount:''}));
+            setEditingExpense(null);setEditingContribution(null);setCategoryModal(false);setEditingCategory(null);setMemberDraft('');
+            setMutation('idle');
+          }
+        }catch{if(currentSession())setMutation('storage-error',marker);}
+      }}
+    ]);
+  };
+
+  const renderMutationNotice=()=>{
+    const kind=mutationState.kind;
+    if(kind==='idle')return null;
+    return <View style={styles.card}>
+      <Text accessibilityRole="header" style={styles.cardTitle}>{kind==='pending'?'Opération en cours':kind==='checking'?'Vérification de la session':kind==='storage-error'?'Vérification indisponible':'Opération à vérifier'}</Text>
+      <Text accessibilityLiveRegion="polite" style={styles.muted}>{kind==='pending'||kind==='checking'?'Patiente avant toute nouvelle action.':'Les nouvelles opérations sont suspendues. Aucun renvoi automatique. Les soldes affichés proviennent du dernier instantané confirmé.'}</Text>
+      {mutationState.marker&&<Text style={styles.muted}>Tentative : {new Date(mutationState.marker.at).toLocaleString('fr-FR')}</Text>}
+      {(kind==='unknown'||kind==='review')&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={()=>syncFromServer(true,true)}><Text style={styles.secondaryButtonText}>Actualiser et vérifier le serveur</Text></TouchableOpacity>}
+      {kind==='review'&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={acknowledgeMutation}><Text style={styles.secondaryButtonText}>J’ai vérifié — débloquer</Text></TouchableOpacity>}
+      {kind==='storage-error'&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={async()=>{if(!currentSession())return;try{const marker=await journal.read(session);if(currentSession())setMutation(marker?'unknown':'idle',marker);}catch{if(currentSession())Alert.alert('Stockage indisponible','Les actions restent suspendues.');}}}><Text style={styles.secondaryButtonText}>Revérifier le stockage</Text></TouchableOpacity>}
+    </View>;
   };
 
   const fetchAuthStatus = async () => {
@@ -400,10 +482,13 @@ function AuthenticatedApp() {
 
   const applyLoginSuccess = (data) => {
     if (!boundary.isCurrent(epoch)) return;
+    const nextSession={...session,user:data?.member?.id,token:data?.authToken,expires:data?.expiresAt,sessionId:sessionStorage.newSessionId()};
+    if(!sessionStorage.valid(nextSession))throw new Error('Réponse de connexion invalide');
     resetSession();
     setCurrentUserId(data.member.id);
     setAuthToken(data.authToken);
     setAuthTokenExpiresAt(data.expiresAt);
+    setSessionId(nextSession.sessionId);
     setPinStage(null);
     setProfileModal(false);
     setAuthError('');
@@ -471,24 +556,21 @@ function AuthenticatedApp() {
 
   const loadLocal = async () => {
     try {
-      const [cache, storedApi, storedSecret, storedUserId, storedToken, storedExpires] = await Promise.all([
-        AsyncStorage.getItem(CACHE_KEY),
-        AsyncStorage.getItem(API_KEY),
-        AsyncStorage.getItem(SECRET_KEY),
-        AsyncStorage.getItem(USER_KEY),
-        AsyncStorage.getItem(AUTH_TOKEN_KEY),
-        AsyncStorage.getItem(AUTH_EXPIRES_KEY),
+      const [cache,storedApi,storedSecret,storedAuth]=await Promise.all([
+        AsyncStorage.getItem(CACHE_KEY),AsyncStorage.getItem(API_KEY),
+        AsyncStorage.getItem(SECRET_KEY),AsyncStorage.getItem(AUTH_SESSION_KEY)
       ]);
-      if (storedApi) setApiUrl(storedApi);
-      if (storedSecret) setApiSecret(storedSecret);
-      if (storedUserId) setCurrentUserId(storedUserId);
-      const restored={api:storedApi||'',secret:storedSecret||'',user:storedUserId||'',token:storedToken||'',expires:storedExpires||''};
+      if(!boundary.isCurrent(epoch))return;
+      if(storedApi)setApiUrl(storedApi);
+      if(storedSecret)setApiSecret(storedSecret);
+      const restored=sessionStorage.readStoredSession(storedAuth,storedApi||'',storedSecret||'');
       const data=sessionStorage.readCache(cache, restored);
       if(sessionStorage.valid(restored)){
-        setAuthToken(storedToken);setAuthTokenExpiresAt(storedExpires);
+        setCurrentUserId(restored.user);setAuthToken(restored.token);setAuthTokenExpiresAt(restored.expires);setSessionId(restored.sessionId);
         if(data){
           setMembers(data.members.map(m=>({...m,role:currentMemberRole(m)})));
           setCategories(data.categories);setExpenses(data.expenses);setContributions(data.contributions);setActivityLogs(data.activityLogs);setDataReady(true);
+          setSyncMessage('Dernier état confirmé — synchronisation à vérifier');
         }else await AsyncStorage.removeItem(CACHE_KEY);
       }else await resetSession();
     }catch(error){resetSession();reportStorageError();}
@@ -563,8 +645,7 @@ function AuthenticatedApp() {
 
     confirmFutureDateIfNeeded(expenseDraft.date, 'dépense', (status) => {
       const payload = { ...expenseDraft, id: uid('expense'), amount, status, createdByMemberId: currentUserId };
-      mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
-      setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
+      mutate('/api/expenses','POST',payload,()=>setExpenseDraft(d=>d.label===payload.label&&parseAmount(d.amount)===payload.amount&&d.date===payload.date&&d.categoryId===payload.categoryId&&d.paidByMemberId===payload.paidByMemberId?{...d,label:'',amount:''}:d));
     });
   };
 
@@ -575,8 +656,7 @@ function AuthenticatedApp() {
 
     confirmFutureDateIfNeeded(contributionDraft.date, 'versement', (status) => {
       const payload = { ...contributionDraft, id: uid('contribution'), amount, status, createdByMemberId: currentUserId };
-      mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
-      setContributionDraft((d) => ({ ...d, amount: '' }));
+      mutate('/api/contributions','POST',payload,()=>setContributionDraft(d=>parseAmount(d.amount)===payload.amount&&d.date===payload.date&&d.categoryId===payload.categoryId&&d.memberId===payload.memberId?{...d,amount:''}:d));
     });
   };
 
@@ -586,10 +666,7 @@ function AuthenticatedApp() {
     const monthsCount = Math.max(1, parseInt(autoDraft.monthsCount || '1', 10));
 
     confirmFutureDateIfNeeded(autoDraft.date, 'versement automatique', (status) => {
-      const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
-        id: uid('auto'), memberId, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0) * monthsCount, date: autoDraft.date, status, note: `Versement automatique (${monthsCount} mois)`,
-      })).filter((row) => row.amount > 0));
-      mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date, status }, () => setContributions((list) => [...localRows, ...list]));
+      mutate('/api/auto-contributions','POST',{memberIds,monthsCount,date:autoDraft.date,status});
     });
   };
 
@@ -599,7 +676,7 @@ function AuthenticatedApp() {
     }
     Alert.alert('Supprimer la dépense', `Supprimer « ${expense.label} » ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/expenses/${expense.id}`, 'DELETE', {}, () => setExpenses((list) => list.filter((e) => e.id !== expense.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/expenses/${expense.id}`,'DELETE',{}) },
     ]);
   };
 
@@ -609,24 +686,12 @@ function AuthenticatedApp() {
     }
     Alert.alert('Supprimer le versement', `Supprimer le versement de ${formatEuro(contribution.amount)} ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== contribution.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`,'DELETE',{}) },
     ]);
   };
 
-  const markActivityRead = (logId) => {
-    mutate(`/api/activity-logs/${logId}/read`, 'POST', {}, () => {
-      setActivityLogs((list) => list.map((log) => (log.id === logId
-        ? { ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) }
-        : log)));
-    });
-  };
-
-  const markAllActivityRead = () => {
-    mutate('/api/activity-logs/read-all', 'POST', {}, () => {
-      setActivityLogs((list) => list.map((log) => ({ ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) })));
-    });
-  };
-
+  const markActivityRead=logId=>mutate(`/api/activity-logs/${logId}/read`,'POST',{});
+  const markAllActivityRead=()=>mutate('/api/activity-logs/read-all','POST',{});
 
   const startEditExpense = (expense) => {
     if (!canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId')) {
@@ -650,8 +715,7 @@ function AuthenticatedApp() {
 
     confirmFutureDateIfNeeded(editingExpense.date, 'dépense modifiée', (status) => {
       const payload = { ...editingExpense, amount, status };
-      mutate(`/api/expenses/${editingExpense.id}`, 'PUT', payload, () => setExpenses((list) => list.map((e) => e.id === editingExpense.id ? { ...e, ...payload } : e)));
-      setEditingExpense(null);
+      mutate(`/api/expenses/${editingExpense.id}`,'PUT',payload,()=>setEditingExpense(d=>d?.id===payload.id?null:d));
     });
   };
 
@@ -675,8 +739,7 @@ function AuthenticatedApp() {
 
     confirmFutureDateIfNeeded(editingContribution.date, 'versement modifié', (status) => {
       const payload = { ...editingContribution, amount, status };
-      mutate(`/api/contributions/${editingContribution.id}`, 'PUT', payload, () => setContributions((list) => list.map((c) => c.id === editingContribution.id ? { ...c, ...payload } : c)));
-      setEditingContribution(null);
+      mutate(`/api/contributions/${editingContribution.id}`,'PUT',payload,()=>setEditingContribution(d=>d?.id===payload.id?null:d));
     });
   };
 
@@ -687,17 +750,16 @@ function AuthenticatedApp() {
     const payload = { ...editingCategory, monthlyPerPerson: amount };
     if (editingCategory.isNew) {
       payload.id = uid('category');
-      mutate('/api/categories', 'POST', payload, () => setCategories((list) => [...list, { ...payload, active: true }]));
+      mutate('/api/categories','POST',payload,()=>setCategoryModal(false));
     } else {
-      mutate(`/api/categories/${payload.id}`, 'PUT', payload, () => setCategories((list) => list.map((c) => (c.id === payload.id ? payload : c))));
+      mutate(`/api/categories/${payload.id}`,'PUT',payload,()=>setCategoryModal(false));
     }
-    setCategoryModal(false);
   };
 
   const deleteCategory = (category) => {
     Alert.alert('Supprimer la caisse', `Supprimer ${category.name} ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/categories/${category.id}`, 'DELETE', {}, () => setCategories((list) => list.filter((c) => c.id !== category.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/categories/${category.id}`,'DELETE',{}) },
     ]);
   };
 
@@ -705,12 +767,12 @@ function AuthenticatedApp() {
     const name = memberDraft.trim();
     if (!name) return;
     const payload = { id: uid('member'), name };
-    mutate('/api/members', 'POST', payload, () => setMembers((list) => [...list, payload]));
-    setMemberDraft('');
+    mutate('/api/members','POST',payload,()=>setMemberDraft(d=>d.trim()===payload.name?'':d));
   };
 
 
   const createServerBackup = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/backups/create', { method: 'POST', body: JSON.stringify({ reason: 'mobile' }) });
@@ -720,6 +782,7 @@ function AuthenticatedApp() {
   };
 
   const exportServerJson = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/export/json', { method: 'POST', body: JSON.stringify({}) });
@@ -729,6 +792,7 @@ function AuthenticatedApp() {
   };
 
   const exportServerCsv = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/export/csv', { method: 'POST', body: JSON.stringify({}) });
@@ -916,7 +980,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       {tab !== 'dashboard' && <NavigationActions route={tab} onNavigate={setTab} />}
   </>);
 
-  if (bootLoading) {
+  if (!appActive || bootLoading) {
     return (
       <SafeAreaProvider>
         <SafeAreaView style={styles.safe}><StatusBar style="dark" /></SafeAreaView>
@@ -947,10 +1011,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
   if (!dataReady) return (
     <SafeAreaProvider><SafeAreaView style={styles.safe}>
-      <Text style={styles.title}>Chargement des données</Text>
-      <Text style={styles.muted}>Aucune donnée financière disponible tant que la synchronisation initiale n'a pas réussi.</Text>
-      <TouchableOpacity style={styles.primaryButton} onPress={()=>syncFromServer(true)}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryButton} onPress={logout}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.contentInner}>
+        <Text style={styles.title}>Chargement des données</Text>
+        <Text style={styles.muted}>Aucune donnée financière disponible tant que la synchronisation initiale n'a pas réussi.</Text>
+        {renderMutationNotice()}
+        <TouchableOpacity style={styles.primaryButton} onPress={()=>syncFromServer(true)}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButton} onPress={logout}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+      </ScrollView>
     </SafeAreaView></SafeAreaProvider>
   );
   return (
@@ -961,6 +1028,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
         {(largeText || tab === 'dashboard') && renderMainControls()}
+        {renderMutationNotice()}
         {tab === 'dashboard' && (
           <>
             <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} personState={personState} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
@@ -1211,9 +1279,9 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>
             <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de ce profil connecté par PIN.</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'La session sera fermée et le cache effacé. Les actions locales non synchronisées peuvent être perdues.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => { resetSession(); setApiUrl(''); setShowGlance(false); } }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'La session sera fermée et le cache effacé. Une opération à vérifier restera signalée pour ce compte.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => { resetSession(); setApiUrl(''); setShowGlance(false); } }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Le cache et les actions locales non synchronisées seront effacés. Il faudra ressaisir ton PIN pour continuer.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Le cache et la session seront effacés. Une opération à vérifier restera signalée pour ce compte. Il faudra ressaisir ton PIN.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
             {isAdmin && <View style={styles.card}>
               <Text style={styles.cardTitle}>Sauvegarde et exports</Text>
               <Text style={styles.muted}>Actions réservées à l’administrateur. Les fichiers sont créés sur le serveur dans server/backups/.</Text>
