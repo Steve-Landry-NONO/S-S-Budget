@@ -49,3 +49,29 @@ Backend : Claude rapporte rejeu propre R2 PostgreSQL 17.12 sans écart, NUM-01 b
 Mobile : session d'exécution rapporte blobs préparés non attachés à #28, 23 tests unitaires locaux et 12 assertions statiques ; pas de CI sur nouveau candidat. Récupérer manifeste path/blob SHA et parent exact auprès de la session, relire et publier en avance rapide uniquement sur #28 après vérification ; ne pas recréer des corrections à l'aveugle. Tester absence de fallback sur erreurs, conservation des formulaires en cas de refus/inconnu, verrou mutations concurrentes, réponse tardive, réconciliation sans réémission ; la réconciliation manuelle V2 ne prouve pas exactement-une-fois. R-02/R-03 restent ouverts, aucune diffusion externe. Recette native non exécutée.
 Produit : #30 contient docs/product/SPRINT_3_EXECUTION_LAB_2026-11-27.md, six vues QA Figma rapportées (384:297/319/341/363/385 et 386:297), dix parcours audités statiquement. Pas de validation interactive/accessibilité. Réconcilier le VM proposé avec contrat R3 : capacités partial/not_declared/not_available et incident, contexte session/duo/période, protection lift_pending ; ne pas confondre objectif et fonds. Couverture progressive jusqu'à 90 configurations, E07–09 lecture/prototype non opérant jusqu'aux autorisations d'écriture. Préserver baseline. 
 Ordre recommandé : sécuriser et publier les candidats exacts, CI et recette indépendante, qualification HTTP isolée et dossier 006r1, puis intégration/archivage et README. Aucun nouveau chantier majeur avant résolution des portes correspondantes. Score officiel 48,96 %, pas de recalcul sans preuves comparables. Aucun merge ni migration autorisé.
+
+## Arbitrages officiels R3 — validés par le propriétaire le 27/11/2026
+
+Ces six décisions remplacent les mentions « en attente » antérieures. Elles complètent D-GA-1 à D-GD-1, sans autoriser une publication R3, une fusion dans main ou une migration Supabase DEV.
+
+| ID | Décision validée |
+|---|---|
+| GA-ARB-1 | Préparation du budget autorisée ; activation initiale des fonds communs après arrivée du second partenaire. |
+| GA-ARB-2 | 7 jours configurables, invalidation immédiate si les soldes ou la composition changent. |
+| GA-ARB-3 | REQUEST_NO_LONGER_VALID, motif explicite et caducité enregistrée durablement. |
+| GA-ARB-4 | Refus de l'activation initiale avec trésorerie négative ; déficits ultérieurs autorisés et correctement représentés. |
+| GD-ARB-1 | 48 h ; 10 aperçus/h/compte, 20/h/jeton, 30/h/IP, 10 créations/jour/duo, 10 tentatives d'acceptation/h/compte. Seuils configurables. |
+| TECH-ARB-1 | Qualification autorisée sur environnement isolé et bases jetables, sans contournement de permissions. |
+
+Critères de mise en œuvre à vérifier : consentement lié à l'état financier et à la composition exacts ; vérification atomique sous verrou au dernier accord ; une demande caduque ne peut activer les fonds, et sa caducité doit persister sans rollback involontaire ; une nouvelle demande est requise. L'espace personnel reste distinct. Le départ ultérieur ne réécrit pas le grand livre. Les limites d'invitation doivent être appliquées côté serveur, sans oracle ni exposition de secrets. Les règles détaillées de concurrence et d'audit restent à qualifier.
+
+### Porte suivante — préparation R3, sans publication
+- R3-01 : vérification locale du bundle et préparation d'un push atomique aux SHA exacts ; pas de push avant autorisation distincte.
+- R3-02 : aligner le protocole N01–N18 et le dossier GO/NO GO ; qualification HTTP exclusivement sur réplique isolée jetable, aucune écriture DEV.
+- R3-03 : corriger la spécification de caducité durable (pas d'UPDATE suivi d'une exception non interceptée qui annule l'UPDATE) et définir des tests de concurrence.
+- R3-04 : prouver l'isolation réelle du dry-run, notamment les URI hostaddr, paramètres multiples et options libpq ; ne pas se fier à un marqueur seul. Aucun essai à blanc DEV.
+- Rejouer les tests des éventuels candidats modifiés ; conserver les exceptions historiques, documenter S11c non expliqué. NUM-01 : 006r1 R2 reste NO GO ; R3 à qualifier.
+- Préparer la sauvegarde/restauration exercée et le contrôle de l'état DEV en lecture seule ; aucun accès en écriture DEV autorisé. Autorisation distincte par migration.
+- Mobile #28 : session d'exécution responsable de la publication des correctifs et de leur CI ; éviter les modifications concurrentes. #30 à réconcilier avec le contrat R3 après publication. G-A non implémenté à ce stade.
+
+Score officiel maintenu à 48,96 %. Aucun nouveau chantier majeur, merge, force-push, suppression de branche ou déploiement autorisé par ces arbitrages.
