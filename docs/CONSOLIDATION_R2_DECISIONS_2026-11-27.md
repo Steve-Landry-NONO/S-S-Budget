@@ -95,3 +95,34 @@ Terminal propriétaire : simulation finale réussie, git push --atomic origin de
 
 ## Inventaire d'assainissement GitHub — 27/11/2026
 18 PR ouvertes, toutes draft : #3,4,6,7,8,9,11,12,14,15,22,23,24,25,26,28,29,30. Vérification compare API : #3/#14/#15 ancêtres de #28 (58/50/29 commits d'avance, 0 de retard). #4 diverge (71 avance/8 retard), ses sept fichiers sont présents dans #28, docs/ANDROID_PREVIEW_BUILD.md identique, six évolués ; couverture fonctionnelle à compléter avant fermeture. #12 ancêtre de #23 (28 avance, 0 retard), jamais fusionner seule. #6/#7/#8/#9/#11 divergent de #23 : archive après couverture A-02/A-03, conserver branches. SECURITY_GATE.md #8 récupéré à l'identique dans main docs/legacy/SECURITY_GATE_ORIGINAL.md ; vérifier récupération complète #6 et invariants #9. #7 et #11 : tests historiques exactitude, six devises EUR/USD/GBP/XAF/XOF/JPY, formats non canoniques, reports, transferts conservatifs, dépassements ; couverture R3 HTTP annoncée EUR/USD/XAF, ne pas supposer équivalence des autres devises ou formats. Vérifier les exigences par lot avant fermeture. #22 stratégie différée A-12 ; #29 documentation à intégrer séparément après autorisation ; #30 Figma S3 en attente de livraison. Ordre proposé : documentation #29 puis recette #28 et intégration/fermeture #3/#14/#15/#4 après couverture ; backend #23/#24/#25 après réconciliation qualifiée et autorisations, #12 fermeture après #23 ; #26 intégration contrat séparée sous gates ; prototypes archivés après matrice de couverture. Objectif intermédiaire 18→8 PR en fermant 10 anciennes (3,4,6,7,8,9,11,12,14,15) sous conditions, pas de suppression de branches. Aucune fermeture ni fusion exécutée ; pas de publication de nouveaux candidats ni accès DEV. Maturité inchangée.
+
+## Arbitrages de consolidation finale — D1–D7 validés par le propriétaire le 27/11/2026
+Cette section prévaut sur les états historiques contradictoires ci-dessus. Les identifiants D1–D7 sont locaux à cet arbitrage, distincts des décisions métier D-001 etc.
+| ID | Décision |
+|---|---|
+| D1 | Maturité officielle 53,81 % (ancienne 48,96 %, +4,85 points). |
+| D2 | G8-R4 bloquant pour toute migration contenant des duos existants ; aucune exception implicite. |
+| D3 | Recette mobile interne uniquement, serveur V2 isolé, données fictives, SQLite jetable. |
+| D4 | R-02 et R-03 bloquants avant diffusion externe. |
+| D5 | Poursuivre conception S3 sans modifier #28. |
+| D6 | Terminer matrice de couverture historique et assainissement documentaire ; fermeture seulement après preuves et portes. |
+| D7 | NO GO Supabase DEV jusqu'à satisfaction de toutes les portes et autorisation écrite. |
+
+### Maturité — méthode inchangée
+| Sprint | Poids | Ancien score | Nouveau score | Contribution |
+|---|---:|---:|---:|---:|
+| S0 | 8 | 100 | 100 | 8,00 |
+| S1 | 10 | 95 | 95 | 9,50 |
+| S2 | 12 | 90 | 95 | 11,40 |
+| S3 | 15 | 35 | 40 | 6,00 |
+| S4 | 15 | 30 | 45 | 6,75 |
+| S5 | 15 | 35 | 40 | 6,00 |
+| S6 | 8 | 45 | 45 | 3,60 |
+| S7 | 10 | 15 | 20 | 2,00 |
+| S8+ | 7 | 8 | 8 | 0,56 |
+| Total | 100 | | | 53,81 |
+Estimation de maturité, non disponibilité ni clôture de sprint. Score validé par le propriétaire ; main conserve son snapshot historique jusqu'à intégration documentaire.
+
+### État consolidé
+R3 : #23 16deec8435fa1334482c84d36d50773759f73e97, #24 06355edd3a7a1b3f2e514f01f00e504aceaf425b, #25 f086090bfa801765ce9cfff880d7a2b496b532a9, #26 64a0e0f4ff353c25b2f40ac6844eebb55094b313. Ascendance vérifiée +10/0 puis +14/0. CI 46007770260, 46019415562, 46019419497, 46007772443 vertes. RC-01 clos. G2/G5/G6 remplies ; G7 partielle (PostgREST DEV), G8 partielle (22/22 x3 local rapporté, export DEV réel et restauration locale selon méthode officielle non exécutés), G1/G10 ouvertes, G3/G4/G9 jour J. ERR-02/CAT-01 maintenues. Aucun accès DEV ni migration autorisés par ces décisions.
+Mobile #28 8ef2abdb0725c7d449bd68931138a04e98401a91 : 9/9 jobs, 61/61 frontend, 13 Glance, 32 Android, 20/20 Doctor, 40 cellules web sans échec, SQLite 30 pass + 2 TODO R-02/R-03. Gemini : restitution documentaire, pas de tests ni lecture directe. Recette native non démontrée ; GO interne conditionnel, NO GO fusion/diffusion. Guide recette : clone isolé, ne pas utiliser reset --hard ; npm test absent du package.json, reprendre les commandes CI exactes. Fusionner matrices N01–N10 et REC-01–12. S3 conception seulement, #28 gelée. Voir commentaires #29 7221447200 et 7222311390.
