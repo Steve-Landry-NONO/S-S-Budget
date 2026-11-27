@@ -14,20 +14,20 @@
 
 ## Étapes
 
-1. **Essai à blanc — sur base JETABLE uniquement (REV-08, R2-03).** L'essai à blanc est **interdit sur DEV et sur
-   production** : un `ROLLBACK` n'annule ni les séquences, ni les appels externes, ni les écritures de fichiers serveur
-   (cas D29 de la suite adverse). L'outil `v3/database/tools/dry_run_migration.py` refuse, **avant toute connexion**, tout hôte
-   autre qu'un socket Unix ou la boucle locale, et toute base sans le marqueur `duo-v3-disposable`.
-   - Reconstruire une réplique jetable 001→005 depuis les fichiers du dépôt et vérifier qu'elle est **identique à DEV** :
-     `dev_state_check.sql` donne sur la réplique l'empreinte `f421a30206151d95999d5c6eb54196cd` (100 objets), celle relevée sur
-     DEV le 21/11. Relever DEV en **lecture seule** le jour J et comparer.
-   - `comment on database <réplique> is 'duo-v3-disposable';` puis
-     `python3 v3/database/tools/dry_run_migration.py "host=/chemin/socket dbname=<réplique>" supabase/migrations/20261126120000_duo_v3_financial_model_r1.sql`.
-   - Ce que l'outil **garantit** : refus avant exécution de tout contrôle transactionnel, méta-commande ou interpolation psql,
-     commande non transactionnelle ou appel non annulable visible ; exécution entre `BEGIN` et `ROLLBACK` générés, avec un garde
-     qui vérifie que l'on est toujours dans la même transaction. Ce qu'il **détecte seulement** (sans le garantir) : catalogue,
-     versions et séquences comparés après coup.
-   - Relever la durée, les erreurs et les verrous. Suite adverse : `v3/database/qualification/dryrun/test_dry_run_adversarial.py`.
+1. **Essai à blanc — sur base JETABLE créée par l'outil (REV-08, R2-03, R3-04).** L'essai à blanc est **interdit sur DEV et
+   sur production** : un `ROLLBACK` n'annule ni les séquences, ni les appels externes, ni les écritures de fichiers serveur
+   (cas D29 de la suite adverse). `v3/database/tools/dry_run_migration.py` n'accepte **aucune chaîne de connexion** : il crée
+   lui-même une base jetable au nom aléatoire, par socket Unix local, depuis un gabarit, et la détruit ensuite. Rôle
+   d'administration superutilisateur exigé (jamais le cas sur Supabase hébergé). Variables libpq neutralisées.
+   - Reconstruire une réplique 001→005 depuis les fichiers du dépôt (gabarit `b005`) et vérifier qu'elle est **identique à DEV** :
+     `dev_state_check.sql` donne `f421a30206151d95999d5c6eb54196cd` (100 objets), valeur relevée sur DEV le 21/11. Relever DEV en
+     **lecture seule** le jour J et comparer.
+   - `python3 v3/database/tools/dry_run_migration.py supabase/migrations/20261126120000_duo_v3_financial_model_r1.sql --template b005 --socket-dir <répertoire du socket local> --port <port local>`
+   - Ce que l'outil **garantit** : refus, avant exécution, de toute cible non locale ou implicite et de tout contrôle
+     transactionnel, méta-commande ou interpolation psql, commande non transactionnelle ou appel non annulable visible ;
+     exécution entre `BEGIN` et `ROLLBACK` générés, avec un garde « même transaction ». Ce qu'il **détecte seulement** :
+     catalogue, types et domaines, versions et séquences comparés après coup.
+   - Suite adverse : `v3/database/qualification/dryrun/test_dry_run_adversarial.py`. Qualification HTTP : `POSTGREST_NUMERIC_PROTOCOL.md`.
 2. **Comparaison** : rejouer `deep006r1.py` et `qualify_rollback.py` sur la réplique jetable équivalente à DEV.
 3. **Application** en une transaction, par la CLI (`supabase db push`, après `supabase migration list`) ou par l'outil d'application de migration. Un seul fichier : `20261126120000_duo_v3_financial_model_r1.sql`.
 4. **Vérifications après application — en LECTURE SEULE sur DEV** (aucune suite de test, même annulée, n'est exécutée sur DEV) :
