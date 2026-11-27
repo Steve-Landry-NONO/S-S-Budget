@@ -24,6 +24,7 @@ Depuis la 3.2, le **message exposé** est toujours le message public stable du c
 | — | 42501 | `FORBIDDEN` / `UNAUTHENTICATED` | Retour à l'accueil |
 | — | 23505 | `IDEMPOTENCY_MISMATCH` | Bug client : même clé, charge différente |
 | — | 22023 | `VALIDATION` | Afficher l'erreur de saisie |
+| — | 22P02 | `VALIDATION` | Texte non convertible en nombre (qualification HTTP du 27/11) ; le contrat n'émet que des chaînes canoniques |
 
 | — (adaptateur) | — | `CONTRACT_VIOLATION` | Réponse non conforme : incident, aucun affichage de montant |
 | — (adaptateur) | — | `SPACE_NOT_INITIALIZED` | Parcours d'activation de l'espace (lot G-A) |

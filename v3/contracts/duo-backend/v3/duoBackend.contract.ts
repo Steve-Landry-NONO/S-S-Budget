@@ -209,6 +209,7 @@ export function errorFromPostgrest(e: { code?: string; message?: string; details
     case '42501': return publicError(/authentication required/i.test(raw) ? 'UNAUTHENTICATED' : 'FORBIDDEN', code);
     case 'PGRST301': case 'PGRST303': return publicError('SESSION_EXPIRED', code);
     case '22023': return publicError('VALIDATION', code);
+    case '22P02': return publicError('VALIDATION', code);                     // texte non convertible (ex. « abc » pour un numeric), constaté en HTTP le 27/11
     case '23505': return publicError(/already a member/i.test(raw) ? 'ALREADY_MEMBER' : 'IDEMPOTENCY_MISMATCH', code);
     case '23503': return publicError('NOT_FOUND', code);
     case '23514': return publicError(/full/i.test(raw) ? 'DUO_FULL' : 'VALIDATION', code);
