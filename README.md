@@ -4,15 +4,15 @@
 <p align="center"><strong>Deux personnes. Des projets communs. Une vision claire de leur argent.</strong></p>
 <p align="center">Application mobile de gestion budgétaire à deux · iOS & Android · V3 en développement</p>
 
-## État du projet — 26 novembre 2026
+## État du projet — 27 novembre 2026
 
-**Maturité globale estimée : 48,96 % (~49 %).** Indicateur de pilotage pondéré, non pourcentage de code livré ni taux de disponibilité. Voir [méthode, preuves et limites](docs/PROJECT_STATUS.md).
+**Maturité globale estimée : 53,81 % (~54 %).** Indicateur de pilotage pondéré, non pourcentage de code livré ni taux de disponibilité. Voir [méthode, preuves et limites](docs/PROJECT_STATUS.md).
 
 | Version / environnement | Situation |
 |---|---|
 | V2 historique sur main | Application Expo/React Native, API Express et SQLite auto-hébergées ; documentation historique V2.2.3 |
-| V3 mobile | Navigation et Dashboard candidats, PR #3/#14/#15 en attente d'intégration |
-| V3 cloud | Supabase/PostgreSQL ; migrations 001–005 déclarées appliquées sur DEV selon rapport ; PR #23–25 publiées, qualifiées sur réplique selon Claude, non autorisées sur DEV |
+| V3 mobile | Candidat consolidé #28, CI 9/9 ; recette native et intégration restantes |
+| V3 cloud | Supabase/PostgreSQL ; migrations 001–005 déclarées appliquées sur DEV selon rapport ; PR #23–26 R3 publiées et CI vertes ; qualification locale rapportée, NO GO DEV |
 | Alpha Cloud | Prochain jalon, non disponible |
 | Bêta / stores | Non ouverts |
 
@@ -50,17 +50,27 @@ Les trois livres représentent des dimensions distinctes : une allocation budgé
 |---|---|---:|
 | 0 — Fondations | 05–11 nov. 2026 | 100 % |
 | 1 — Navigation & thème | 12–25 nov. | 95 % |
-| 2 — Dashboard | 26 nov.–09 déc. | 90 % |
-| 3 — Enveloppes | 10–23 déc. | 35 % |
-| 4 — Opérations & activité | 24 déc.–06 janv. 2027 | 30 % |
-| 5 — Duo & auth | 07–20 janv. | 35 % |
+| 2 — Dashboard | 26 nov.–09 déc. | 95 % |
+| 3 — Enveloppes | 10–23 déc. | 40 % |
+| 4 — Opérations & activité | 24 déc.–06 janv. 2027 | 45 % |
+| 5 — Duo & auth | 07–20 janv. | 40 % |
 | 6 — Motion & accessibilité | 21 janv.–03 fév. | 45 % |
-| 7 — Bêta privée | 04–17 fév. | 15 % |
+| 7 — Bêta privée | 04–17 fév. | 20 % |
 | 8+ — Bêta publique | à partir du 18 fév. | 8 % |
 
 Dates de la roadmap historique, non engagements de sortie. Sprint 1 non clôturé : recette et intégration restantes. Aucun couple externe avant qualification cloud, sécurité et distribution. Recalage du calendrier à valider.
 
+## Priorités actuelles
+
+- Revue G1, couverture historique et recette mobile interne fictive ; aucune fusion #28 avant validation.
+- Récupération G8 qualifiée localement seulement ; export DEV réel et restauration locale à préparer. G2/G5/G6 remplies, G7/G8 partielles ; NO GO DEV.
+- R-02/R-03 bloquants avant diffusion externe ; G8-R4 bloque les migrations contenant des duos existants.
+- Sprint 3 : conception sur espace séparé, #28 et Figma V3.0.7 préservées.
+
 ## Documentation
+
+- [Clôture du 27 novembre et reprise Ubuntu](docs/CLOSURE_2026-11-27.md)
+- [Registre consolidé D1–D7 et R3](docs/CONSOLIDATION_R2_DECISIONS_2026-11-27.md)
 
 - [Consolidation des trois audits](docs/CONSOLIDATED_AUDITS_2026-11-26.md)
 - [Arbitrages de consolidation validés](docs/CONSOLIDATION_DECISIONS_2026-11-26.md)

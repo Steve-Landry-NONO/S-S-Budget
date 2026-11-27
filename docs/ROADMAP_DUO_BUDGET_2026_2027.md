@@ -159,3 +159,7 @@ ChatGPT pilote la revue indépendante, les critères de sortie et l'intégration
 
 ## Consolidation validée — 26 novembre 2026
 Les arbitrages A-01–A-12 sont approuvés. Voir [décisions](CONSOLIDATION_DECISIONS_2026-11-26.md), [audits consolidés](CONSOLIDATED_AUDITS_2026-11-26.md) et [état actuel](PROJECT_STATUS.md). Cette section prévaut sur les snapshots historiques pour l'état des PR et les priorités, sans changer les dates indicatives ni les règles métier. Priorité P0 : intégration mobile S1/S2 unique, corrections REV-01–08, couverture historique et neutralisation du harnais DEV obsolète. P1 : Figma/S3 sur fixtures, gestion G-A à G-E, qualification cloud séquentielle après autorisations distinctes. S1 non clôturé ; aucun couple externe avant Alpha Cloud qualifiée. Pas de paywall. Pas de fusion backend ni migration implicite. Score officiel 48,96 %, réévaluation sur preuves comparables.
+
+
+## Clôture validée — 27 novembre 2026
+Le [point de reprise](CLOSURE_2026-11-27.md) et le [registre D1–D7](CONSOLIDATION_R2_DECISIONS_2026-11-27.md) prévalent pour l'état courant. Maturité 53,81 %. Dates et critères inchangés. P0 : G1, recette interne #28, matrice historique, G8 ; P1 : conception S3 sans modification #28. NO GO DEV et fusion technique, pas de diffusion externe.

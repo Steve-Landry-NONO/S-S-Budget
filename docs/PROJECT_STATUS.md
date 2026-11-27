@@ -1,5 +1,21 @@
 # Duo Budget — État et pilotage du projet
-Snapshot 26 novembre 2026. Source distante main au début de l'audit : 8e7f6f66d4094bb0dc88b865042eb9c8c2ae3e40. Les travaux externes sont rapportés, pas indépendamment rejoués ici.
+Snapshot historique 26 novembre 2026. Source distante main au début de l'audit : 8e7f6f66d4094bb0dc88b865042eb9c8c2ae3e40. Les travaux externes sont rapportés, pas indépendamment rejoués ici.
+
+## État courant — 27 novembre 2026
+Maturité officielle 53,81 % (+4,85 points), validée D1. [Clôture et reprise](CLOSURE_2026-11-27.md) et [registre](CONSOLIDATION_R2_DECISIONS_2026-11-27.md) prévalent sur les états historiques ci-dessous. NO GO DEV et fusion technique ; recette interne fictive uniquement. G2/G5/G6 remplies, G7/G8 partielles. Candidats #23–26 et #28 gelés.
+
+| Sprint | Poids | Score | Contribution |
+|---|---:|---:|---:|
+| S0 | 8 | 100 | 8,00 |
+| S1 | 10 | 95 | 9,50 |
+| S2 | 12 | 95 | 11,40 |
+| S3 | 15 | 40 | 6,00 |
+| S4 | 15 | 45 | 6,75 |
+| S5 | 15 | 40 | 6,00 |
+| S6 | 8 | 45 | 3,60 |
+| S7 | 10 | 20 | 2,00 |
+| S8+ | 7 | 8 | 0,56 |
+| Total | 100 | | 53,81 |
 
 ## Méthode
 Maturité = somme des poids × scores / 100. Poids total 100. Scores estimés par jugement de maturité, non par volume de code ni par tests passés. Les critères de sortie de sprint de la roadmap demeurent obligatoires. Un score de 100 ne remplace pas une recette ou une clôture formelle. Revoir chaque semaine à preuves comparables ; noter les changements de périmètre et garder l'historique. Ne pas inventer un taux d'intégration : le mesurer après inventaire des critères effectivement présents sur main. La baisse par rapport à l'ancienne estimation informelle de 53 % correspond à un recalage du périmètre, pas une régression démontrée.

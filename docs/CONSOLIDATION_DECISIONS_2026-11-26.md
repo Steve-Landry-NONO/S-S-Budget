@@ -15,3 +15,7 @@ Le propriétaire a répondu « oui allons y, faisons ça » à la proposition A-
 | A-11 | Recette Gemini corrigée et critères par sprint |
 | A-12 | Growth différé, hypothèses uniquement, aucun paywall ni prix imposé |
 Les décisions antérieures restent applicables. Aucune application 006r1, aucun workflow DEV, aucune donnée réelle. D-021–029 et L2/ONB restent à réconcilier. Le score officiel reste 48,96 % en attente de réévaluation sur critères comparables.
+
+
+## Actualisation du 27 novembre 2026
+A-01–A-12 restent applicables ; voir [D1–D7 et R3](CONSOLIDATION_R2_DECISIONS_2026-11-27.md) et [clôture](CLOSURE_2026-11-27.md) pour l'état courant : maturité 53,81 %, NO GO DEV, recette interne fictive uniquement. Les mentions de score antérieures sont historiques.
