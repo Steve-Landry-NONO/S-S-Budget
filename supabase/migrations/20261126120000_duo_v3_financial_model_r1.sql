@@ -981,8 +981,10 @@ create trigger duo_v3_entries_guard_insert before insert on public.duo_v3_entrie
 
 -- ======================================================================================== F4
 -- Domaine sans échelle : une valeur 1.5 est refusée telle quelle, avant tout arrondi.
+-- NUM-01 (27/11) : « 100.0 » (entier à échelle non nulle, accepté par « value = trunc(value) ») est aussi refusé : il serait
+-- relu « 100.0 » et rendrait l'instantané illisible pour le contrat (chaînes d'entiers canoniques, REV-01).
 create domain duo_v3_private.minor_units as numeric
-  check (value = trunc(value) and abs(value) <= 99999999999999999999999999999999999999);
+  check (value = trunc(value) and scale(value) = 0 and abs(value) <= 99999999999999999999999999999999999999);
 drop view public.duo_v3_household_position;
 drop view public.duo_v3_envelope_balances;
 alter table public.duo_v3_entries alter column amount_minor type duo_v3_private.minor_units;
