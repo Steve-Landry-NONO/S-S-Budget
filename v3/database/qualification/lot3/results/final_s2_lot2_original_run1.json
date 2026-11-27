@@ -1,0 +1,13 @@
+{
+ "label": "final_s2_lot2_original_run1",
+ "template": "s2",
+ "suite": "v3/database/tests/lot2_financial_model_local.sql",
+ "suite_sha256": "c93b7be24fc87e01fdce38c89bdf987a6d2a9adb78da9244999706795e710746",
+ "specs_sha256": "c6ecc3022ca7483d9c91623c7ea9f2c35779a4cb81309b8704c7f2150c96cd36",
+ "debut": "2026-11-26T09:43:22+00:00",
+ "psql_code": 3,
+ "stderr": "psql:v3/database/tests/lot2_financial_model_local.sql:17: ERROR:  duplicate key value violates unique constraint \"duo_v3_one_active_duo_per_user\"\nDETAIL:  Key (user_id)=(a1000000-0000-4000-8000-0000000000a1) already exists.\n",
+ "bilan": {
+  "erreur_execution": 1
+ }
+}

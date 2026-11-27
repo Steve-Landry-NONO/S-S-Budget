@@ -1,0 +1,210 @@
+{
+ "label": "final_s2_lot3v3_run1",
+ "template": "s2",
+ "fonds": false,
+ "bilan": {
+  "Réussi": 20
+ },
+ "resultats": [
+  {
+   "id": "C3-01",
+   "regle": "Soldes communs courants identiques pour les deux membres actifs, y compris un membre revenu",
+   "decision": "POST006-02",
+   "action": "B part, A dépense 25 €, B revient ; A et B lisent instantané, vue des soldes, position",
+   "attendu": "instantanés identiques (hors horodatage) ; soldes et trésorerie égaux",
+   "observe": "instantané_égal=True solde A=(Decimal('46500'),) B=(Decimal('46500'),) trésorerie A=(Decimal('46500'),) B=(Decimal('46500'),)",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-02",
+   "regle": "Détail de la période d'absence non accessible (transactions et lignes)",
+   "decision": "CF-07 / POST006-02",
+   "action": "B lit le journal et les lignes",
+   "attendu": "« a-during » invisible ; 0 ligne",
+   "observe": "clés=['alloc:d079dc4f-7ec4-429f-9426-31e0b3a275ef:79fde35c-a2a1-49db-86c7-30c84bd779c4', 'b-before', 'b-in'] lignes_a_during=0",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-03",
+   "regle": "Divulgation indirecte explicitée : l'effet net de l'absence est visible dans les soldes, jamais l'opération",
+   "decision": "POST006-02",
+   "action": "B compare son solde à ses propres opérations visibles",
+   "attendu": "solde B = solde commun (inclut −25 €) ≠ somme des lignes que B voit",
+   "observe": "solde=46500 somme_visible=49000",
+   "statut": "Réussi",
+   "note": "Comportement voulu et documenté (07_lot3 § divulgation) : le nombre d'opérations (ledgerVersion) et les soldes reflètent l'absence."
+  },
+  {
+   "id": "C3-04",
+   "regle": "Non-membre et ancien membre (parti) : aucun solde, aucun instantané",
+   "decision": "POST006-02",
+   "action": "tiers lit",
+   "attendu": "enveloppes [] ; 0 ligne de solde",
+   "observe": "enveloppes=[] position=None soldes=0",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-06",
+   "regle": "Départ du propriétaire : le membre restant devient propriétaire ; journalisé ; duo actif",
+   "decision": "POST006-06",
+   "action": "A (owner) quitte",
+   "attendu": "B owner actif ; évènements [left, owner_transferred] ; non archivé",
+   "observe": "B=('owner', 'active') évènements=['left', 'owner_transferred'] archivé=False",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-07",
+   "regle": "Continuité : le nouveau propriétaire écrit et invite ; l'ancien propriétaire revient comme partenaire",
+   "decision": "POST006-06",
+   "action": "B écrit puis invite A",
+   "attendu": "écriture ok ; A revient partner",
+   "observe": "écriture=True retour=True A=('partner', 'active')",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-08",
+   "regle": "Plus aucun membre : duo archivé, rien n'est détruit",
+   "decision": "POST006-06",
+   "action": "A puis B quittent",
+   "attendu": "archivé ; évènement household_archived ; transactions conservées (même nombre)",
+   "observe": "archivé=True évènements=['left', 'household_archived'] transactions 2→2",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-09",
+   "regle": "Duo archivé : ni invitation, ni réactivation directe, ni désarchivage",
+   "decision": "POST006-06",
+   "action": "inviter ; INSERT membre (postgres) ; UPDATE archived_at=null",
+   "attendu": "42501 (plus membre) ; 55000 ; 23514",
+   "observe": "42501 ; 55000 ; 23514",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-10",
+   "regle": "Course : les deux membres quittent simultanément",
+   "decision": "POST006-06",
+   "action": "2 départs simultanés",
+   "attendu": "2 ok ; archivé une seule fois ; 0 propriétaire actif",
+   "observe": "['ok', 'ok'] évènements=['left', 'left', 'household_archived'] propriétaires_actifs=0",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-11",
+   "regle": "Suppression Auth hors procédure : réconciliée dans la même transaction (déclencheur) ; propriété transmise ; grand livre intact",
+   "decision": "POST006-05 / CF-09",
+   "action": "DELETE auth.users du propriétaire",
+   "attendu": "A left ; B owner ; évènements [left, owner_transferred] ; lignes identiques",
+   "observe": "A=('owner', 'left') B=('owner', 'active') évènements=['left', 'owner_transferred'] lignes (2, Decimal('0'))→(2, Decimal('0'))",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-12",
+   "regle": "Réconciliation des orphelins : membre actif sans compte Auth → départ « auth_orphan » ; idempotente",
+   "decision": "POST006-05 / CF-09",
+   "action": "suppression sans déclencheur (replica, supabase_admin) ; reconcile ×2",
+   "attendu": "2 actifs avant ; 1 réconcilié puis 0 ; B left ; évènement orphan_reconciled",
+   "observe": "actifs_avant=2 réconciliés=1,0 B=('partner', 'left') évènements=['orphan_reconciled']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-13",
+   "regle": "Suppression du dernier membre : duo archivé, sans destruction",
+   "decision": "POST006-05 / CF-09",
+   "action": "prepare_account_deletion du seul membre",
+   "attendu": "1 départ ; archivé",
+   "observe": "départs=1 archivé=True évènements=['left', 'household_archived']",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-14",
+   "regle": "Espace personnel : créé à côté du duo actif (CF-05 ne porte que sur les duos) ; idempotent",
+   "decision": "Espace personnel",
+   "action": "A crée deux fois",
+   "attendu": "même espace ; A actif dans le duo ET dans son espace",
+   "observe": "ok=True même=True duo_A=('owner', 'active')",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-15",
+   "regle": "Dépenses personnelles jamais exposées au partenaire, directement (journal, lignes) ni indirectement (soldes, instantané, existence)",
+   "decision": "Espace personnel",
+   "action": "B lit transactions, lignes, soldes, instantané, foyer, membres de l'espace de A ; B écrit",
+   "attendu": "tout à 0 / vide ; écriture 42501",
+   "observe": "tx=0 lignes=0 soldes=0 instantané=[] foyer=0 membres=0 écriture=42501",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-16",
+   "regle": "Une dépense personnelle ne modifie aucune donnée commune (pas de canal indirect via le duo)",
+   "decision": "Espace personnel",
+   "action": "A dépense dans son espace ; B relit le duo",
+   "attendu": "instantané commun inchangé (y compris ledgerVersion)",
+   "observe": "inchangé=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-17",
+   "regle": "Espace personnel non partageable : ni invitation, ni 2e membre (même privilégié) ; espace non falsifiable",
+   "decision": "Espace personnel",
+   "action": "inviter ; INSERT direct de B ; UPDATE space='duo'",
+   "attendu": "23514 ; 23514 ; space reste personal",
+   "observe": "23514 ; 23514 ; space=personal",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-19",
+   "regle": "Départ et écriture financière simultanés (F7) : aucune écriture postérieure au départ",
+   "decision": "F7 × POST006-06",
+   "action": "6 courses départ/dépense de B",
+   "attendu": "départ toujours ok ; dépense acceptée avant ou refusée 42501 ; 0 écriture après left_at",
+   "observe": "['refusée', 'refusée', 'écrite', 'refusée', 'refusée', 'refusée'] conformes=True",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-20",
+   "regle": "Départ du propriétaire et écriture du partenaire simultanés : écriture acceptée, propriété transmise",
+   "decision": "POST006-06",
+   "action": "6 courses",
+   "attendu": "départ ok ; B owner ; écriture ok",
+   "observe": "[('ok', ('owner', 'active')), ('ok', ('owner', 'active')), ('ok', ('owner', 'active'))] incohérences=0",
+   "statut": "Réussi",
+   "note": ""
+  },
+  {
+   "id": "C3-21",
+   "regle": "Suppression du compte et acceptation d'une invitation simultanées : jamais de membre actif sans compte",
+   "decision": "POST006-05",
+   "action": "6 courses",
+   "attendu": "0 appartenance active pour le compte supprimé",
+   "observe": "anomalies=[]",
+   "statut": "Réussi",
+   "note": "L'acceptation est refusée (CF-05 : déjà actif ailleurs) ou suivie de la suppression qui réconcilie toutes ses appartenances."
+  },
+  {
+   "id": "C3-22",
+   "regle": "Révocation et acceptation simultanées après un départ : état final cohérent",
+   "decision": "CF-08",
+   "action": "révoquer / accepter",
+   "attendu": "accepted + 2 actifs, ou revoked + 1 actif",
+   "observe": "['ok', 'P0002'] statut=revoked actifs=1",
+   "statut": "Réussi",
+   "note": ""
+  }
+ ]
+}

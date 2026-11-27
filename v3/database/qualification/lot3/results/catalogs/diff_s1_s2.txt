@@ -1,0 +1,156 @@
+46a47
+> COL|public.duo_v3_households.archived_at|timestamp with time zone|YES|
+50a52
+> COL|public.duo_v3_households.kind|text|NO|'duo'::text
+51a54,68
+> COL|public.duo_v3_invitations.channel|text|NO|
+> COL|public.duo_v3_invitations.created_at|timestamp with time zone|NO|now()
+> COL|public.duo_v3_invitations.created_by|uuid|NO|
+> COL|public.duo_v3_invitations.decided_at|timestamp with time zone|YES|
+> COL|public.duo_v3_invitations.decided_by|uuid|YES|
+> COL|public.duo_v3_invitations.expires_at|timestamp with time zone|NO|
+> COL|public.duo_v3_invitations.household_id|uuid|NO|
+> COL|public.duo_v3_invitations.id|uuid|NO|gen_random_uuid()
+> COL|public.duo_v3_invitations.status|text|NO|'pending'::text
+> COL|public.duo_v3_invitations.target_email_sha256|bytea|YES|
+> COL|public.duo_v3_invitations.token_sha256|bytea|NO|
+> COL|public.duo_v3_member_episodes.household_id|uuid|NO|
+> COL|public.duo_v3_member_episodes.joined_at|timestamp with time zone|NO|
+> COL|public.duo_v3_member_episodes.left_at|timestamp with time zone|YES|
+> COL|public.duo_v3_member_episodes.user_id|uuid|NO|
+53a71
+> COL|public.duo_v3_members.left_at|timestamp with time zone|YES|
+54a73,74
+> COL|public.duo_v3_members.space|text|NO|'duo'::text
+> COL|public.duo_v3_members.status|text|NO|'active'::text
+55a76,81
+> COL|public.duo_v3_membership_events.at|timestamp with time zone|NO|clock_timestamp()
+> COL|public.duo_v3_membership_events.event|text|NO|
+> COL|public.duo_v3_membership_events.household_id|uuid|NO|
+> COL|public.duo_v3_membership_events.id|bigint|NO|
+> COL|public.duo_v3_membership_events.reason|text|YES|
+> COL|public.duo_v3_membership_events.user_id|uuid|YES|
+127a154
+> CON|duo_v3_households|duo_v3_households_kind_check|CHECK ((kind = ANY (ARRAY['duo'::text, 'personal'::text])))
+129a157,174
+> CON|duo_v3_invitations|duo_v3_invitations_channel_check|CHECK ((channel = ANY (ARRAY['link'::text, 'email'::text])))
+> CON|duo_v3_invitations|duo_v3_invitations_check1|CHECK (((channel = 'email'::text) = (target_email_sha256 IS NOT NULL)))
+> CON|duo_v3_invitations|duo_v3_invitations_check2|CHECK (((status = 'pending'::text) = (decided_at IS NULL)))
+> CON|duo_v3_invitations|duo_v3_invitations_check|CHECK ((expires_at > created_at))
+> CON|duo_v3_invitations|duo_v3_invitations_household_id_created_by_fkey|FOREIGN KEY (household_id, created_by) REFERENCES duo_v3_members(household_id, user_id)
+> CON|duo_v3_invitations|duo_v3_invitations_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+> CON|duo_v3_invitations|duo_v3_invitations_pkey|PRIMARY KEY (id)
+> CON|duo_v3_invitations|duo_v3_invitations_status_check|CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text, 'revoked'::text, 'expired'::text])))
+> CON|duo_v3_invitations|duo_v3_invitations_target_email_sha256_check|CHECK (((target_email_sha256 IS NULL) OR (length(target_email_sha256) = 32)))
+> CON|duo_v3_invitations|duo_v3_invitations_token_sha256_check|CHECK ((length(token_sha256) = 32))
+> CON|duo_v3_invitations|duo_v3_invitations_token_sha256_key|UNIQUE (token_sha256)
+> CON|duo_v3_member_episodes|duo_v3_member_episodes_check|CHECK (((left_at IS NULL) OR (left_at >= joined_at)))
+> CON|duo_v3_member_episodes|duo_v3_member_episodes_household_id_user_id_fkey|FOREIGN KEY (household_id, user_id) REFERENCES duo_v3_members(household_id, user_id) ON DELETE RESTRICT
+> CON|duo_v3_member_episodes|duo_v3_member_episodes_pkey|PRIMARY KEY (household_id, user_id, joined_at)
+> CON|duo_v3_membership_events|duo_v3_membership_events_event_check|CHECK ((event = ANY (ARRAY['left'::text, 'owner_transferred'::text, 'household_archived'::text, 'orphan_reconciled'::text, 'member_returned'::text])))
+> CON|duo_v3_membership_events|duo_v3_membership_events_household_id_fkey|FOREIGN KEY (household_id) REFERENCES duo_v3_households(id) ON DELETE RESTRICT
+> CON|duo_v3_membership_events|duo_v3_membership_events_pkey|PRIMARY KEY (id)
+> CON|duo_v3_membership_events|duo_v3_membership_events_reason_check|CHECK ((reason = ANY (ARRAY['left'::text, 'account_deleted'::text, 'auth_orphan'::text])))
+130a176
+> CON|duo_v3_members|duo_v3_members_left_at_consistent|CHECK (((status = 'left'::text) = (left_at IS NOT NULL)))
+133c179,180
+< CON|duo_v3_members|duo_v3_members_user_id_fkey|FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT
+---
+> CON|duo_v3_members|duo_v3_members_space_check|CHECK ((space = ANY (ARRAY['duo'::text, 'personal'::text])))
+> CON|duo_v3_members|duo_v3_members_status_check|CHECK ((status = ANY (ARRAY['active'::text, 'left'::text])))
+181a229,231
+> IDX|public.duo_v3_invitations_pkey|CREATE UNIQUE INDEX duo_v3_invitations_pkey ON public.duo_v3_invitations USING btree (id)
+> IDX|public.duo_v3_invitations_token_sha256_key|CREATE UNIQUE INDEX duo_v3_invitations_token_sha256_key ON public.duo_v3_invitations USING btree (token_sha256)
+> IDX|public.duo_v3_member_episodes_pkey|CREATE UNIQUE INDEX duo_v3_member_episodes_pkey ON public.duo_v3_member_episodes USING btree (household_id, user_id, joined_at)
+183a234,237
+> IDX|public.duo_v3_membership_events_pkey|CREATE UNIQUE INDEX duo_v3_membership_events_pkey ON public.duo_v3_membership_events USING btree (id)
+> IDX|public.duo_v3_one_active_duo_per_user|CREATE UNIQUE INDEX duo_v3_one_active_duo_per_user ON public.duo_v3_members USING btree (user_id) WHERE ((status = 'active'::text) AND (space = 'duo'::text))
+> IDX|public.duo_v3_one_active_owner_per_household|CREATE UNIQUE INDEX duo_v3_one_active_owner_per_household ON public.duo_v3_members USING btree (household_id) WHERE ((role = 'owner'::text) AND (status = 'active'::text))
+> IDX|public.duo_v3_one_open_episode|CREATE UNIQUE INDEX duo_v3_one_open_episode ON public.duo_v3_member_episodes USING btree (household_id, user_id) WHERE (left_at IS NULL)
+185c239
+< IDX|public.duo_v3_one_owner_per_household|CREATE UNIQUE INDEX duo_v3_one_owner_per_household ON public.duo_v3_members USING btree (household_id) WHERE (role = 'owner'::text)
+---
+> IDX|public.duo_v3_one_personal_space_per_user|CREATE UNIQUE INDEX duo_v3_one_personal_space_per_user ON public.duo_v3_members USING btree (user_id) WHERE ((status = 'active'::text) AND (space = 'personal'::text))
+196a251
+> TRG|auth.users|duo_v3_on_auth_user_deleted|O|CREATE TRIGGER duo_v3_on_auth_user_deleted AFTER DELETE ON auth.users FOR EACH ROW EXECUTE FUNCTION duo_v3_private.on_auth_user_deleted()
+206a262,267
+> TRG|duo_v3_households|duo_v3_households_guard_kind|O|CREATE TRIGGER duo_v3_households_guard_kind BEFORE UPDATE OF kind, archived_at ON public.duo_v3_households FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_household_kind()
+> TRG|duo_v3_invitations|duo_v3_invitations_guard|O|CREATE TRIGGER duo_v3_invitations_guard BEFORE INSERT ON public.duo_v3_invitations FOR EACH ROW EXECUTE FUNCTION duo_v3_private.guard_invitation()
+> TRG|duo_v3_membership_events|duo_v3_membership_events_immutable|O|CREATE TRIGGER duo_v3_membership_events_immutable BEFORE DELETE OR UPDATE ON public.duo_v3_membership_events FOR EACH ROW EXECUTE FUNCTION duo_v3_private.reject_mutation()
+> TRG|duo_v3_members|duo_v3_members_enforce|O|CREATE TRIGGER duo_v3_members_enforce BEFORE INSERT OR UPDATE OF status, space ON public.duo_v3_members FOR EACH ROW EXECUTE FUNCTION duo_v3_private.enforce_membership()
+> TRG|duo_v3_members|duo_v3_members_episode|O|CREATE TRIGGER duo_v3_members_episode AFTER INSERT OR UPDATE OF status ON public.duo_v3_members FOR EACH ROW EXECUTE FUNCTION duo_v3_private.track_episode()
+> TRG|duo_v3_members|duo_v3_members_return|O|CREATE TRIGGER duo_v3_members_return AFTER UPDATE OF status ON public.duo_v3_members FOR EACH ROW EXECUTE FUNCTION duo_v3_private.on_member_return()
+223c284,286
+< POL|public.duo_v3_entries|duo_v3_entries_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+---
+> POL|public.duo_v3_entries|duo_v3_entries_member_read|PERMISSIVE|SELECT|authenticated|(EXISTS ( SELECT 1
+>    FROM duo_v3_transactions t
+>   WHERE (t.id = duo_v3_entries.transaction_id)))|
+225a289,290
+> POL|public.duo_v3_invitations|duo_v3_invitations_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+> POL|public.duo_v3_membership_events|duo_v3_membership_events_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+231c296
+< POL|public.duo_v3_transactions|duo_v3_transactions_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.is_current_member(household_id)|
+---
+> POL|public.duo_v3_transactions|duo_v3_transactions_member_read|PERMISSIVE|SELECT|authenticated|duo_v3_private.can_read_at(household_id, COALESCE(posted_at, created_at))|
+236a302,304
+> RLS|public.duo_v3_invitations|true|false
+> RLS|public.duo_v3_member_episodes|true|false
+> RLS|public.duo_v3_membership_events|true|false
+249a318,321
+> TACL|public.duo_v3_invitations|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+> TACL|public.duo_v3_member_episodes|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+> TACL|public.duo_v3_membership_events_id_seq|S|{postgres=rwU/postgres,service_role=rwU/postgres}
+> TACL|public.duo_v3_membership_events|r|{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres,authenticated=r/postgres}
+256a329,337
+> CACL|duo_v3_invitations.channel|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.created_at|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.created_by|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.decided_at|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.decided_by|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.expires_at|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.household_id|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.id|{authenticated=r/postgres}
+> CACL|duo_v3_invitations.status|{authenticated=r/postgres}
+260a342
+> FN|duo_v3_private.can_read_at(p_household uuid, p_at timestamp with time zone)|secdef=true|{postgres=X/postgres,authenticated=X/postgres}|search_path=""|c502cf1c19ab6759e643b93e3edcb45e
+261a344
+> FN|duo_v3_private.confirmed_email_sha256(p_user uuid)|secdef=true|{postgres=X/postgres}|search_path=""|03cd05680ef42ad6b60425f3f30e8a55
+265a349,351
+> FN|duo_v3_private.depart(p_household uuid, p_user uuid, p_reason text)|secdef=true|{postgres=X/postgres}|search_path=""|fc7b13568e2e7e3da4b6737ec23eff25
+> FN|duo_v3_private.duo_v3_get_envelope_snapshot_all(p_household uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres}|search_path=""|0a4a9a73c67e96c4e1d5811a0bf4de48
+> FN|duo_v3_private.enforce_membership()|secdef=true|{postgres=X/postgres}|search_path=""|e89e02f4c0aca53abcd7ba01d45b6faa
+266a353
+> FN|duo_v3_private.export_archived_household(p_household uuid)|secdef=true|{postgres=X/postgres}|search_path=""|28b79067e645814534a6e4a0c6738c18
+269a357,358
+> FN|duo_v3_private.guard_household_kind()|secdef=true|{postgres=X/postgres}|search_path=""|521e6b40d2ba7f732e60101ca761d157
+> FN|duo_v3_private.guard_invitation()|secdef=true|{postgres=X/postgres}|search_path=""|fbca2a93895a3822af0dbd7ae4d6c3ef
+273,274c362,367
+< FN|duo_v3_private.is_current_member(p_household uuid)|secdef=true|{postgres=X/postgres,authenticated=X/postgres}|search_path=""|e2928b7dee52b180a68ac2a1b464ad18
+< FN|duo_v3_private.is_member(p_household uuid, p_user uuid)|secdef=true|{postgres=X/postgres}|search_path=""|ec870cc6dbbeabb3675b9aadb729e5fe
+---
+> FN|duo_v3_private.invitation_ttl()|secdef=false|{postgres=X/postgres}||4bcb01cb3007e376ecd4cf0848502ec6
+> FN|duo_v3_private.is_current_member(p_household uuid)|secdef=true|{postgres=X/postgres,authenticated=X/postgres}|search_path=""|1f19e95edd6e3add691bf06da87007fc
+> FN|duo_v3_private.is_member(p_household uuid, p_user uuid)|secdef=true|{postgres=X/postgres}|search_path=""|cd197fe6baa3e29b97dfe359a8e1d311
+> FN|duo_v3_private.lock_invitation(p_token text, p_user uuid, OUT inv duo_v3_invitations)|secdef=true|{postgres=X/postgres}|search_path=""|13d26af1aab9ffddde6828a4d9c7c186
+> FN|duo_v3_private.on_auth_user_deleted()|secdef=true|{postgres=X/postgres}|search_path=""|4e7652b083c511eec855c8c5e091c529
+> FN|duo_v3_private.on_member_return()|secdef=true|{postgres=X/postgres}|search_path=""|8bff093adbff63fadeeebe5ff0ffb53d
+276a370,371
+> FN|duo_v3_private.prepare_account_deletion(p_user uuid)|secdef=true|{postgres=X/postgres}|search_path=""|c5465468b482c2b99c5d45735f9770e1
+> FN|duo_v3_private.reconcile_orphan_memberships()|secdef=true|{postgres=X/postgres}|search_path=""|e2fbe192da3968cb357bee9e9bd0284f
+278a374
+> FN|duo_v3_private.require_user()|secdef=true|{postgres=X/postgres}|search_path=""|13737911ee842984921945d853d9acb8
+279a376
+> FN|duo_v3_private.track_episode()|secdef=true|{postgres=X/postgres}|search_path=""|366fa543d6797c580a9b7bcd7d72c94a
+288c385,391
+< FN|public.duo_v3_get_envelope_snapshot(p_household uuid)|secdef=false|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|ca2d25e5c6455bdae73e1f29bf6e9aaf
+---
+> FN|public.duo_v3_accept_invitation(p_token text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|8384318a4ebd4ac3c327684e95c55b27
+> FN|public.duo_v3_create_invitation(p_household uuid, p_channel text, p_target_email text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|a6dc1ac59eb405386db2001557133dc0
+> FN|public.duo_v3_create_personal_space(p_currency text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|adb85d44a3f035738004c51dab98af70
+> FN|public.duo_v3_decline_invitation(p_token text)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|408a1b235cb070dcc6f054e2d19c30fb
+> FN|public.duo_v3_get_envelope_snapshot(p_household uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3b60d529f78711c54e21e9b7869b1ab8
+> FN|public.duo_v3_leave_household(p_household uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|3a7bdf985e8fa21b62f2af27b24bcb64
+> FN|public.duo_v3_list_membership_notices(p_household uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|edcca2474fe57200c3e1eabd521f33fd
+292a396
+> FN|public.duo_v3_revoke_invitation(p_invitation uuid)|secdef=true|{postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}|search_path=""|ca20d945010c1e3a7ddcd31d18aa0bba
