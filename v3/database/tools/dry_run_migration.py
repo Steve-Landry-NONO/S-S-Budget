@@ -168,7 +168,12 @@ def observe(conn, cat):
     r = psql(conn, "-At", "-f", str(cat)); cat_h = hashlib.sha256(r.stdout.encode()).hexdigest()[:16] if r.returncode == 0 else "erreur"
     v = psql(conn, "-At", "-c", "select coalesce(string_agg(version, ',' order by version), '') from supabase_migrations.schema_migrations")
     s = psql(conn, "-At", "-c", "select coalesce(string_agg(schemaname||'.'||sequencename||'='||coalesce(last_value::text,'null'), ',' order by 1), '') from pg_sequences")
-    return dict(catalogue=cat_h, versions=v.stdout.strip() if v.returncode == 0 else "absent", sequences=s.stdout.strip())
+    # CAT-01 : catalog_dump.sql n'inclut ni les types ni les contraintes de domaine ; relevé complémentaire.
+    d = psql(conn, "-At", "-c", "select coalesce(string_agg(n.nspname||'.'||t.typname||'|'||t.typtype::text||'|'||coalesce(pg_get_constraintdef(c.oid),''), ',' order by 1), '')"
+             " from pg_type t join pg_namespace n on n.oid = t.typnamespace left join pg_constraint c on c.contypid = t.oid"
+             " where n.nspname not in ('pg_catalog','information_schema','pg_toast') and n.nspname not like 'pg_temp%' and t.typtype in ('d','e','c','r') and not exists (select 1 from pg_class r where r.reltype = t.oid)")
+    dom_h = hashlib.sha256(d.stdout.encode()).hexdigest()[:16] if d.returncode == 0 else "erreur"
+    return dict(catalogue=cat_h, types_domaines=dom_h, versions=v.stdout.strip() if v.returncode == 0 else "absent", sequences=s.stdout.strip())
 
 GUARD_SET = "select pg_catalog.set_config('duo_v3.dry_run_xact', pg_catalog.pg_current_xact_id()::text, true);"
 GUARD_CHECK = ("do $dry_run_guard$ begin if coalesce(pg_catalog.current_setting('duo_v3.dry_run_xact', true), '') "
@@ -203,14 +208,14 @@ def main(argv):
     seq_changed = before["sequences"] != after["sequences"]
     if "DRY_RUN_TRANSACTION_BROKEN" in r.stderr:
         return done(3, "TRANSACTION ROMPUE", motif="le corps a quitté la transaction de l'essai : des effets ont pu être validés ; détruire la base jetable")
-    if before["catalogue"] != after["catalogue"] or before["versions"] != after["versions"]:
-        return done(4, "MODIFICATION PERSISTANTE DÉTECTÉE", motif="catalogue ou versions différents après l'essai")
+    if before["catalogue"] != after["catalogue"] or before["versions"] != after["versions"] or before["types_domaines"] != after["types_domaines"]:
+        return done(4, "MODIFICATION PERSISTANTE DÉTECTÉE", motif="catalogue, types et domaines ou versions différents après l'essai")
     if r.returncode:
         last = [l for l in r.stderr.splitlines() if "ERROR" in l or "ERREUR" in l]
         return done(5, "MIGRATION EN ÉCHEC (ANNULÉE)", motif=(last[-1] if last else r.stderr.strip()[-200:]),
                     effets_non_transactionnels=(["séquences"] if seq_changed else []))
     return done(0, "ESSAI À BLANC OK" + (" — AVEC EFFET NON TRANSACTIONNEL (séquences avancées)" if seq_changed else ""),
-                motif="détection a posteriori : catalogue et versions inchangés (ce n'est pas une preuve d'absence d'effet)",
+                motif="détection a posteriori : catalogue, types et domaines, versions inchangés (ce n'est pas une preuve d'absence d'effet)",
                 effets_non_transactionnels=(["séquences"] if seq_changed else []))
 
 if __name__ == "__main__":
