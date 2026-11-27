@@ -1,0 +1,48 @@
+{
+ "asOf": "2026-11-26T16:36:17.151086+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "assignedRealFunds": "30000",
+   "assignedRealFundsCumulative": "30000",
+   "budgetAllocation": "30000",
+   "budgetBalance": "30000",
+   "carryOver": "0",
+   "envelopeId": "ced068c9-9d6e-4a6f-a877-51d815bfad73",
+   "flags": [],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Courses",
+   "protectionState": "none",
+   "realAvailable": "30000",
+   "realCarryOver": "0",
+   "realizedExpenses": "0",
+   "remainingBudget": "30000",
+   "status": "active",
+   "target": "30000",
+   "unfundedTarget": "0"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "30000",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "100000",
+  "realizedContributions": "100000",
+  "unassignedRealFunds": "70000"
+ },
+ "householdId": "4778f1c1-a9df-4e9a-8110-1caa100210a7",
+ "ledgerVersion": "3",
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "b8e5e0f9-7822-435f-8678-822ba08d8305",
+  "startsOn": "2026-11-01"
+ },
+ "scope": "common"
+}

@@ -1,0 +1,70 @@
+{
+ "asOf": "2026-11-26T16:36:17.573565+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "assignedRealFunds": "18000",
+   "assignedRealFundsCumulative": "18000",
+   "budgetAllocation": "20000",
+   "budgetBalance": "20000",
+   "carryOver": "0",
+   "envelopeId": "e103c4cd-6626-4acb-b66e-bbffc0f39a17",
+   "flags": [
+    "unfunded_target"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Courses",
+   "protectionState": "none",
+   "realAvailable": "18000",
+   "realCarryOver": "0",
+   "realizedExpenses": "0",
+   "remainingBudget": "20000",
+   "status": "active",
+   "target": "20000",
+   "unfundedTarget": "2000"
+  },
+  {
+   "assignedRealFunds": "12000",
+   "assignedRealFundsCumulative": "12000",
+   "budgetAllocation": "10000",
+   "budgetBalance": "10000",
+   "carryOver": "0",
+   "envelopeId": "75fcfa1e-6567-43ec-ab6e-4362e5c58f5a",
+   "flags": [],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Loisirs",
+   "protectionState": "none",
+   "realAvailable": "12000",
+   "realCarryOver": "0",
+   "realizedExpenses": "0",
+   "remainingBudget": "10000",
+   "status": "active",
+   "target": "10000",
+   "unfundedTarget": "0"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "30000",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "30000",
+  "realizedContributions": "30000",
+  "unassignedRealFunds": "0"
+ },
+ "householdId": "abe64647-f140-42af-a21e-0e446422c4b6",
+ "ledgerVersion": "4",
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "1ae8bf90-1ed7-4657-8693-22b519f38a89",
+  "startsOn": "2026-11-01"
+ },
+ "scope": "common"
+}

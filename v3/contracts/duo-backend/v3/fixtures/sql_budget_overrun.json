@@ -1,0 +1,50 @@
+{
+ "asOf": "2026-11-26T16:36:17.004129+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "assignedRealFunds": "20000",
+   "assignedRealFundsCumulative": "20000",
+   "budgetAllocation": "10000",
+   "budgetBalance": "-5000",
+   "carryOver": "0",
+   "envelopeId": "25022af5-5ab0-4c88-8b9c-99ef79f17ad2",
+   "flags": [
+    "budget_overrun"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Cadeaux",
+   "protectionState": "none",
+   "realAvailable": "5000",
+   "realCarryOver": "0",
+   "realizedExpenses": "15000",
+   "remainingBudget": "-5000",
+   "status": "active",
+   "target": "10000",
+   "unfundedTarget": "0"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "5000",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "5000",
+  "realizedContributions": "20000",
+  "unassignedRealFunds": "0"
+ },
+ "householdId": "fb568076-8833-4db6-b238-13649243fd25",
+ "ledgerVersion": "3",
+ "period": {
+  "endsBefore": "2026-12-01",
+  "periodId": "6403a26c-7c5c-460d-9ff2-811c8ca133fe",
+  "startsOn": "2026-11-01"
+ },
+ "scope": "common"
+}

@@ -1,0 +1,73 @@
+{
+ "asOf": "2026-11-26T16:36:17.387411+01:00",
+ "currency": "EUR",
+ "envelopes": [
+  {
+   "assignedRealFunds": "0",
+   "assignedRealFundsCumulative": "1000",
+   "budgetAllocation": "5000",
+   "budgetBalance": "6000",
+   "carryOver": "1000",
+   "envelopeId": "4275d8d4-66f5-4915-baba-6780d0f790e1",
+   "flags": [
+    "unfunded_target",
+    "real_deficit"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Deficit",
+   "protectionState": "none",
+   "realAvailable": "-3000",
+   "realCarryOver": "-3000",
+   "realizedExpenses": "0",
+   "remainingBudget": "6000",
+   "status": "active",
+   "target": "5000",
+   "unfundedTarget": "5000"
+  },
+  {
+   "assignedRealFunds": "0",
+   "assignedRealFundsCumulative": "8000",
+   "budgetAllocation": "10000",
+   "budgetBalance": "20000",
+   "carryOver": "10000",
+   "envelopeId": "ce9d0a55-cc7d-4c51-bdcb-8d31b57dfb37",
+   "flags": [
+    "unfunded_target"
+   ],
+   "forecastBalance": null,
+   "forecastState": "not_available",
+   "name": "Reportable",
+   "protectionState": "none",
+   "realAvailable": "8000",
+   "realCarryOver": "8000",
+   "realizedExpenses": "0",
+   "remainingBudget": "20000",
+   "status": "active",
+   "target": "10000",
+   "unfundedTarget": "10000"
+  }
+ ],
+ "fundsTracking": true,
+ "household": {
+  "assignedRealFunds": "5000",
+  "budgetReserve": "0",
+  "expectedByMember": [],
+  "expectedContributions": null,
+  "expectedContributionsState": "not_configured",
+  "forecastState": "not_available",
+  "forecastTreasury": null,
+  "invariantHolds": true,
+  "realTreasury": "16000",
+  "realizedContributions": "0",
+  "unassignedRealFunds": "11000"
+ },
+ "householdId": "78c2628d-ec77-4964-9b0b-92094e27435d",
+ "ledgerVersion": "8",
+ "period": {
+  "endsBefore": "2027-01-01",
+  "periodId": "4eb3099f-5782-4791-90e9-f0bc508ef5e4",
+  "startsOn": "2026-12-01"
+ },
+ "scope": "common"
+}
