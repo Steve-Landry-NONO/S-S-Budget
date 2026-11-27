@@ -33,7 +33,7 @@ Dix frames au format initial **390 × 844** : E01 commun, E02 personnel, E03 dé
 | `384:363` | 390 | 135 % | Exemple QA de lecture |
 | `384:385` | 390 | 200 % | Exemple QA de lecture |
 
-Ces cinq vues **ne remplacent pas** les dix écrans et ne satisfont pas la matrice complète de 90 configurations. Contrôle géométrique initial : aucun texte au-delà de la largeur de sa frame pour ces exemples. Le 200 % nécessite une vue verticalement défilante ; aucun test lecteur d'écran/contraste/prototype natif n'a été exécuté.
+Une sixième vue QA, **E01 contenu défilant déployé** (`386:297`, 390 × 1424), montre la totalité de la liste jusqu'à la réserve ; c'est une vue statique étendue, pas une preuve de ScrollView ou de navigation interactive. L'E01 original reste inchangé.\n\nCes cinq vues **ne remplacent pas** les dix écrans et ne satisfont pas la matrice complète de 90 configurations. Contrôle géométrique initial : aucun texte au-delà de la largeur de sa frame pour ces exemples. Le 200 % nécessite une vue verticalement défilante ; aucun test lecteur d'écran/contraste/prototype natif n'a été exécuté.
 
 ### Couverture progressive exigée
 
