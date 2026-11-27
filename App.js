@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
+  Platform,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -8,10 +11,17 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import DuoGlanceScreen from './src/features/glance/DuoGlanceScreen';
+import { BottomNavigation, NavigationActions } from './src/features/navigation/DuoNavigation';
+import { palette } from './src/theme/tokens';
+import dashboardModel from './src/features/dashboard/dashboardModel.cjs';
+import DashboardOverview from './src/features/dashboard/DashboardOverview';
+import WebPreview from './src/features/preview/WebPreview';
 
 const CACHE_KEY = 'SS_BUDGET_V2_CACHE';
 const API_KEY = 'SS_BUDGET_V2_API_URL';
@@ -19,6 +29,8 @@ const SECRET_KEY = 'SS_BUDGET_V2_API_SECRET';
 const USER_KEY = 'SS_BUDGET_V2_CURRENT_USER_ID';
 const AUTH_TOKEN_KEY = 'SS_BUDGET_V2_AUTH_TOKEN';
 const AUTH_EXPIRES_KEY = 'SS_BUDGET_V2_AUTH_EXPIRES_AT';
+const AUTH_SESSION_KEY = 'SS_BUDGET_V2_AUTH_SESSION_V2';
+const PENDING_MUTATION_PREFIX = 'SS_BUDGET_V2_PENDING_MUTATION:';
 const DELETE_WINDOW_DAYS = 5;
 const defaultStartMonth = '2026-07';
 
@@ -27,7 +39,8 @@ const currentMonthKey = () => todayKey().slice(0, 7);
 const isValidPinFormat = (pin) => /^\d{4,8}$/.test(String(pin || ''));
 
 const uid = (prefix = 'id') => `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
-const formatEuro = (value) => `${Number(value || 0).toFixed(2).replace('.', ',')} €`;
+// F-01: shared presentation (same cent rounding as before, never "-0,00 €").
+const formatEuro = (value) => dashboardModel.formatEuro(value);
 const parseAmount = (value) => Number(String(value || '').replace(',', '.'));
 const monthDefaultDate = (month) => {
   const normalized = /^\d{4}-\d{2}$/.test(String(month || '')) ? month : currentMonthKey();
@@ -172,11 +185,22 @@ const initialState = {
 };
 
 export default function App() {
+  if (Platform.OS === 'web' && process.env.EXPO_PUBLIC_DUO_PREVIEW === '1') return <WebPreview />;
+  return <AuthenticatedApp />;
+}
+
+function AuthenticatedApp() {
+  const sessionStorage = require('./src/features/session/sessionBoundary.cjs');
+  const mutationStorage = require('./src/features/session/mutationBoundary.cjs');
+  const {fontScale, width} = useWindowDimensions();
+  const largeText = fontScale >= 1.3 || width < 340;
+  const [showGlance, setShowGlance] = useState(true);
   const [apiUrl, setApiUrl] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  const [editingServer, setEditingServer] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('steve');
   const [connected, setConnected] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('Mode local');
+  const [syncMessage, setSyncMessage] = useState('Non synchronisé');
   const [members, setMembers] = useState(initialState.members);
   const [categories, setCategories] = useState(initialState.categories);
   const [expenses, setExpenses] = useState([]);
@@ -184,6 +208,7 @@ export default function App() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [monthDraft, setMonthDraft] = useState(currentMonthKey());
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [tab, setTab] = useState('dashboard');
   const [expenseDraft, setExpenseDraft] = useState({ label: '', amount: '', categoryId: 'weekends', paidByMemberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
   const [contributionDraft, setContributionDraft] = useState({ amount: '', categoryId: 'weekends', memberId: 'steve', date: monthDefaultDate(currentMonthKey()) });
@@ -198,6 +223,8 @@ export default function App() {
   const [bootLoading, setBootLoading] = useState(true);
   const [authToken, setAuthToken] = useState('');
   const [authTokenExpiresAt, setAuthTokenExpiresAt] = useState('');
+  const [sessionId,setSessionId]=useState('');
+  const [appActive,setAppActive]=useState(Platform.OS==='web'||AppState.currentState==null||AppState.currentState==='active');
   const [authMembers, setAuthMembers] = useState([]);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -206,17 +233,73 @@ export default function App() {
   const [pinManageModal, setPinManageModal] = useState(false);
   const [pinManageDraft, setPinManageDraft] = useState({ currentPin: '', newPin: '', newPin2: '' });
 
-  const isSessionValid = () => Boolean(authToken) && Boolean(authTokenExpiresAt) && new Date(authTokenExpiresAt).getTime() > Date.now();
+  const boundaryRef=useRef(null);
+  if(!boundaryRef.current) boundaryRef.current=sessionStorage.createSessionBoundary(AsyncStorage,{cache:CACHE_KEY,api:API_KEY,secret:SECRET_KEY,user:USER_KEY,token:AUTH_TOKEN_KEY,expires:AUTH_EXPIRES_KEY,auth:AUTH_SESSION_KEY});
+  const boundary=boundaryRef.current;
+  const epoch=boundary.current();
+  const session={api:apiUrl,secret:apiSecret,user:currentUserId,token:authToken,expires:authTokenExpiresAt,sessionId};
+  const journalRef=useRef(null), readFenceRef=useRef(null);
+  if(!journalRef.current)journalRef.current=mutationStorage.createMutationJournal(AsyncStorage,PENDING_MUTATION_PREFIX);
+  if(!readFenceRef.current)readFenceRef.current=mutationStorage.createReadFence();
+  const journal=journalRef.current,readFence=readFenceRef.current;
+  const mutationRef=useRef({kind:'checking',marker:null});
+  const [mutationState,setMutationState]=useState(mutationRef.current);
+  const setMutation=(kind,marker=null)=>{const next={kind,marker};mutationRef.current=next;setMutationState(next);};
+  const currentSession=()=>boundary.isCurrent(epoch)&&sessionStorage.valid(session);
+  const isSessionValid=()=>sessionStorage.valid(session);
+  const [dataReady,setDataReady]=useState(false);
+  const [storageError,setStorageError]=useState(false);
+  const reportStorageError=()=>setStorageError(true);
+  const resetSession=()=>{
+    const purge=boundary.purge();
+    readFence.invalidate();setMutation('checking');
+    setAuthToken('');setAuthTokenExpiresAt('');setSessionId('');setCurrentUserId('');
+    setMembers([]);setCategories([]);setExpenses([]);setContributions([]);setActivityLogs([]);
+    setDataReady(false);setConnected(false);setSyncMessage('Session fermée');
+    setSelectedMonth(currentMonthKey());setMonthDraft(currentMonthKey());setMonthPickerOpen(false);setTab('dashboard');
+    setExpenseDraft({label:'',amount:'',categoryId:'',paidByMemberId:'',date:monthDefaultDate(currentMonthKey())});
+    setContributionDraft({amount:'',categoryId:'',memberId:'',date:monthDefaultDate(currentMonthKey())});
+    setAutoDraft({mode:'all',memberId:'',monthsCount:'1',date:monthDefaultDate(currentMonthKey())});
+    setEditingExpense(null);setEditingContribution(null);setEditingCategory(null);setCategoryModal(false);
+    setSettingsModal(false);setProfileModal(false);setPinManageModal(false);setMemberDraft('');
+    setPinManageDraft({currentPin:'',newPin:'',newPin2:''});setPinStage(null);setAuthMembers([]);setAuthError('');setAuthLoading(false);
+    purge.catch(reportStorageError);
+    return purge;
+  };
+  const changeServer=(value,secret=false)=>{
+    resetSession();setEditingServer(true);setShowGlance(false);
+    if(secret)setApiSecret(value);else setApiUrl(value);
+  };
+  const stale=()=>Object.assign(new Error('Session changée'),{code:'STALE_SESSION'});
+  const staleError=error=>error?.code==='STALE_SESSION'||!boundary.isCurrent(epoch);
+  useEffect(()=>{
+    if(!authToken)return;
+    const expire=()=>{if(boundary.isCurrent(epoch)&&!isSessionValid())resetSession();};
+    expire();const timer=setInterval(expire,1000);
+    const sub=AppState.addEventListener('change',state=>{if(state==='active')expire();});
+    return()=>{clearInterval(timer);sub.remove();};
+  },[authToken,authTokenExpiresAt,currentUserId,epoch]);
 
   useEffect(() => { loadLocal(); }, []);
+  useEffect(()=>{
+    const sub=AppState.addEventListener('change',state=>setAppActive(Platform.OS==='web'||state==='active'));
+    return()=>sub.remove();
+  },[]);
+  useEffect(()=>{
+    if(bootLoading||!currentSession())return;
+    let cancelled=false;
+    journal.read(session).then(marker=>{if(!cancelled&&currentSession())setMutation(marker?'unknown':'idle',marker);}).catch(()=>{if(!cancelled&&currentSession())setMutation('storage-error');});
+    return()=>{cancelled=true;};
+  },[bootLoading,epoch,sessionId]);
 
   useEffect(() => {
+    if (bootLoading) return;
     saveLocal();
     if (!firstId(members) || !firstId(categories)) return;
     setExpenseDraft((d) => ({ ...d, paidByMemberId: members.find((m) => m.id === d.paidByMemberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setContributionDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members), categoryId: categories.find((c) => c.id === d.categoryId)?.id || firstId(categories) }));
     setAutoDraft((d) => ({ ...d, memberId: members.find((m) => m.id === d.memberId)?.id || firstId(members) }));
-  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
+  }, [members, categories, expenses, contributions, activityLogs, selectedMonth, apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, sessionId, bootLoading, dataReady, epoch]);
 
   useEffect(() => {
     setMonthDraft(selectedMonth);
@@ -227,45 +310,55 @@ export default function App() {
   }, [selectedMonth]);
 
   useEffect(() => {
-    if (!apiUrl || !isSessionValid()) return;
+    if (bootLoading || !apiUrl || !isSessionValid() || mutationState.kind!=='idle' || !appActive) return;
     syncFromServer(false);
     const timer = setInterval(() => { if (isSessionValid()) syncFromServer(false); }, 15000);
     return () => clearInterval(timer);
-  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt]);
+  }, [apiUrl, apiSecret, currentUserId, authToken, authTokenExpiresAt, sessionId, bootLoading, epoch, mutationState.kind, appActive]);
 
   useEffect(() => {
-    if (apiUrl && !isSessionValid()) fetchAuthStatus();
-  }, [apiUrl, authToken, authTokenExpiresAt]);
+    if (!bootLoading && apiUrl && !editingServer && !isSessionValid()) fetchAuthStatus();
+  }, [apiUrl, apiSecret, authToken, authTokenExpiresAt, editingServer, bootLoading, epoch]);
 
   const request = async (path, options = {}) => {
+    if (!boundary.isCurrent(epoch)) throw stale();
+    if (boundary.requestStatus(epoch,session)==='expired') { resetSession(); throw stale(); }
     if (!apiUrl.trim()) throw new Error('Aucune URL serveur configurée.');
     const url = `${apiUrl.replace(/\/$/, '')}${path}`;
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
-        ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
-        ...(authToken ? { 'x-ss-budget-auth-token': authToken } : {}),
-        ...(options.headers || {}),
-      },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const error = new Error(data.error || `Erreur serveur ${response.status}`);
-      error.code = data.code;
-      if (response.status === 401 && data.code === 'AUTH_REQUIRED') {
-        setAuthToken('');
-        setAuthTokenExpiresAt('');
-        setConnected(false);
-        setSyncMessage('Session expirée');
+    const controller=new AbortController();
+    // Timeout is a transport failure, never proof that a write was rejected.
+    const timer=setTimeout(()=>controller.abort(),20000);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal:controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiSecret ? { 'x-ss-budget-secret': apiSecret } : {}),
+          ...(currentUserId ? { 'x-ss-budget-user-id': currentUserId } : {}),
+          ...(authToken ? { 'x-ss-budget-auth-token': authToken } : {}),
+          ...(options.headers || {}),
+        },
+      });
+      const data = await response.json().catch(() => null);
+      if (!boundary.isCurrent(epoch)) throw stale();
+      if (boundary.requestStatus(epoch,session)==='expired') { resetSession(); throw stale(); }
+      if (!response.ok) {
+        const error = mutationStorage.httpError(response.status,data);
+        if (response.status === 401 && data?.code === 'AUTH_REQUIRED') {
+          resetSession();
+          setSyncMessage('Session expirée');
+        }
+        throw error;
       }
-      throw error;
-    }
-    return data;
+      if(!data||typeof data!=='object'||Array.isArray(data))throw new Error('Réponse serveur invalide');
+      return data;
+    } finally {clearTimeout(timer);}
   };
 
   const applyServerState = (data) => {
+    if (!currentSession() || !sessionStorage.isSnapshot(data)) return;
+    setDataReady(true);
     setMembers((data.members || []).map((m) => ({ ...m, role: currentMemberRole(m) })));
     setCategories((data.categories || []).map((c) => ({ ...c, locked: Boolean(c.locked), active: c.active !== false })));
     setExpenses(data.expenses || []);
@@ -275,38 +368,93 @@ export default function App() {
     setSyncMessage(`Synchronisé ${new Date().toLocaleTimeString('fr-FR').slice(0, 5)}`);
   };
 
-  const syncFromServer = async (showAlert = true) => {
+  const syncFromServer = async (showAlert = true, reconcile = false) => {
+    if(!currentSession())return false;
+    const kind=mutationRef.current.kind;
+    if(kind!=='idle'&&!(reconcile&&(kind==='unknown'||kind==='review'))){
+      if(showAlert)Alert.alert('Synchronisation suspendue','Utilise la vérification de l’opération en attente.');
+      return false;
+    }
+    if(reconcile&&kind==='review')setMutation('unknown',mutationRef.current.marker);
+    const readId=readFence.start();
     try {
       const data = await request('/api/state');
+      if(!currentSession()||!readFence.isCurrent(readId))return false;
+      if(!sessionStorage.isSnapshot(data))throw new Error('Instantané serveur invalide');
       applyServerState(data);
-      if (showAlert) Alert.alert('Synchronisation réussie', 'Les données du serveur ont été chargées.');
+      if(reconcile){
+        setMutation('review',mutationRef.current.marker);
+        Alert.alert('Instantané serveur chargé','Vérifie les opérations et le journal. Si l’écriture est absente ou ambiguë, demande au responsable du serveur de confirmer sa fin. Un instantané seul ne prouve pas un refus.');
+      }else if(showAlert)Alert.alert('Synchronisation réussie','Les données du serveur ont été chargées.');
+      return true;
     } catch (error) {
+      if(staleError(error)||!readFence.isCurrent(readId))return false;
       setConnected(false);
-      if (error.code === 'AUTH_REQUIRED') {
-        setSyncMessage('Session expirée');
-        if (showAlert) Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
-        return;
-      }
-      setSyncMessage(`Hors ligne : ${error.message}`);
-      if (showAlert) Alert.alert('Synchronisation impossible', error.message);
+      setSyncMessage('Synchronisation indisponible — dernier état confirmé');
+      if(showAlert)Alert.alert('Synchronisation impossible','Aucune donnée locale n’a été modifiée.');
+      return false;
     }
   };
 
-  const mutate = async (path, method, body, fallback) => {
-    try {
-      const data = await request(path, { method, body: JSON.stringify(body || {}) });
-      applyServerState(data);
-    } catch (error) {
-      setConnected(false);
-      if (error.code === 'AUTH_REQUIRED') {
-        setSyncMessage('Session expirée');
-        Alert.alert('Session expirée', 'Merci de vous reconnecter avec ton PIN.');
-        return;
-      }
-      setSyncMessage(`Mode local : ${error.message}`);
-      fallback?.();
-      Alert.alert('Serveur non disponible', `Action appliquée en local uniquement.\n\n${error.message}`);
+  const mutate = async (path, method, body, onConfirmed) => {
+    if(!currentSession())return;
+    if(mutationRef.current.kind!=='idle'){
+      Alert.alert('Action suspendue','Une vérification ou une opération est en cours. Ne renvoie pas cette action.');
+      return;
     }
+    readFence.invalidate();setMutation('pending');
+    const result=await mutationStorage.executeMutation({
+      journal,session,id:sessionStorage.newSessionId(),current:currentSession,
+      send:()=>request(path,{method,body:JSON.stringify(body||{})}),apply:applyServerState
+    });
+    if(!currentSession()||result.kind==='stale')return;
+    if(result.kind==='confirmed')onConfirmed?.();
+    if(result.kind==='storage-error'){
+      setMutation('storage-error');setConnected(false);
+      Alert.alert('Stockage indisponible','Aucune nouvelle action n’a été envoyée. Vérification du stockage requise.');
+      return;
+    }
+    if(result.marker||result.kind==='unknown'||result.kind==='blocked'){
+      setMutation('unknown',result.marker);setConnected(false);
+      setSyncMessage('Opération à vérifier — dernier état confirmé');
+      Alert.alert('Opération à vérifier','Ne renvoie pas l’action. Ferme le formulaire si nécessaire, puis vérifie l’état du serveur et le journal.');
+      return;
+    }
+    setMutation('idle');
+    if(result.kind==='refused')Alert.alert('Action refusée',result.error.message);
+  };
+
+  const acknowledgeMutation=()=>{
+    if(!currentSession()||mutationRef.current.kind!=='review')return;
+    const marker=mutationRef.current.marker;
+    Alert.alert('Vérification manuelle','As-tu établi le résultat de l’opération, au besoin avec le responsable du serveur ? Si le résultat reste incertain, ne débloque pas. Les brouillons d’opération seront réinitialisés.',[
+      {text:'Annuler',style:'cancel'},
+      {text:'Vérification effectuée',onPress:async()=>{
+        if(!currentSession()||mutationRef.current.kind!=='review'||mutationRef.current.marker?.id!==marker?.id)return;
+        readFence.invalidate();setMutation('pending',marker);
+        try{
+          if(!marker||!await journal.clear(session,marker.id,currentSession)){if(currentSession())setMutation('unknown',marker);return;}
+          if(currentSession()){
+            setExpenseDraft(d=>({...d,label:'',amount:''}));setContributionDraft(d=>({...d,amount:''}));
+            setEditingExpense(null);setEditingContribution(null);setCategoryModal(false);setEditingCategory(null);setMemberDraft('');
+            setMutation('idle');
+          }
+        }catch{if(currentSession())setMutation('storage-error',marker);}
+      }}
+    ]);
+  };
+
+  const renderMutationNotice=()=>{
+    const kind=mutationState.kind;
+    if(kind==='idle')return null;
+    return <View style={styles.card}>
+      <Text accessibilityRole="header" style={styles.cardTitle}>{kind==='pending'?'Opération en cours':kind==='checking'?'Vérification de la session':kind==='storage-error'?'Vérification indisponible':'Opération à vérifier'}</Text>
+      <Text accessibilityLiveRegion="polite" style={styles.muted}>{kind==='pending'||kind==='checking'?'Patiente avant toute nouvelle action.':'Les nouvelles opérations sont suspendues. Aucun renvoi automatique. Les soldes affichés proviennent du dernier instantané confirmé.'}</Text>
+      {mutationState.marker&&<Text style={styles.muted}>Tentative : {new Date(mutationState.marker.at).toLocaleString('fr-FR')}</Text>}
+      {(kind==='unknown'||kind==='review')&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={()=>syncFromServer(true,true)}><Text style={styles.secondaryButtonText}>Actualiser et vérifier le serveur</Text></TouchableOpacity>}
+      {kind==='review'&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={acknowledgeMutation}><Text style={styles.secondaryButtonText}>J’ai vérifié — débloquer</Text></TouchableOpacity>}
+      {kind==='storage-error'&&<TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={async()=>{if(!currentSession())return;try{const marker=await journal.read(session);if(currentSession())setMutation(marker?'unknown':'idle',marker);}catch{if(currentSession())Alert.alert('Stockage indisponible','Les actions restent suspendues.');}}}><Text style={styles.secondaryButtonText}>Revérifier le stockage</Text></TouchableOpacity>}
+    </View>;
   };
 
   const fetchAuthStatus = async () => {
@@ -314,11 +462,14 @@ export default function App() {
     setAuthLoading(true);
     try {
       const data = await request('/api/auth/status');
+      if (!boundary.isCurrent(epoch)) return;
       setAuthMembers(data.members || []);
     } catch (error) {
+      if (staleError(error)) return;
+      setAuthMembers([]);
       setAuthError(error.message || 'Impossible de contacter le serveur.');
     } finally {
-      setAuthLoading(false);
+      if (boundary.isCurrent(epoch)) setAuthLoading(false);
     }
   };
 
@@ -330,9 +481,14 @@ export default function App() {
   const closePinStage = () => setPinStage(null);
 
   const applyLoginSuccess = (data) => {
+    if (!boundary.isCurrent(epoch)) return;
+    const nextSession={...session,user:data?.member?.id,token:data?.authToken,expires:data?.expiresAt,sessionId:sessionStorage.newSessionId()};
+    if(!sessionStorage.valid(nextSession))throw new Error('Réponse de connexion invalide');
+    resetSession();
     setCurrentUserId(data.member.id);
     setAuthToken(data.authToken);
     setAuthTokenExpiresAt(data.expiresAt);
+    setSessionId(nextSession.sessionId);
     setPinStage(null);
     setProfileModal(false);
     setAuthError('');
@@ -353,9 +509,10 @@ export default function App() {
         Alert.alert('PIN créé', `Le PIN de ${pinStage.memberName} a été créé.`);
         applyLoginSuccess(loginData);
       } catch (error) {
+        if (staleError(error)) return;
         Alert.alert('Création impossible', error.message);
       } finally {
-        setAuthLoading(false);
+        if (boundary.isCurrent(epoch)) setAuthLoading(false);
       }
     } else {
       setAuthLoading(true);
@@ -363,11 +520,12 @@ export default function App() {
         const loginData = await request('/api/auth/login', { method: 'POST', body: JSON.stringify({ memberId: pinStage.memberId, pin }) });
         applyLoginSuccess(loginData);
       } catch (error) {
+        if (staleError(error)) return;
         Alert.alert('Connexion refusée', error.message);
         setPinStage((stage) => (stage ? { ...stage, pin: '' } : stage));
         fetchAuthStatus();
       } finally {
-        setAuthLoading(false);
+        if (boundary.isCurrent(epoch)) setAuthLoading(false);
       }
     }
   };
@@ -377,11 +535,9 @@ export default function App() {
     fetchAuthStatus();
   };
 
-  const logout = () => {
-    setAuthToken('');
-    setAuthTokenExpiresAt('');
-    setSettingsModal(false);
-    Alert.alert('Déconnecté', 'Reconnecte-toi avec ton PIN pour continuer.');
+  const logout = async () => {
+    try { await resetSession(); Alert.alert('Déconnecté', 'Reconnecte-toi avec ton PIN pour continuer.'); }
+    catch { Alert.alert('Stockage local', 'Effacement incomplet. Ne partage pas cet appareil avant résolution.'); }
   };
 
   const submitPinManage = async () => {
@@ -394,55 +550,35 @@ export default function App() {
       setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' });
       Alert.alert('PIN modifié', 'Ton PIN a été mis à jour.');
     } catch (error) {
-      Alert.alert('Modification impossible', error.message);
+      if (!staleError(error)) Alert.alert('Modification impossible', error.message);
     }
   };
 
   const loadLocal = async () => {
     try {
-      const [cache, storedApi, storedSecret, storedUserId, storedToken, storedExpires] = await Promise.all([
-        AsyncStorage.getItem(CACHE_KEY),
-        AsyncStorage.getItem(API_KEY),
-        AsyncStorage.getItem(SECRET_KEY),
-        AsyncStorage.getItem(USER_KEY),
-        AsyncStorage.getItem(AUTH_TOKEN_KEY),
-        AsyncStorage.getItem(AUTH_EXPIRES_KEY),
+      const [cache,storedApi,storedSecret,storedAuth]=await Promise.all([
+        AsyncStorage.getItem(CACHE_KEY),AsyncStorage.getItem(API_KEY),
+        AsyncStorage.getItem(SECRET_KEY),AsyncStorage.getItem(AUTH_SESSION_KEY)
       ]);
-      if (storedApi) setApiUrl(storedApi);
-      if (storedSecret) setApiSecret(storedSecret);
-      if (storedUserId) setCurrentUserId(storedUserId);
-      const stillValid = storedToken && storedExpires && new Date(storedExpires).getTime() > Date.now();
-      if (stillValid) {
-        setAuthToken(storedToken);
-        setAuthTokenExpiresAt(storedExpires);
-      } else if (storedToken || storedExpires) {
-        await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_EXPIRES_KEY]);
-      }
-      if (cache) {
-        const data = JSON.parse(cache);
-        setMembers((data.members || initialState.members).map((m) => ({ ...m, role: currentMemberRole(m) })));
-        setCategories(data.categories || initialState.categories);
-        setExpenses(data.expenses || []);
-        setContributions(data.contributions || []);
-        setActivityLogs(data.activityLogs || []);
-        // Au lancement, l'app revient automatiquement sur le mois courant.
-        // L'historique reste accessible avec les flèches ou la saisie AAAA-MM.
-        setSelectedMonth(currentMonthKey());
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de charger le cache local.');
-    } finally {
-      setBootLoading(false);
-    }
+      if(!boundary.isCurrent(epoch))return;
+      if(storedApi)setApiUrl(storedApi);
+      if(storedSecret)setApiSecret(storedSecret);
+      const restored=sessionStorage.readStoredSession(storedAuth,storedApi||'',storedSecret||'');
+      const data=sessionStorage.readCache(cache, restored);
+      if(sessionStorage.valid(restored)){
+        setCurrentUserId(restored.user);setAuthToken(restored.token);setAuthTokenExpiresAt(restored.expires);setSessionId(restored.sessionId);
+        if(data){
+          setMembers(data.members.map(m=>({...m,role:currentMemberRole(m)})));
+          setCategories(data.categories);setExpenses(data.expenses);setContributions(data.contributions);setActivityLogs(data.activityLogs);setDataReady(true);
+          setSyncMessage('Dernier état confirmé — synchronisation à vérifier');
+        }else await AsyncStorage.removeItem(CACHE_KEY);
+      }else await resetSession();
+    }catch(error){resetSession();reportStorageError();}
+    finally{setBootLoading(false);}
   };
-
-  const saveLocal = async () => {
-    await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ members, categories, expenses, contributions, activityLogs, selectedMonth }));
-    await AsyncStorage.setItem(API_KEY, apiUrl || '');
-    await AsyncStorage.setItem(SECRET_KEY, apiSecret || '');
-    await AsyncStorage.setItem(USER_KEY, currentUserId || 'steve');
-    await AsyncStorage.setItem(AUTH_TOKEN_KEY, authToken || '');
-    await AsyncStorage.setItem(AUTH_EXPIRES_KEY, authTokenExpiresAt || '');
+  const saveLocal=()=>{
+    if(bootLoading||!boundary.isCurrent(epoch))return Promise.resolve();
+    return boundary.save(epoch,session,dataReady?{members,categories,expenses,contributions,activityLogs,selectedMonth}:null).catch(reportStorageError);
   };
 
   const monthExpenseRows = useMemo(() => expenses.filter((e) => String(e.date || '').startsWith(selectedMonth)), [expenses, selectedMonth]);
@@ -455,49 +591,11 @@ export default function App() {
   const previousExpenses = useMemo(() => expenses.filter((e) => !isPlannedAction(e) && isBeforeMonth(e.date, selectedMonth)), [expenses, selectedMonth]);
   const previousContributions = useMemo(() => contributions.filter((c) => !isPlannedAction(c) && isBeforeMonth(c.date, selectedMonth)), [contributions, selectedMonth]);
 
-  const summary = useMemo(() => categories.map((category) => {
-    const spent = monthExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const paidIn = monthContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const previousSpent = previousExpenses.filter((e) => e.categoryId === category.id).reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const previousPaidIn = previousContributions.filter((c) => c.categoryId === category.id).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    const monthlyBudget = Number(category.monthlyPerPerson || 0) * members.length;
-    const carryOver = previousPaidIn - previousSpent;
-    const availableBudget = carryOver + monthlyBudget;
-    const remainingBudget = availableBudget - spent;
-    const cashBalance = carryOver + paidIn - spent;
-    return {
-      ...category,
-      spent,
-      paidIn,
-      previousSpent,
-      previousPaidIn,
-      carryOver,
-      monthlyBudget,
-      availableBudget,
-      remainingBudget,
-      cashBalance,
-      overBudget: spent > availableBudget,
-      needsFunding: cashBalance < 0,
-    };
-  }), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
-
-  const totals = useMemo(() => summary.reduce((acc, c) => ({
-    monthlyBudget: acc.monthlyBudget + c.monthlyBudget,
-    availableBudget: acc.availableBudget + c.availableBudget,
-    carryOver: acc.carryOver + c.carryOver,
-    spent: acc.spent + c.spent,
-    paidIn: acc.paidIn + c.paidIn,
-    cashBalance: acc.cashBalance + c.cashBalance,
-  }), { monthlyBudget: 0, availableBudget: 0, carryOver: 0, spent: 0, paidIn: 0, cashBalance: 0 }), [summary]);
-
-
-  const plannedTotals = useMemo(() => ({
-    spent: plannedMonthExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0),
-    paidIn: plannedMonthContributions.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-  }), [plannedMonthExpenses, plannedMonthContributions]);
-
+  const summary = useMemo(() => dashboardModel.summarizeCategories(categories, members.length, monthExpenses, monthContributions, previousExpenses, previousContributions), [categories, members, monthExpenses, monthContributions, previousExpenses, previousContributions]);
+  const totals = useMemo(() => dashboardModel.summarizeTotals(summary), [summary]);
+  const plannedTotals = useMemo(() => dashboardModel.summarizePlanned(plannedMonthExpenses, plannedMonthContributions), [plannedMonthExpenses, plannedMonthContributions]);
   const hasPlannedActions = plannedTotals.spent > 0 || plannedTotals.paidIn > 0;
-  const forecastCashBalance = totals.cashBalance + plannedTotals.paidIn - plannedTotals.spent;
+  const forecastCashBalance = dashboardModel.forecastBalance(totals, plannedTotals);
 
   const personState = useMemo(() => members.map((member) => {
     const expected = categories.reduce((sum, c) => sum + Number(c.monthlyPerPerson || 0), 0);
@@ -523,6 +621,7 @@ export default function App() {
     const normalized = normalizeMonth(monthDraft);
     if (!normalized) return Alert.alert('Mois invalide', 'Utilise le format AAAA-MM, par exemple 2026-07.');
     setSelectedMonth(normalized);
+    setMonthPickerOpen(false);
   };
 
   const confirmFutureDateIfNeeded = (date, actionLabel, onConfirm) => {
@@ -546,8 +645,7 @@ export default function App() {
 
     confirmFutureDateIfNeeded(expenseDraft.date, 'dépense', (status) => {
       const payload = { ...expenseDraft, id: uid('expense'), amount, status, createdByMemberId: currentUserId };
-      mutate('/api/expenses', 'POST', payload, () => setExpenses((list) => [payload, ...list]));
-      setExpenseDraft((d) => ({ ...d, label: '', amount: '' }));
+      mutate('/api/expenses','POST',payload,()=>setExpenseDraft(d=>d.label===payload.label&&parseAmount(d.amount)===payload.amount&&d.date===payload.date&&d.categoryId===payload.categoryId&&d.paidByMemberId===payload.paidByMemberId?{...d,label:'',amount:''}:d));
     });
   };
 
@@ -558,8 +656,7 @@ export default function App() {
 
     confirmFutureDateIfNeeded(contributionDraft.date, 'versement', (status) => {
       const payload = { ...contributionDraft, id: uid('contribution'), amount, status, createdByMemberId: currentUserId };
-      mutate('/api/contributions', 'POST', payload, () => setContributions((list) => [payload, ...list]));
-      setContributionDraft((d) => ({ ...d, amount: '' }));
+      mutate('/api/contributions','POST',payload,()=>setContributionDraft(d=>parseAmount(d.amount)===payload.amount&&d.date===payload.date&&d.categoryId===payload.categoryId&&d.memberId===payload.memberId?{...d,amount:''}:d));
     });
   };
 
@@ -569,10 +666,7 @@ export default function App() {
     const monthsCount = Math.max(1, parseInt(autoDraft.monthsCount || '1', 10));
 
     confirmFutureDateIfNeeded(autoDraft.date, 'versement automatique', (status) => {
-      const localRows = memberIds.flatMap((memberId) => categories.map((category) => ({
-        id: uid('auto'), memberId, categoryId: category.id, amount: Number(category.monthlyPerPerson || 0) * monthsCount, date: autoDraft.date, status, note: `Versement automatique (${monthsCount} mois)`,
-      })).filter((row) => row.amount > 0));
-      mutate('/api/auto-contributions', 'POST', { memberIds, monthsCount, date: autoDraft.date, status }, () => setContributions((list) => [...localRows, ...list]));
+      mutate('/api/auto-contributions','POST',{memberIds,monthsCount,date:autoDraft.date,status});
     });
   };
 
@@ -582,7 +676,7 @@ export default function App() {
     }
     Alert.alert('Supprimer la dépense', `Supprimer « ${expense.label} » ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/expenses/${expense.id}`, 'DELETE', {}, () => setExpenses((list) => list.filter((e) => e.id !== expense.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/expenses/${expense.id}`,'DELETE',{}) },
     ]);
   };
 
@@ -592,24 +686,12 @@ export default function App() {
     }
     Alert.alert('Supprimer le versement', `Supprimer le versement de ${formatEuro(contribution.amount)} ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`, 'DELETE', {}, () => setContributions((list) => list.filter((c) => c.id !== contribution.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/contributions/${contribution.id}`,'DELETE',{}) },
     ]);
   };
 
-  const markActivityRead = (logId) => {
-    mutate(`/api/activity-logs/${logId}/read`, 'POST', {}, () => {
-      setActivityLogs((list) => list.map((log) => (log.id === logId
-        ? { ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) }
-        : log)));
-    });
-  };
-
-  const markAllActivityRead = () => {
-    mutate('/api/activity-logs/read-all', 'POST', {}, () => {
-      setActivityLogs((list) => list.map((log) => ({ ...log, readByMemberIds: Array.from(new Set([...(log.readByMemberIds || []), currentUserId])) })));
-    });
-  };
-
+  const markActivityRead=logId=>mutate(`/api/activity-logs/${logId}/read`,'POST',{});
+  const markAllActivityRead=()=>mutate('/api/activity-logs/read-all','POST',{});
 
   const startEditExpense = (expense) => {
     if (!canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId')) {
@@ -633,8 +715,7 @@ export default function App() {
 
     confirmFutureDateIfNeeded(editingExpense.date, 'dépense modifiée', (status) => {
       const payload = { ...editingExpense, amount, status };
-      mutate(`/api/expenses/${editingExpense.id}`, 'PUT', payload, () => setExpenses((list) => list.map((e) => e.id === editingExpense.id ? { ...e, ...payload } : e)));
-      setEditingExpense(null);
+      mutate(`/api/expenses/${editingExpense.id}`,'PUT',payload,()=>setEditingExpense(d=>d?.id===payload.id?null:d));
     });
   };
 
@@ -658,8 +739,7 @@ export default function App() {
 
     confirmFutureDateIfNeeded(editingContribution.date, 'versement modifié', (status) => {
       const payload = { ...editingContribution, amount, status };
-      mutate(`/api/contributions/${editingContribution.id}`, 'PUT', payload, () => setContributions((list) => list.map((c) => c.id === editingContribution.id ? { ...c, ...payload } : c)));
-      setEditingContribution(null);
+      mutate(`/api/contributions/${editingContribution.id}`,'PUT',payload,()=>setEditingContribution(d=>d?.id===payload.id?null:d));
     });
   };
 
@@ -670,17 +750,16 @@ export default function App() {
     const payload = { ...editingCategory, monthlyPerPerson: amount };
     if (editingCategory.isNew) {
       payload.id = uid('category');
-      mutate('/api/categories', 'POST', payload, () => setCategories((list) => [...list, { ...payload, active: true }]));
+      mutate('/api/categories','POST',payload,()=>setCategoryModal(false));
     } else {
-      mutate(`/api/categories/${payload.id}`, 'PUT', payload, () => setCategories((list) => list.map((c) => (c.id === payload.id ? payload : c))));
+      mutate(`/api/categories/${payload.id}`,'PUT',payload,()=>setCategoryModal(false));
     }
-    setCategoryModal(false);
   };
 
   const deleteCategory = (category) => {
     Alert.alert('Supprimer la caisse', `Supprimer ${category.name} ?`, [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/categories/${category.id}`, 'DELETE', {}, () => setCategories((list) => list.filter((c) => c.id !== category.id))) },
+      { text: 'Supprimer', style: 'destructive', onPress: () => mutate(`/api/categories/${category.id}`,'DELETE',{}) },
     ]);
   };
 
@@ -688,37 +767,39 @@ export default function App() {
     const name = memberDraft.trim();
     if (!name) return;
     const payload = { id: uid('member'), name };
-    mutate('/api/members', 'POST', payload, () => setMembers((list) => [...list, payload]));
-    setMemberDraft('');
+    mutate('/api/members','POST',payload,()=>setMemberDraft(d=>d.trim()===payload.name?'':d));
   };
 
 
   const createServerBackup = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/backups/create', { method: 'POST', body: JSON.stringify({ reason: 'mobile' }) });
       Alert.alert('Sauvegarde créée', `Fichier : ${data.backup?.file || 'sauvegarde SQLite'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Sauvegarde impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Sauvegarde impossible', error.message); }
   };
 
   const exportServerJson = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/export/json', { method: 'POST', body: JSON.stringify({}) });
       Alert.alert('Export JSON créé', `Fichier : ${data.export?.file || 'export JSON'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Export impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Export impossible', error.message); }
   };
 
   const exportServerCsv = async () => {
+    if(!currentSession()||mutationRef.current.kind!=='idle')return Alert.alert('Action suspendue','Vérifie d’abord l’opération en attente.');
     if (!isAdmin) return Alert.alert('Accès refusé', 'Cette action est réservée à un administrateur.');
     try {
       const data = await request('/api/export/csv', { method: 'POST', body: JSON.stringify({}) });
       const files = (data.exports || []).map((item) => item.file).join('\n');
       Alert.alert('Exports CSV créés', `${files || 'exports CSV'}\nDossier serveur : server/backups/`);
       syncFromServer(false);
-    } catch (error) { Alert.alert('Export impossible', error.message); }
+    } catch (error) { if (!staleError(error)) Alert.alert('Export impossible', error.message); }
   };
 
   const showRestoreInfo = () => {
@@ -788,7 +869,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
       {authLoading && !authMembers.length ? <Text style={styles.muted}>Chargement…</Text> : null}
       {authMembers.map((member) => (
         <View key={member.id} style={styles.card}>
-          <View style={styles.rowBetween}>
+          <View style={[styles.rowBetween, largeText && styles.stacked]}>
             <Text style={styles.cardTitle}>{member.name}</Text>
             <Text style={member.locked ? styles.badgeWarn : (member.pinSet ? styles.badgeOk : styles.badge)}>
               {member.locked ? 'Verrouillé' : member.pinSet ? 'PIN défini' : 'PIN à créer'}
@@ -809,25 +890,29 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
   const renderAuthGate = () => (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>S&S Budget</Text>
+      <StatusBar style="dark" />
+      <View style={[styles.header, largeText && styles.stacked]}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title}>Duo Budget</Text>
           <Text style={styles.subtitle}>Connexion sécurisée</Text>
         </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retour à l'aperçu" onPress={() => setShowGlance(true)} style={styles.headerButton}>
+          <Text style={styles.headerButtonText}>← Aperçu</Text>
+        </TouchableOpacity>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
-        {!apiUrl ? (
+        {(!apiUrl || editingServer) ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Configurer le serveur</Text>
-            <Text style={styles.muted}>Renseigne l’URL Tailscale du serveur avant de te connecter.</Text>
+            <Text style={styles.muted}>Renseigne l’adresse du serveur de confiance (réseau local ou Tailscale).</Text>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value) => changeServer(value)} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
-            <TouchableOpacity style={styles.primaryButton} onPress={fetchAuthStatus}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} autoCorrect={false} onChangeText={(value)=>changeServer(value,true)} />
+            <TouchableOpacity style={styles.primaryButton} disabled={authLoading || !apiUrl.trim()} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(false); }}><Text style={styles.primaryButtonText}>Enregistrer et continuer</Text></TouchableOpacity>
           </View>
         ) : pinStage ? renderPinStageForm() : renderAuthMemberList()}
+        {apiUrl && !editingServer ? <TouchableOpacity accessibilityRole="button" disabled={authLoading} style={styles.secondaryButton} onPress={() => { setAuthMembers([]); setPinStage(null); setAuthError(''); setEditingServer(true); }}><Text style={styles.secondaryButtonText}>Modifier la configuration du serveur</Text></TouchableOpacity> : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -874,78 +959,79 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
     return lines;
   };
 
-  if (bootLoading) {
+  const renderMainControls = () => (<>
+      <View style={[styles.compactHeader, largeText && styles.stacked]}>
+        <View style={styles.brandRow}>
+          <Image source={require('./assets/duo-mark-blue.png')} style={styles.brandMark} accessibilityIgnoresInvertColors accessible={false} />
+          <Text style={styles.brandName}>Duo Budget</Text>
+        </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Configuration" style={styles.compactConfig} onPress={() => setSettingsModal(true)}><Text style={styles.compactConfigText}>Config</Text></TouchableOpacity>
+      </View>
+      <View style={[styles.compactMonth, largeText && styles.monthWrap]}>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois précédent" accessibilityRole="button" onPress={() => updateMonth(-1)}><Text style={styles.compactArrowText}>‹</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choisir le mois" style={styles.monthCenter} onPress={() => setMonthPickerOpen(v => !v)}><Text style={styles.monthCaption}>{new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(selectedMonth+'-01T00:00:00Z'))} ▾</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.compactArrow} accessibilityLabel="Mois suivant" accessibilityRole="button" onPress={() => updateMonth(1)}><Text style={styles.compactArrowText}>›</Text></TouchableOpacity>
+      </View>
+      {monthPickerOpen && <View style={styles.card}>
+        <Text style={styles.label}>Choisir un mois (AAAA-MM)</Text>
+        <TextInput style={styles.input} value={monthDraft} onChangeText={setMonthDraft} autoCorrect={false} keyboardType="numbers-and-punctuation" onSubmitEditing={applyMonthDraft} />
+        <TouchableOpacity style={styles.secondaryButton} onPress={applyMonthDraft}><Text style={styles.secondaryButtonText}>Appliquer</Text></TouchableOpacity>
+      </View>}
+      {tab !== 'dashboard' && <NavigationActions route={tab} onNavigate={setTab} />}
+  </>);
+
+  if (!appActive || bootLoading) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView style={styles.safe}><StatusBar style="light" /></SafeAreaView>
+        <SafeAreaView style={styles.safe}><StatusBar style="dark" /></SafeAreaView>
       </SafeAreaProvider>
     );
   }
+
+  if(storageError)return (
+    <SafeAreaProvider><SafeAreaView style={styles.safe}>
+      <Text style={styles.title}>Stockage local indisponible</Text>
+      <Text style={styles.muted}>Les données ne sont pas affichées. Réessaie l'effacement avant de continuer.</Text>
+      <TouchableOpacity style={styles.primaryButton} onPress={async()=>{try{await resetSession();setStorageError(false);}catch{reportStorageError();}}}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
+    </SafeAreaView></SafeAreaProvider>
+  );
 
   if (!isSessionValid()) {
     return (
       <SafeAreaProvider>
-        {renderAuthGate()}
+        {showGlance ? (
+          <DuoGlanceScreen
+            onSignIn={() => setShowGlance(false)}
+            onCreateAccount={() => setShowGlance(false)}
+          />
+        ) : renderAuthGate()}
       </SafeAreaProvider>
     );
   }
 
+  if (!dataReady) return (
+    <SafeAreaProvider><SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.contentInner}>
+        <Text style={styles.title}>Chargement des données</Text>
+        <Text style={styles.muted}>Aucune donnée financière disponible tant que la synchronisation initiale n'a pas réussi.</Text>
+        {renderMutationNotice()}
+        <TouchableOpacity style={styles.primaryButton} onPress={()=>syncFromServer(true)}><Text style={styles.primaryButtonText}>Réessayer</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.secondaryButton} onPress={logout}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView></SafeAreaProvider>
+  );
   return (
     <SafeAreaProvider>
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>S&S Budget</Text>
-          <Text style={styles.subtitle}>Gestion de budget de couple</Text>
-          <Text style={[styles.syncText, connected ? styles.online : styles.offline]}>{syncMessage}</Text>
-        </View>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSettingsModal(true)}><Text style={styles.headerButtonText}>Config</Text></TouchableOpacity>
-      </View>
+      <StatusBar style="dark" />
+      {!largeText && tab !== 'dashboard' && renderMainControls()}
 
-      <View style={styles.monthRow}>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(-1)}><Text style={styles.navText}>‹</Text></TouchableOpacity>
-        <TextInput
-          style={styles.monthLabel}
-          value={monthDraft}
-          onChangeText={setMonthDraft}
-          onSubmitEditing={applyMonthDraft}
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="numbers-and-punctuation"
-          placeholder="AAAA-MM"
-        />
-        <TouchableOpacity style={styles.monthOkButton} onPress={applyMonthDraft}><Text style={styles.monthOkText}>OK</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.navButton} onPress={() => updateMonth(1)}><Text style={styles.navText}>›</Text></TouchableOpacity>
-      </View>
-
-      <View style={styles.tabsOuter}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-          {[
-            ['dashboard', 'Synthèse'], ['expenses', 'Dépenses'], ['contributions', 'Versements'], ['categories', 'Caisses'], ['members', 'Membres'],
-            ['activity', unreadActivityCount > 0 ? `Journal • ${unreadActivityCount}` : 'Journal'],
-          ].map(([key, label]) => (
-            <TouchableOpacity key={key} style={[styles.tab, tab === key && styles.activeTab]} onPress={() => setTab(key)}>
-              <Text style={[styles.tabText, tab === key && styles.activeTabText]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner}>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} keyboardShouldPersistTaps="handled">
+        {(largeText || tab === 'dashboard') && renderMainControls()}
+        {renderMutationNotice()}
         {tab === 'dashboard' && (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.sectionTitleDark}>Vue générale du mois</Text>
-              <View style={styles.metricGrid}>
-                <Metric label="Report précédent" value={formatEuro(totals.carryOver)} dark />
-                <Metric label="Budget du mois" value={formatEuro(totals.monthlyBudget)} dark />
-                <Metric label="Versé ce mois" value={formatEuro(totals.paidIn)} dark />
-                <Metric label="Dépensé ce mois" value={formatEuro(totals.spent)} dark />
-                <Metric label="Solde réel" value={formatEuro(totals.cashBalance)} dark />
-                <Metric label="Solde prévisionnel" value={formatEuro(forecastCashBalance)} dark />
-              </View>
-            </View>
+            <DashboardOverview totals={totals} plannedTotals={plannedTotals} forecastCashBalance={forecastCashBalance} connected={connected} syncMessage={syncMessage} selectedMonth={selectedMonth} formatEuro={formatEuro} summary={summary} personState={personState} recent={dashboardModel.recentOperations(monthExpenses, monthContributions, categories, members)} onNavigate={setTab} />
             {hasPlannedActions && (
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>À venir ce mois-ci</Text>
@@ -954,11 +1040,12 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                 <Text style={styles.muted}>Solde après actions prévues : {formatEuro(forecastCashBalance)}</Text>
               </View>
             )}
-            <TouchableOpacity style={styles.primaryButton} onPress={() => updateMonth(1)}><Text style={styles.primaryButtonText}>Nouveau mois</Text></TouchableOpacity>
-            <Text style={styles.sectionTitle}>État par membre</Text>
-            {personState.map((state) => <PersonCard key={state.member.id} state={state} />)}
-            <Text style={styles.sectionTitle}>Situation des caisses</Text>
-            {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+            <TouchableOpacity accessibilityRole="button" style={styles.secondaryButton} onPress={() => updateMonth(1)}><Text style={styles.secondaryButtonText}>Mois suivant ›</Text></TouchableOpacity>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Détail des enveloppes</Text>
+              {summary.map((category) => <CategorySummary key={category.id} category={category} />)}
+              {!summary.length && <Text style={styles.muted}>Aucune enveloppe configurée.</Text>}
+            </View>
           </>
         )}
 
@@ -976,11 +1063,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Dépenses du mois</Text>
             {monthExpenseRows.map((expense) => (
               <View key={expense.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{expense.label}</Text><Text style={styles.amount}>{formatEuro(expense.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(expense.categoryId)} · payé par {getMemberName(expense.paidByMemberId)}</Text><Text style={styles[statusStyleName(expense)]}>{statusLabel(expense)}</Text></View>
                 <Text style={styles.muted}>{expense.date}</Text>
                 {canEditRecentAction(expense, currentUserId, currentRole, 'paidByMemberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditExpense(expense)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeExpense(expense)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1018,10 +1105,10 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             <Text style={styles.sectionTitle}>Versements du mois</Text>
             {monthContributionRows.map((contribution) => (
               <View key={contribution.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
-                <View style={styles.rowBetween}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{getMemberName(contribution.memberId)}</Text><Text style={styles.amount}>{formatEuro(contribution.amount)}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.muted}>{getCategoryName(contribution.categoryId)}</Text><Text style={styles[statusStyleName(contribution)]}>{statusLabel(contribution)}</Text></View><Text style={styles.muted}>{contribution.date}</Text>
                 {canEditRecentAction(contribution, currentUserId, currentRole, 'memberId') ? (
-                  <View style={styles.rowGap}>
+                  <View style={[styles.rowGap, largeText && styles.stacked]}>
                     <TouchableOpacity style={styles.smallButton} onPress={() => startEditContribution(contribution)}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.smallDanger} onPress={() => removeContribution(contribution)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                   </View>
@@ -1039,13 +1126,13 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             {isAdmin && <TouchableOpacity style={styles.primaryButton} onPress={() => { setEditingCategory({ isNew: true, name: '', monthlyPerPerson: '', description: '', locked: false }); setCategoryModal(true); }}><Text style={styles.primaryButtonText}>Ajouter une caisse</Text></TouchableOpacity>}
             {summary.map((category) => (
               <View key={category.id} style={styles.card}>
-                <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
+                <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={styles.badge}>{category.locked ? 'Verrouillée' : 'Libre'}</Text></View>
                 <Text style={styles.muted}>{category.description}</Text>
                 <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
                 <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)} · Disponible budget : {formatEuro(category.availableBudget)}</Text>
                 <Text style={styles.muted}>Versé ce mois : {formatEuro(category.paidIn)} · Dépensé : {formatEuro(category.spent)}</Text>
                 <Text style={styles.muted}>Solde caisse réel : {formatEuro(category.cashBalance)}</Text>
-                {isAdmin && <View style={styles.rowGap}>
+                {isAdmin && <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={() => { setEditingCategory({ ...category, monthlyPerPerson: String(category.monthlyPerPerson) }); setCategoryModal(true); }}><Text style={styles.smallButtonText}>Modifier</Text></TouchableOpacity>
                   <TouchableOpacity style={styles.smallDanger} onPress={() => deleteCategory(category)}><Text style={styles.dangerText}>Supprimer</Text></TouchableOpacity>
                 </View>}
@@ -1063,14 +1150,14 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
             </View>}
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
               <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
             </View>
             <Text style={styles.help}>Le changement de profil demande le PIN du profil cible. Le rôle admin ou membre n’est pas lié au genre : il dépend seulement de votre organisation.</Text>
-            {members.map((member) => <View key={member.id} style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
+            {members.map((member) => <View key={member.id} style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{member.name}</Text><Text style={currentMemberRole(member) === 'admin' ? styles.badge : styles.badgeOk}>{currentMemberRole(member) === 'admin' ? 'Admin' : 'Membre'}</Text></View><Text style={styles.muted}>ID : {member.id}</Text></View>)}
           </>
         )}
 
@@ -1082,7 +1169,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               <Text style={styles.muted}>Historique synchronisé des créations, suppressions, sauvegardes et exports. Les anciennes actions réalisées avant ce patch ne peuvent pas être reconstruites automatiquement.</Text>
               <Text style={styles.muted}>{unreadActivityCount > 0 ? `${unreadActivityCount} activité${unreadActivityCount > 1 ? 's' : ''} non lue${unreadActivityCount > 1 ? 's' : ''} pour vous.` : 'Tout est à jour pour vous.'}</Text>
               {unreadActivityCount > 0 && (
-                <View style={styles.rowGap}>
+                <View style={[styles.rowGap, largeText && styles.stacked]}>
                   <TouchableOpacity style={styles.smallButton} onPress={markAllActivityRead}><Text style={styles.smallButtonText}>Tout marquer comme lu</Text></TouchableOpacity>
                 </View>
               )}
@@ -1094,7 +1181,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
               const unread = isLogUnread(log, currentUserId);
               return (
                 <View key={log.id} style={styles.card}>
-                  <View style={styles.rowBetween}>
+                  <View style={[styles.rowBetween, largeText && styles.stacked]}>
                     <Text style={styles.cardTitle}>{activityLabel(log.action)}</Text>
                     <View style={styles.badgeRow}>
                       {unread && <Text style={styles.badgeWarn}>Nouveau</Text>}
@@ -1107,7 +1194,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
                   {!!log.date && <Text style={styles.muted}>Date action : {log.date}</Text>}
                   <Text style={styles.lockedText}>Action réalisée par : {log.actorName || 'Système'} · {formatActivityDate(log.createdAt)}</Text>
                   {unread && (
-                    <View style={styles.rowGap}>
+                    <View style={[styles.rowGap, largeText && styles.stacked]}>
                       <TouchableOpacity style={styles.smallButton} onPress={() => markActivityRead(log.id)}><Text style={styles.smallButtonText}>Marquer comme lu</Text></TouchableOpacity>
                     </View>
                   )}
@@ -1117,11 +1204,11 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
           </>
         )}
       </ScrollView>
-
+      <BottomNavigation route={tab} onNavigate={setTab} unreadCount={unreadActivityCount} />
 
       <Modal visible={!!editingExpense} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingExpense(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier dépense</Text>
             <TouchableOpacity onPress={saveExpenseEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1139,7 +1226,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={!!editingContribution} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => setEditingContribution(null)}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier versement</Text>
             <TouchableOpacity onPress={saveContributionEdit}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1156,7 +1243,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={categoryModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>{editingCategory?.isNew ? 'Créer une caisse' : 'Modifier la caisse'}</Text><TouchableOpacity onPress={saveCategory}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <TextInput style={styles.input} placeholder="Nom" value={editingCategory?.name || ''} onChangeText={(name) => setEditingCategory((c) => ({ ...c, name }))} />
             <TextInput style={styles.input} placeholder="Budget mensuel par membre" keyboardType="decimal-pad" value={String(editingCategory?.monthlyPerPerson || '')} onChangeText={(monthlyPerPerson) => setEditingCategory((c) => ({ ...c, monthlyPerPerson }))} />
@@ -1173,28 +1260,28 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={settingsModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}><Text style={styles.modalTitle}>Configuration serveur</Text><TouchableOpacity onPress={() => { saveLocal(); setSettingsModal(false); syncFromServer(false); }}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity></View>
           <ScrollView contentContainerStyle={styles.modalContent}>
             <Text style={styles.label}>URL API maison</Text>
-            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={setApiUrl} />
+            <TextInput style={styles.input} placeholder="http://100.x.y.z:3001" autoCapitalize="none" value={apiUrl} onChangeText={(value)=>changeServer(value)} />
             <Text style={styles.label}>Secret API optionnel</Text>
-            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={setApiSecret} />
+            <TextInput style={styles.input} placeholder="APP_SECRET" autoCapitalize="none" secureTextEntry value={apiSecret} onChangeText={(value)=>changeServer(value,true)} />
             <Text style={styles.label}>Profil de ce téléphone</Text>
             <View style={styles.card}>
-              <View style={styles.rowBetween}>
+              <View style={[styles.rowBetween, largeText && styles.stacked]}>
                 <Text style={styles.cardTitle}>{currentMember?.name || currentUserId}</Text>
                 <Text style={isAdmin ? styles.badge : styles.badgeOk}>{isAdmin ? 'Admin' : 'Membre'}</Text>
               </View>
-              <View style={styles.rowGap}>
+              <View style={[styles.rowGap, largeText && styles.stacked]}>
                 <TouchableOpacity style={styles.smallButton} onPress={openProfileSwitch}><Text style={styles.smallButtonText}>Changer de profil</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.smallButton} onPress={() => setPinManageModal(true)}><Text style={styles.smallButtonText}>Modifier mon PIN</Text></TouchableOpacity>
               </View>
             </View>
             <Text style={styles.help}>Rôle actuel : {isAdmin ? 'admin' : 'membre'}. Le serveur applique les droits à partir de ce profil connecté par PIN.</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={() => syncFromServer(true)}><Text style={styles.primaryButtonText}>Tester et synchroniser</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'Le téléphone utilisera seulement son cache local et ne partagera plus les données avec l’autre téléphone.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => setApiUrl('') }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Désactiver la synchronisation ?', 'La session sera fermée et le cache effacé. Une opération à vérifier restera signalée pour ce compte.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Désactiver', style: 'destructive', onPress: () => { resetSession(); setApiUrl(''); setShowGlance(false); } }])}><Text style={styles.secondaryButtonText}>Désactiver la synchronisation</Text></TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={showRoleInfo}><Text style={styles.secondaryButtonText}>Voir sécurité et rôles</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Il faudra ressaisir ton PIN pour continuer.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => Alert.alert('Se déconnecter ?', 'Le cache et la session seront effacés. Une opération à vérifier restera signalée pour ce compte. Il faudra ressaisir ton PIN.', [{ text: 'Annuler', style: 'cancel' }, { text: 'Se déconnecter', style: 'destructive', onPress: logout }])}><Text style={styles.secondaryButtonText}>Se déconnecter</Text></TouchableOpacity>
             {isAdmin && <View style={styles.card}>
               <Text style={styles.cardTitle}>Sauvegarde et exports</Text>
               <Text style={styles.muted}>Actions réservées à l’administrateur. Les fichiers sont créés sur le serveur dans server/backups/.</Text>
@@ -1210,7 +1297,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={profileModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setProfileModal(false); setPinStage(null); }}><Text style={styles.modalAction}>Fermer</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Changer de profil</Text>
             <Text style={styles.modalAction}> </Text>
@@ -1223,7 +1310,7 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
 
       <Modal visible={pinManageModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, largeText && styles.stacked]}>
             <TouchableOpacity onPress={() => { setPinManageModal(false); setPinManageDraft({ currentPin: '', newPin: '', newPin2: '' }); }}><Text style={styles.modalAction}>Annuler</Text></TouchableOpacity>
             <Text style={styles.modalTitle}>Modifier mon PIN</Text>
             <TouchableOpacity onPress={submitPinManage}><Text style={styles.modalAction}>Valider</Text></TouchableOpacity>
@@ -1244,14 +1331,17 @@ Les suppressions sont possibles seulement pendant ${DELETE_WINDOW_DAYS} jours.`
   );
 }
 
-function Metric({ label, value }) { return <View style={styles.metric}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
-function PersonCard({ state }) { return <View style={styles.card}><View style={styles.rowBetween}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={state.missing <= 0 ? styles.badgeOk : styles.badgeWarn}>{state.missing <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
+function Metric({ label, value }) { const {fontScale,width}=useWindowDimensions(); return <View style={[styles.metric, (fontScale >= 1.3 || width < 340) && styles.fullWidth]}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>; }
+function PersonCard({ state }) { const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340; return <View style={styles.card}><View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{state.member.name}</Text><Text style={dashboardModel.presentedAmount(state.missing) <= 0 ? styles.badgeOk : styles.badgeWarn}>{dashboardModel.presentedAmount(state.missing) <= 0 ? 'OK' : `Reste ${formatEuro(state.missing)}`}</Text></View><Text style={styles.muted}>Prévu : {formatEuro(state.expected)}</Text><Text style={styles.muted}>Déjà versé : {formatEuro(state.paid)}</Text><Text style={styles.muted}>Dépenses payées personnellement : {formatEuro(state.personallyPaidExpenses)}</Text></View>; }
 function CategorySummary({ category }) {
+  const {fontScale,width}=useWindowDimensions(); const largeText=fontScale >= 1.3 || width < 340;
   const pct = category.availableBudget ? Math.min(100, Math.max(0, (category.spent / category.availableBudget) * 100)) : 0;
-  const badgeStyle = category.needsFunding ? styles.badgeWarn : category.overBudget ? styles.badgeWarn : styles.badgeOk;
-  const badgeText = category.needsFunding ? 'À alimenter' : category.overBudget ? 'Dépassement' : 'OK';
+  // F-01: badge follows the displayed cents (same labels and priority as before).
+  const envelopeStatus = dashboardModel.envelopePresentation(category).status;
+  const badgeStyle = envelopeStatus ? styles.badgeWarn : styles.badgeOk;
+  const badgeText = envelopeStatus || 'OK';
   return <View style={styles.card}>
-    <View style={styles.rowBetween}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
+    <View style={[styles.rowBetween, largeText && styles.stacked]}><Text style={styles.cardTitle}>{category.name}</Text><Text style={badgeStyle}>{badgeText}</Text></View>
     <View style={styles.progress}><View style={[styles.progressFill, { width: `${pct}%` }]} /></View>
     <Text style={styles.muted}>Report précédent : {formatEuro(category.carryOver)}</Text>
     <Text style={styles.muted}>Budget du mois : {formatEuro(category.monthlyBudget)}</Text>
@@ -1261,14 +1351,19 @@ function CategorySummary({ category }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F3F4F6' },
+  safe: { flex: 1, backgroundColor: palette.background },
+  compactHeader: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:8, padding:8, backgroundColor:palette.background },
+  brandRow: { flexDirection:'row', alignItems:'center', flexShrink:1, gap:8 }, brandMark:{width:32,height:32}, brandName:{fontSize:19,fontWeight:'700',color:palette.midnight,flexShrink:1}, compactConfig:{minHeight:44,justifyContent:'center',paddingHorizontal:12,borderRadius:12,backgroundColor:palette.lightBlue}, compactConfigText:{color:'#304DB2',fontWeight:'600',textAlign:'center'}, compactMonth:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:8,paddingHorizontal:8,paddingBottom:12}, compactArrow:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',backgroundColor:palette.surface,borderRadius:12}, compactArrowText:{fontSize:26,color:palette.midnight},monthWrap:{flexWrap:'wrap'},monthCenter:{flex:1,minWidth:0,flexShrink:1,padding:8,minHeight:44,justifyContent:'center'},monthCaption:{fontSize:16,fontWeight:'600',color:palette.midnight,textAlign:'center'},
+  stacked: { flexDirection: 'column', alignItems: 'stretch' },
+  fullWidth: { width: '100%', flex: 0 },
+  headerCopy: { flexShrink: 1, minWidth: 0 },
   header: { backgroundColor: '#0F172A', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: 'white', fontSize: 31, fontWeight: '900' }, subtitle: { color: '#CBD5E1', fontSize: 16, marginTop: 2 }, syncText: { fontSize: 12, marginTop: 6, fontWeight: '700' }, online: { color: '#86EFAC' }, offline: { color: '#FCA5A5' },
-  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { color: 'white', fontWeight: '900' },
-  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', width: 48, height: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', height: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
+  headerButton: { backgroundColor: '#334155', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 15 }, headerButtonText: { textAlign: 'center', color: 'white', fontWeight: '900' },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: 'white' }, navButton: { backgroundColor: '#0F172A', minWidth: 48, minHeight: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, navText: { color: 'white', fontSize: 34, fontWeight: '900' }, monthLabel: { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, textAlign: 'center', fontSize: 20, fontWeight: '900' }, monthOkButton: { backgroundColor: '#334155', minHeight: 48, paddingHorizontal: 12, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, monthOkText: { color: 'white', fontSize: 13, fontWeight: '900' },
   tabsOuter: { backgroundColor: 'white', paddingHorizontal: 14, paddingTop: 4, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }, tabsContent: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB' }, tab: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#EEF2F7', minWidth: 104, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' }, activeTab: { backgroundColor: '#111827', borderColor: '#111827' }, tabText: { color: '#475467', fontSize: 13, fontWeight: '800' }, activeTabText: { color: 'white' },
   content: { flex: 1 }, contentInner: { padding: 18, paddingBottom: 70 }, hero: { backgroundColor: '#0F172A', borderRadius: 22, padding: 22, marginBottom: 18 }, sectionTitle: { fontSize: 23, fontWeight: '900', color: '#111827', marginTop: 18, marginBottom: 12 }, sectionTitleDark: { color: 'white', fontSize: 22, fontWeight: '900', marginBottom: 16 }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { width: '47%', backgroundColor: '#1E293B', borderRadius: 16, padding: 15 }, metricLabel: { color: '#CBD5E1', fontSize: 14 }, metricValue: { color: 'white', fontSize: 24, fontWeight: '900', marginTop: 6 },
-  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flex: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
-  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
-  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
+  card: { backgroundColor: 'white', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E5E7EB' }, rowBetween: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, rowGap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }, cardTitle: { fontSize: 20, fontWeight: '900', color: '#111827', flexShrink: 1 }, muted: { color: '#4B5563', fontSize: 16, marginTop: 6 }, amount: { fontSize: 20, fontWeight: '900', color: '#111827' }, label: { fontSize: 16, fontWeight: '900', color: '#374151', marginTop: 10, marginBottom: 8 }, input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, marginBottom: 10 }, textarea: { minHeight: 100, textAlignVertical: 'top' }, choiceRow: { flexDirection: 'row', gap: 8, paddingBottom: 8 }, choice: { backgroundColor: '#F3F4F6', borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11, borderWidth: 1, borderColor: '#E5E7EB' }, choiceActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' }, choiceText: { color: '#374151', fontWeight: '900', fontSize: 15 }, choiceTextActive: { color: 'white' },
+  primaryButton: { backgroundColor: '#0F172A', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 10 }, primaryButtonText: { textAlign: 'center', color: 'white', fontWeight: '900', fontSize: 16 }, secondaryButton: { backgroundColor: '#E5E7EB', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 10 }, secondaryButtonText: { textAlign: 'center', color: '#111827', fontWeight: '900' }, dangerButton: { backgroundColor: '#FEE2E2', borderRadius: 14, paddingVertical: 13, alignItems: 'center', marginTop: 12 }, smallButton: { backgroundColor: '#0F172A', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, smallButtonText: { color: 'white', fontWeight: '900' }, smallDanger: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 15, paddingVertical: 11 }, dangerText: { color: '#991B1B', fontWeight: '900' }, badge: { backgroundColor: '#E0F2FE', color: '#075985', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeOk: { backgroundColor: '#DCFCE7', color: '#166534', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeWarn: { backgroundColor: '#FEE2E2', color: '#991B1B', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgePlanned: { backgroundColor: '#FEF3C7', color: '#92400E', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' }, badgeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }, progress: { height: 10, backgroundColor: '#E5E7EB', borderRadius: 999, marginVertical: 12, overflow: 'hidden' }, progressFill: { height: 10, backgroundColor: '#0F172A' }, lockedText: { color: '#6B7280', fontSize: 13, marginTop: 10, fontWeight: '700' },
+  modalSafe: { flex: 1, backgroundColor: '#F3F4F6' }, modalHeader: { flexWrap: 'wrap', gap: 8, backgroundColor: 'white', padding: 18, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' }, modalAction: { color: '#2563EB', fontSize: 17, fontWeight: '900' }, modalContent: { padding: 18 }, help: { color: '#475467', marginTop: 18, fontSize: 15, lineHeight: 22 },
 });
