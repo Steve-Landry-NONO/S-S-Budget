@@ -91,13 +91,14 @@ def run():
            "catalogue modifié ; tables 006 présentes", f"rc={r.returncode} catalogue {before}→{after} duo_v3_periods={present} avertissement={'no transaction in progress' in r.stderr}",
            before != after and present == "1")
     fresh("rev_t", "b005"); before = catalog("rev_t")
-    t = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(MIG), str(CAT)], capture_output=True, text=True)
+    adm("comment on database rev_t is 'duo-v3-disposable'")          # R2-03 : l'outil n'accepte qu'une base jetable marquée
+    t = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(MIG), "--catalog", str(CAT)], capture_output=True, text=True)
     after = catalog("rev_t"); present = psql("rev_t", "-At", "-c", "select count(*) from pg_tables where tablename='duo_v3_periods'").stdout.strip()
     record("REV08-C", "correction", "REV-08 : dry_run_migration.sh exécute le corps puis ROLLBACK ; catalogue et versions inchangés",
            "rc 0 ; « ESSAI À BLANC OK » ; catalogue identique ; aucune table 006", f"rc={t.returncode} {t.stdout.strip().splitlines()[-1] if t.stdout.strip() else t.stderr[-120:]} catalogue {before}→{after} duo_v3_periods={present}",
            t.returncode == 0 and before == after and present == "0" and "ESSAI À BLANC OK" in t.stdout)
     bad = pathlib.Path("/tmp/rev08_two_commits.sql"); bad.write_text("begin;\nselect 1;\ncommit;\nbegin;\nselect 2;\ncommit;\n")
-    t2 = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(bad), str(CAT)], capture_output=True, text=True)
+    t2 = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(bad), "--catalog", str(CAT)], capture_output=True, text=True)
     record("REV08-C2", "correction", "REV-08 : fichier à plusieurs transactions refusé avant toute exécution", "rc 2 ; REFUS", f"rc={t2.returncode} {t2.stdout.strip()[:90]}",
            t2.returncode == 2 and "REFUS" in t2.stdout)
     # ------------------------------------------------------------------------------------------ G13
