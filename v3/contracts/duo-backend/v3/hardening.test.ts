@@ -85,7 +85,8 @@ test('REV-03 : invariant rompu → incident d’intégrité ; aucun fonds réel 
     assert.deepEqual(primaryAmount(e), { label: 'Disponible réel', amount: null, unavailable: 'integrity_incident' });
   }
   assert.deepEqual(s.household.unassignedRealFunds, { state: 'not_available', reason: 'integrity_incident' });
-  const c = new EnvelopeCache(); c.put(s); assert.equal(c.size, 0);
+  const c = new EnvelopeCache(); c.openSession('u-viewer');
+  assert.equal(c.commit(c.beginRead(s.duoId, 'common')!, s), 'integrity_incident'); assert.equal(c.size, 0);
 });
 
 // ---------------------------------------------------------------------------------------------------- REV-04
@@ -98,15 +99,18 @@ test('REV-04 correction : clé (utilisateur, duo, espace, période) ; purge déc
   assert.notEqual(k('u-a', 'p1'), k('u-b', 'p1')); assert.notEqual(k('u-a', 'p1'), k('u-a', 'p2')); assert.notEqual(k('u-a', 'p1'), k('u-a', 'p1', 'personal'));
   assert.throws(() => envelopeCacheKey({ duoId: 'd', scope: 'common', periodId: 'p' }, ''));
   const { be, duoId } = await pair(); be._seed.sprint3(duoId, camille.userId);
-  const cache = new EnvelopeCache(); be.subscribe(duoId, e => cache.onSyncEvent(camille.userId, e));
-  const s = await be.getEnvelopeSnapshot(duoId, 'common'); cache.put(s);
-  assert.equal(cache.get(alex.userId, duoId, 'common', s.periodId), null);                        // autre compte : rien
-  assert.equal(cache.get(camille.userId, duoId, 'common', s.periodId)!.syncStatus, 'offline_cache');
+  // v3.3 (R2-02) : le cache est lié à la session et n'accepte d'écriture qu'avec un ticket de lecture valide.
+  const cache = new EnvelopeCache(); cache.openSession(camille.userId); be.subscribe(duoId, e => cache.onSyncEvent(e));
+  const read = async () => { const t = cache.beginRead(duoId, 'common')!; const s = await be.getEnvelopeSnapshot(duoId, 'common'); return { t, s }; };
+  let { t, s } = await read(); assert.equal(cache.commit(t, s), 'stored');
+  assert.equal(cache.get(duoId, 'common', s.periodId)!.syncStatus, 'offline_cache');
   await be.postContribution({ clientOperationId: id(), duoId, amountMinor: '100', status: 'done', occurredOn: '2026-12-01' });
-  assert.equal(cache.get(camille.userId, duoId, 'common', s.periodId)!.syncStatus, 'stale');       // revalidation exigée
-  await be.signOut(); assert.equal(cache.size, 0);                                                  // déconnexion : purge totale
-  cache.put(s); cache.onSyncEvent(camille.userId, { type: 'member.changed', duoId, userId: camille.userId, status: 'left' }); assert.equal(cache.size, 0);
-  cache.put(s); cache.onSyncEvent(camille.userId, { type: 'session.revoked' }); assert.equal(cache.size, 0);
+  assert.equal(cache.get(duoId, 'common', s.periodId)!.syncStatus, 'stale');                        // revalidation exigée
+  await be.signOut(); assert.equal(cache.size, 0); assert.equal(cache.activeViewer, null);         // déconnexion : purge totale, session fermée
+  cache.openSession(camille.userId); ({ t, s } = await read()); assert.equal(cache.commit(t, s), 'stored');
+  cache.onSyncEvent({ type: 'member.changed', duoId, userId: camille.userId, status: 'left' }); assert.equal(cache.size, 0);
+  cache.membershipConfirmed(duoId); ({ t, s } = await read()); assert.equal(cache.commit(t, s), 'stored');
+  cache.onSyncEvent({ type: 'session.revoked' }); assert.equal(cache.size, 0);
 });
 test('REV-04 / G9 : l’espace annoncé par le serveur prime ; propriétaire = utilisateur de session ; incohérence refusée', () => {
   const s = fromSqlFundsSnapshot(raw('personal_envelope_owner'), { viewerUserId: 'u-session', scope: 'personal' });

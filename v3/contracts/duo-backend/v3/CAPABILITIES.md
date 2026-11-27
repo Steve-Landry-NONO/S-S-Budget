@@ -26,6 +26,7 @@ Chaque notion que la source peut ne pas fournir est un `Capability<T>` :
 - `ProtectionState` vaut `none`, `protected` ou `lift_pending` (R-B6 : la levée attend le second accord ; les fonds restent protégés). Depuis la 3.2 (REV-06), l'instantané SQL corrigé expose `lift_pending` et le mapper le transmet tel quel.
 - `forecastTreasury` « contributions seules » (trésorerie + contributions attendues restantes, sans dépenses prévues) est `partial`, jamais `available` (REV-05).
 - `integrity` vaut `ok` ou `incident` (REV-03). Un instantané en incident n'est jamais mis en cache.
+- Cache (R2-02) : écriture uniquement par ticket de lecture de la session courante ; aucune écriture tardive après purge, déconnexion, changement de compte ou perte d'appartenance.
 - `DuoSnapshot.forecast`, `upcomingContributions` et `plannedExpenses` sont des `Capability<Money>` (REV-07).
 - Une réponse vide d'un espace non autorisé est **refusée** (`FORBIDDEN`). Elle n'est jamais présentée comme un espace vide valide.
 - Un espace membre sans période ouverte lève `SPACE_NOT_INITIALIZED`. Une position absente pour un espace initialisé lève `CONTRACT_VIOLATION` : **aucun repli à zéro**.

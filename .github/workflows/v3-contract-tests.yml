@@ -18,4 +18,4 @@ jobs:
           node-version: '22'
       - name: Contract tests (fixtures only, no backend, no secrets)
         working-directory: v3/contracts/duo-backend/v3
-        run: node --test mockBackend.test.ts envelopeRead.test.ts sqlFixtures.test.ts errors.test.ts hardening.test.ts
+        run: node --test mockBackend.test.ts envelopeRead.test.ts sqlFixtures.test.ts errors.test.ts hardening.test.ts cache.r2-02.test.ts

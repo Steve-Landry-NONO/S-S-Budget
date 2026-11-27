@@ -13,4 +13,11 @@
   - **ajout** `Capability.partial`, `NotAvailableReason.integrity_incident`, `EnvelopeListSnapshot.integrity` et `viewerUserId`, codes `CONTRACT_VIOLATION` et `SPACE_NOT_INITIALIZED` ;
   - **ajout** commandes `reallocateBudget`, `moveRealFunds`, `setEnvelopeProtection`, `getContributionReleasePlan`, `mySpaces`, `createPersonalSpace`, `signOut` ; `transfer` déprécié (alias de `reallocateBudget`) ;
   - `fromSqlFundsSnapshot(raw, { viewerUserId, scope })` : l'ancienne forme `(raw, scope, owner)` reste acceptée ; l'espace annoncé par le serveur prime.
+- La **3.3.0-candidate** (27/11, R2-02) :
+  - **rupture** `EnvelopeCache` est lié à une session (`openSession` / `closeSession`) ; `put(snapshot)` est **supprimé** ;
+    toute écriture passe par `beginRead(duoId, scope)` (avant l'appel réseau) puis `commit(ticket, snapshot)` (au retour) ;
+  - une réponse arrivée après déconnexion, révocation, changement de compte, **reconnexion du même compte** ou perte d'appartenance
+    est refusée avec un motif (`CacheRejection`) ; une version plus ancienne n'écrase jamais une plus récente ;
+  - `get(duoId, scope, periodId)` ne lit que pour la session courante ; `onSyncEvent(e)` n'a plus de paramètre utilisateur ;
+  - perte d'appartenance : purge et refus des lectures jusqu'à `membershipConfirmed(duoId)` (nouvel épisode confirmé par le serveur).
 - **Clés de cache** : `envelopes:v3:<utilisateur>:<duo>:<espace>:<période>`, jamais partagées entre espaces, utilisateurs ni périodes.

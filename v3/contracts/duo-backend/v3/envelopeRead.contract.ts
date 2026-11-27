@@ -16,7 +16,7 @@
 //    partenaire. Le serveur filtre ; clé de cache distincte par (duo, espace, utilisateur).
 import type { CurrencyCode, IsoDate, IsoDateTime, MinorUnits, Uuid } from './duoBackend.contract.ts';
 
-export const ENVELOPE_CONTRACT_VERSION = '3.2.0-candidate';
+export const ENVELOPE_CONTRACT_VERSION = '3.3.0-candidate';
 export type EnvelopeScope = 'common' | 'personal';
 export type SyncStatus = 'fresh' | 'stale' | 'offline_cache';
 
@@ -135,31 +135,92 @@ export function envelopeCacheKey(s: Pick<EnvelopeListSnapshot, 'duoId' | 'scope'
   return `envelopes:v3:${viewerUserId}:${s.duoId}:${s.scope}:${s.periodId}`;
 }
 
-/** Cache client des instantanés (REV-04). Isolation par clé ; purge à la déconnexion et à la révocation ; un évènement
- *  « snapshot.stale » marque les entrées du duo comme à revalider (affichées `stale`, jamais `fresh`). */
+/** Motif de refus d'une écriture dans le cache (R2-02). */
+export type CacheRejection =
+  | 'no_session' | 'session_changed' | 'purged_since_read' | 'membership_revoked'
+  | 'viewer_mismatch' | 'target_mismatch' | 'integrity_incident' | 'older_version';
+/** Ticket de lecture : obtenu AVANT l'appel réseau, présenté au retour. Il fige la session, l'époque de purge et l'épisode
+ *  d'appartenance ; toute réponse dont le ticket est périmé est jetée (R2-02). */
+export interface ReadTicket {
+  readonly sessionId: string; readonly viewerUserId: Uuid; readonly duoId: Uuid; readonly scope: EnvelopeScope;
+  readonly epoch: number; readonly membershipEpoch: number;
+}
+/** Cache client des instantanés (REV-04, R2-02).
+ *  - Lié à UNE session à la fois (`openSession`). Changer de compte, se déconnecter, être révoqué : purge totale et nouvelle session.
+ *  - Aucune écriture sans ticket : `beginRead` avant la requête, `commit(ticket, snapshot)` au retour. Une réponse arrivée après
+ *    une purge, un changement de compte, une reconnexion (même compte, nouvelle session) ou une perte d'appartenance est REFUSÉE.
+ *  - Isolation par clé (utilisateur, duo, espace, période) ; jamais d'écrasement par une version plus ancienne.
+ *  - « snapshot.stale » marque les entrées du duo comme à revalider (affichées `stale`, jamais `fresh`). */
 export class EnvelopeCache {
   private readonly entries = new Map<string, { snapshot: EnvelopeListSnapshot; stale: boolean }>();
-  put(s: EnvelopeListSnapshot): void {
-    if (s.integrity !== 'ok') return;                               // un instantané en incident n'est jamais mis en cache
-    this.entries.set(envelopeCacheKey(s, s.viewerUserId), { snapshot: structuredClone(s), stale: false });
+  private session: { sessionId: string; viewerUserId: Uuid } | null = null;
+  private epoch = 0;                                              // incrémentée à chaque purge, quelle qu'en soit la cause
+  private readonly membership = new Map<Uuid, { epoch: number; revoked: boolean }>();   // par duo, pour la session courante
+  private nextSession = 0;
+
+  /** Ouvre (ou remplace) la session. Toute session précédente est fermée : purge totale, même si le compte est identique. */
+  openSession(viewerUserId: Uuid): string {
+    if (!viewerUserId) throw new Error('EnvelopeCache.openSession : utilisateur authentifié requis');
+    this.closeSession();
+    this.nextSession += 1;
+    const sessionId = `s${this.nextSession}:${Date.now().toString(36)}`;
+    this.session = { sessionId, viewerUserId }; return sessionId;
   }
-  get(viewerUserId: Uuid, duoId: Uuid, scope: EnvelopeScope, periodId: Uuid): EnvelopeListSnapshot | null {
-    const e = this.entries.get(envelopeCacheKey({ duoId, scope, periodId }, viewerUserId)); if (!e) return null;
+  /** Déconnexion, révocation de session, suppression de compte. */
+  closeSession(): void { this.session = null; this.purgeAll(); this.membership.clear(); }
+  get activeViewer(): Uuid | null { return this.session?.viewerUserId ?? null; }
+
+  /** À appeler AVANT l'appel réseau. Refuse (null) sans session ou pour un duo dont l'appartenance a été retirée. */
+  beginRead(duoId: Uuid, scope: EnvelopeScope): ReadTicket | null {
+    if (!this.session) return null;
+    const m = this.membership.get(duoId) ?? { epoch: 0, revoked: false };
+    if (m.revoked) return null;
+    return Object.freeze({ sessionId: this.session.sessionId, viewerUserId: this.session.viewerUserId, duoId, scope, epoch: this.epoch, membershipEpoch: m.epoch });
+  }
+  /** Au retour de la requête : n'écrit que si le ticket est toujours valide. Renvoie 'stored' ou le motif du refus. */
+  commit(t: ReadTicket, s: EnvelopeListSnapshot): 'stored' | CacheRejection {
+    if (!this.session) return 'no_session';
+    if (t.sessionId !== this.session.sessionId) return 'session_changed';
+    if (t.epoch !== this.epoch) return 'purged_since_read';
+    const m = this.membership.get(t.duoId) ?? { epoch: 0, revoked: false };
+    if (m.revoked || m.epoch !== t.membershipEpoch) return 'membership_revoked';
+    if (s.viewerUserId !== t.viewerUserId || s.viewerUserId !== this.session.viewerUserId) return 'viewer_mismatch';
+    if (s.duoId !== t.duoId || s.scope !== t.scope) return 'target_mismatch';
+    if (s.integrity !== 'ok') return 'integrity_incident';           // un instantané en incident n'est jamais mis en cache
+    const key = envelopeCacheKey(s, s.viewerUserId), prev = this.entries.get(key);
+    if (prev && BigInt(prev.snapshot.version) > BigInt(s.version)) return 'older_version';
+    this.entries.set(key, { snapshot: structuredClone(s), stale: false }); return 'stored';
+  }
+  /** Lecture pour la session courante uniquement. */
+  get(duoId: Uuid, scope: EnvelopeScope, periodId: Uuid): EnvelopeListSnapshot | null {
+    if (!this.session) return null;
+    const m = this.membership.get(duoId); if (m?.revoked) return null;
+    const e = this.entries.get(envelopeCacheKey({ duoId, scope, periodId }, this.session.viewerUserId)); if (!e) return null;
     const copy = structuredClone(e.snapshot); copy.syncStatus = e.stale ? 'stale' : 'offline_cache'; return copy;
   }
   /** Revalidation : toutes les entrées du duo (tous espaces, toutes périodes) deviennent `stale`. */
   invalidateDuo(duoId: Uuid): void { for (const [, e] of this.entries) if (e.snapshot.duoId === duoId) e.stale = true; }
-  /** Départ ou révocation d'appartenance : suppression des entrées de CET utilisateur pour ce duo. */
-  purgeMembership(viewerUserId: Uuid, duoId: Uuid): void {
-    for (const [k, e] of this.entries) if (e.snapshot.viewerUserId === viewerUserId && e.snapshot.duoId === duoId) this.entries.delete(k);
+  /** Départ, exclusion ou révocation d'appartenance : purge des entrées du duo et refus des lectures en vol et futures,
+   *  jusqu'à confirmation explicite d'un NOUVEL épisode d'appartenance par le serveur (`membershipConfirmed`). */
+  revokeMembership(duoId: Uuid): void {
+    const m = this.membership.get(duoId) ?? { epoch: 0, revoked: false };
+    this.membership.set(duoId, { epoch: m.epoch + 1, revoked: true });
+    for (const [k, e] of this.entries) if (e.snapshot.duoId === duoId) this.entries.delete(k);
+    this.epoch += 1;
   }
-  /** Déconnexion, suppression de compte, session révoquée : purge totale. */
-  purgeAll(): void { this.entries.clear(); }
+  /** Nouvel épisode d'appartenance confirmé par le serveur (ex. : invitation acceptée de nouveau). Les tickets antérieurs restent périmés. */
+  membershipConfirmed(duoId: Uuid): void {
+    const m = this.membership.get(duoId) ?? { epoch: 0, revoked: false };
+    this.membership.set(duoId, { epoch: m.epoch + 1, revoked: false });
+  }
+  /** Purge totale (la session reste ouverte) ; toute lecture en vol devient périmée. */
+  purgeAll(): void { this.entries.clear(); this.epoch += 1; }
   get size(): number { return this.entries.size; }
   /** Branchement sur `DuoBackend.subscribe` (événements sans montant). */
-  onSyncEvent(viewerUserId: Uuid, e: { type: string; duoId?: Uuid; userId?: Uuid; status?: string }): void {
-    if (e.type === 'session.revoked') return this.purgeAll();
-    if (e.type === 'member.changed' && e.status === 'left' && e.userId === viewerUserId && e.duoId) return this.purgeMembership(viewerUserId, e.duoId);
+  onSyncEvent(e: { type: string; duoId?: Uuid; userId?: Uuid; status?: string }): void {
+    if (e.type === 'session.revoked') return this.closeSession();
+    if (e.type === 'member.changed' && (e.status === 'left' || e.status === 'removed' || e.status === 'revoked')
+        && e.userId === this.session?.viewerUserId && e.duoId) return this.revokeMembership(e.duoId);
     if ((e.type === 'snapshot.stale' || e.type === 'operation.changed' || e.type === 'member.changed') && e.duoId) this.invalidateDuo(e.duoId);
   }
 }
