@@ -1,3 +1,7 @@
+-- OBSOLÈTE (A-05 / G13, 26/11/2026) : incompatible avec la 006 révisée (duo sans période, comptes cash/envelope).
+-- Ne pas exécuter. Remplacement : docs/v3/E2E_AUTH_REPLACEMENT_PLAN.md.
+\echo 'fixture obsolete (A-05/G13)'
+\quit
 -- DEV-only fixture. Replace the two user IDs with real Supabase Auth UUIDs.
 -- Run AFTER creating and verifying two users through Supabase Auth.
 -- Do not execute against production. No secrets are stored in this file.

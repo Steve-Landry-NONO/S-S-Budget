@@ -1,0 +1,13 @@
+{
+ "label": "final_s1_lot1post006_original_run1",
+ "template": "s1",
+ "suite": "v3/database/tests/lot1_post006.sql",
+ "suite_sha256": "e2f1e11ec2a2a11ecf1040e3ffa6524b02cbe39c779ff4ea794ceb03b39b4014",
+ "specs_sha256": "04246968f130ceedba917d1eab1e2231ea030c7ea3681ec2bb669c44cf799253",
+ "debut": "2026-11-26T09:43:22+00:00",
+ "psql_code": 3,
+ "stderr": "psql:v3/database/tests/lot1_post006.sql:17: ERROR:  insert or update on table \"duo_v3_accounts\" violates foreign key constraint \"duo_v3_accounts_household_currency_fkey\"\nDETAIL:  Key (household_id, currency)=(a0000000-0000-4000-8000-00000000000a, USD) is not present in table \"duo_v3_households\".\n",
+ "bilan": {
+  "erreur_execution": 1
+ }
+}

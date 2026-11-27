@@ -1,0 +1,64 @@
+{
+ "avant": {
+  "horodatage": "2026-11-21T06:09:48.103763+00:00",
+  "empreinte": "f421a30206151d95999d5c6eb54196cd",
+  "objets": 100,
+  "lignes": {
+   "households": 0,
+   "members": 0,
+   "accounts": 0,
+   "transactions": 0,
+   "entries": 0,
+   "auth_users": 0
+  },
+  "migrations": [
+   "20261120092413",
+   "20261120092416",
+   "20261120092419",
+   "20261120102820",
+   "20261121050030"
+  ],
+  "fonctions_duo_v3_private": 2,
+  "relations": [
+   "duo_v3_accounts",
+   "duo_v3_entries",
+   "duo_v3_households",
+   "duo_v3_members",
+   "duo_v3_transactions"
+  ]
+ },
+ "apres": {
+  "horodatage": "2026-11-21T06:20:16.173013+00:00",
+  "empreinte": "f421a30206151d95999d5c6eb54196cd",
+  "objets": 100,
+  "lignes": {
+   "households": 0,
+   "members": 0,
+   "accounts": 0,
+   "transactions": 0,
+   "entries": 0,
+   "auth_users": 0
+  },
+  "migrations": [
+   "20261120092413",
+   "20261120092416",
+   "20261120092419",
+   "20261120102820",
+   "20261121050030"
+  ],
+  "fonctions_duo_v3_private": 2,
+  "relations": [
+   "duo_v3_accounts",
+   "duo_v3_entries",
+   "duo_v3_households",
+   "duo_v3_members",
+   "duo_v3_transactions"
+  ]
+ },
+ "reference_locale_005": "f421a30206151d95999d5c6eb54196cd (100 objets)",
+ "passe1": {
+  "horodatage_serveur": "2026-11-21T06:14:29.390531+00:00",
+  "bilan": "72/72 selon les critères de code, mais X15 réussi pour une raison indirecte (déclencheur différé hérité) ; outillage corrigé, résultat non retenu",
+  "schema_006": "da09ae9bc700bc12ba2cfdcdf0aa034a"
+ }
+}

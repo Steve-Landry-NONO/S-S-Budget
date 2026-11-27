@@ -1,0 +1,663 @@
+{
+ "environnement": "Supabase DEV eetnzdvjfzexgvqbtyrj (PostgreSQL 17.12)",
+ "mode": "006 exécutée dans la transaction de test, ROLLBACK final, aucune application",
+ "script": "lot2_financial_model_dev_compact.sql sha256 72aee2a569ead898…",
+ "lot": "2",
+ "pg": "17.12",
+ "horodatage_serveur": "2026-11-21T06:20:00.492449+00:00",
+ "schema_006": {
+  "objets": 286,
+  "empreinte": "da09ae9bc700bc12ba2cfdcdf0aa034a"
+ },
+ "note": "role et sub reportés depuis les entrées de test (identiques à la sortie de l’outil).",
+ "resultats": [
+  {
+   "id": "K01",
+   "ms": 3.4,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K02",
+   "ms": 0.97,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K03",
+   "ms": 0.85,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K04",
+   "ms": 0.65,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K05",
+   "ms": 0.69,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K06",
+   "ms": 1.37,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K07",
+   "ms": 0.45,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K08",
+   "ms": 0.62,
+   "obtenu": "23514",
+   "message": "Accounting periods must be contiguous (expected start 2028-04-30)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K09",
+   "ms": 0.53,
+   "obtenu": "23514",
+   "message": "Closed or historical accounting period cannot be modified",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "K10",
+   "ms": 0.72,
+   "obtenu": "23514",
+   "message": "Calendar and currency are frozen once periods exist (D-005, D-011)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "C01",
+   "ms": 13.33,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "C02",
+   "ms": 7.14,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "C02b",
+   "ms": 9.68,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "C03",
+   "ms": 10.12,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "C04",
+   "ms": 31.74,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "C05",
+   "ms": 17.76,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "C06",
+   "ms": 2.76,
+   "obtenu": "23514",
+   "message": "Ledger posting must balance within each book (cash, budget)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "C07",
+   "ms": 1.62,
+   "obtenu": "23503",
+   "message": "Accounts not eligible in household/currency",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "C08",
+   "ms": 0.73,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "R01",
+   "ms": 4.31,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R02",
+   "ms": 2.61,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R03",
+   "ms": 2.18,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R04",
+   "ms": 1.65,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R05",
+   "ms": 1.93,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R06",
+   "ms": 1.17,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "R07",
+   "ms": 1.78,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R08",
+   "ms": 8.83,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "R09",
+   "ms": 2.31,
+   "obtenu": "23514",
+   "message": "Insufficient unallocated reserve (D-015)",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R10",
+   "ms": 3.56,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "L01",
+   "ms": 7.56,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "L02",
+   "ms": 1.05,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "L03",
+   "ms": 2.43,
+   "obtenu": "23514",
+   "message": "Accounting period is closed",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "L04",
+   "ms": 0.62,
+   "obtenu": "23514",
+   "message": "Closed or historical accounting period cannot be modified",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "L05",
+   "ms": 0.59,
+   "obtenu": "23514",
+   "message": "Accounting history is immutable (duo_v3_periods)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "L06",
+   "ms": 0.93,
+   "obtenu": "22023",
+   "message": "A completed expense cannot be dated in the future",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "L07",
+   "ms": 7.66,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "R11",
+   "ms": 5.53,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X01",
+   "ms": 0.56,
+   "obtenu": "42501",
+   "message": "permission denied for table duo_v3_periods",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X02",
+   "ms": 0.5,
+   "obtenu": "42501",
+   "message": "permission denied for table duo_v3_allocation_versions",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X03",
+   "ms": 2.98,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "c1000000-0000-4000-8000-0000000000c1"
+  },
+  {
+   "id": "X04",
+   "ms": 0.47,
+   "obtenu": "42501",
+   "message": "permission denied for view duo_v3_household_position",
+   "controle": true,
+   "role": "anon",
+   "sub": ""
+  },
+  {
+   "id": "X05",
+   "ms": 0.47,
+   "obtenu": "42501",
+   "message": "permission denied for function close_period",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X06",
+   "ms": 0.4,
+   "obtenu": "42501",
+   "message": "permission denied for function set_allocation",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X07",
+   "ms": 0.45,
+   "obtenu": "42501",
+   "message": "permission denied for function duo_v3_post_expense",
+   "controle": true,
+   "role": "anon",
+   "sub": ""
+  },
+  {
+   "id": "X08",
+   "ms": 0.67,
+   "obtenu": "42501",
+   "message": "Not authorized for this household",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "c1000000-0000-4000-8000-0000000000c1"
+  },
+  {
+   "id": "X09",
+   "ms": 0.88,
+   "obtenu": "23503",
+   "message": "Envelope not eligible in household",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X10",
+   "ms": 10.21,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X11",
+   "ms": 1.05,
+   "obtenu": "23505",
+   "message": "Idempotency key reused for different expense",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X12",
+   "ms": 0.62,
+   "obtenu": "42501",
+   "message": "Not authorized for this household",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "S01",
+   "ms": 6.07,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "S02",
+   "ms": 3.4,
+   "obtenu": "23514",
+   "message": "Insufficient envelope balance: a transfer cannot create a deficit",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "S03",
+   "ms": 5.74,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a2000000-0000-4000-8000-0000000000a2"
+  },
+  {
+   "id": "S04",
+   "ms": 7.73,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "S05",
+   "ms": 2.35,
+   "obtenu": "23514",
+   "message": "Insufficient envelope balance: a transfer cannot create a deficit",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "S06",
+   "ms": 6.1,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "A01",
+   "ms": 1.46,
+   "obtenu": "23514",
+   "message": "Envelope balance must be exactly zero to archive (D-023)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "A02",
+   "ms": 0.83,
+   "obtenu": "23514",
+   "message": "Envelope balance must be exactly zero to archive (D-023)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "A03",
+   "ms": 1.26,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "A04",
+   "ms": 0.64,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "A05",
+   "ms": 0.51,
+   "obtenu": "23514",
+   "message": "Archived envelope cannot receive an allocation (D-023)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "X13",
+   "ms": 1.78,
+   "obtenu": "23503",
+   "message": "Envelope is archived (D-023): choose an active envelope",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "X14",
+   "ms": 1.41,
+   "obtenu": "23503",
+   "message": "Accounts not eligible in household/currency",
+   "controle": true,
+   "role": "authenticated",
+   "sub": "a1000000-0000-4000-8000-0000000000a1"
+  },
+  {
+   "id": "G01",
+   "ms": 6.21,
+   "obtenu": "P0001",
+   "message": "interruption simulée",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "G02",
+   "ms": 10.06,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "G03",
+   "ms": 1.94,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "G04",
+   "ms": 1.29,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "G05",
+   "ms": 1.62,
+   "obtenu": "23505",
+   "message": "duplicate key value violates unique constraint \"duo_v3_period_allocations_pkey\"",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "A06",
+   "ms": 1.57,
+   "obtenu": "23514",
+   "message": "Envelope balance must be exactly zero to archive (D-023)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "X15",
+   "ms": 0.85,
+   "obtenu": "23514",
+   "message": "Accounting history is immutable (duo_v3_periods)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "X16",
+   "ms": 0.72,
+   "obtenu": "23514",
+   "message": "Accounting history is immutable (duo_v3_period_envelope_closes)",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "X17",
+   "ms": 1.85,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  },
+  {
+   "id": "X18",
+   "ms": 15.75,
+   "obtenu": "OK",
+   "message": "",
+   "controle": true,
+   "role": "postgres",
+   "sub": ""
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "V-F3": [
+  "fixture : les comptes USD du duo EUR ne sont plus créés (interdits par F3)",
+  "L10b : attente 23514 (contre-passation USD) remplacée par 23503 (création du compte USD refusée)",
+  "S01, S02, S11p : le duo A compte 5 comptes au lieu de 7 (les 2 comptes USD ne sont plus créés)",
+  "sortie suffixée",
+  "sortie suffixée"
+ ],
+ "V-CF05": [
+  "nouvel utilisateur fictif « dom »",
+  "dom ajouté à auth.users",
+  "hc appartient à dom (CF-05)",
+  "L07 exécuté par dom",
+  "sortie suffixée",
+  "sortie suffixée"
+ ]
+}
