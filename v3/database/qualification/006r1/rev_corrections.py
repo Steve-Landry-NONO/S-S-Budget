@@ -91,15 +91,40 @@ def run():
            "catalogue modifié ; tables 006 présentes", f"rc={r.returncode} catalogue {before}→{after} duo_v3_periods={present} avertissement={'no transaction in progress' in r.stderr}",
            before != after and present == "1")
     fresh("rev_t", "b005"); before = catalog("rev_t")
-    t = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(MIG), str(CAT)], capture_output=True, text=True)
+    adm("comment on database rev_t is 'duo-v3-disposable'")          # R2-03 : l'outil n'accepte qu'une base jetable marquée
+    t = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(MIG), "--catalog", str(CAT)], capture_output=True, text=True)
     after = catalog("rev_t"); present = psql("rev_t", "-At", "-c", "select count(*) from pg_tables where tablename='duo_v3_periods'").stdout.strip()
     record("REV08-C", "correction", "REV-08 : dry_run_migration.sh exécute le corps puis ROLLBACK ; catalogue et versions inchangés",
            "rc 0 ; « ESSAI À BLANC OK » ; catalogue identique ; aucune table 006", f"rc={t.returncode} {t.stdout.strip().splitlines()[-1] if t.stdout.strip() else t.stderr[-120:]} catalogue {before}→{after} duo_v3_periods={present}",
            t.returncode == 0 and before == after and present == "0" and "ESSAI À BLANC OK" in t.stdout)
     bad = pathlib.Path("/tmp/rev08_two_commits.sql"); bad.write_text("begin;\nselect 1;\ncommit;\nbegin;\nselect 2;\ncommit;\n")
-    t2 = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(bad), str(CAT)], capture_output=True, text=True)
+    t2 = subprocess.run(["sh", str(TOOL), f"host={HOST} port={PORT} user=postgres dbname=rev_t", str(bad), "--catalog", str(CAT)], capture_output=True, text=True)
     record("REV08-C2", "correction", "REV-08 : fichier à plusieurs transactions refusé avant toute exécution", "rc 2 ; REFUS", f"rc={t2.returncode} {t2.stdout.strip()[:90]}",
            t2.returncode == 2 and "REFUS" in t2.stdout)
+    # ------------------------------------------------------------------------------------------ NUM-01 (27/11)
+    # Simulation SQL du passage des arguments RPC (corps JSON → json_to_record → numeric), comme PostgREST pour une RPC en POST.
+    def via_json(db, u, h, raw_amount):
+        body = '{"p_household":"%s","p_amount_minor":%s,"p_occurred_on":"2026-11-27","p_idempotency_key":"%s"}' % (h, raw_amount, uuid.uuid4())
+        with conn(db) as c:
+            try:
+                with c.cursor() as cur:
+                    claims(cur, u); cur.execute("""select public.duo_v3_post_contribution(a.p_household, a.p_amount_minor, a.p_occurred_on, a.p_idempotency_key)
+                        from json_to_record(%s::json) as a(p_household uuid, p_amount_minor numeric, p_occurred_on date, p_idempotency_key text)""", (body,))
+                c.commit(); return "OK"
+            except psycopg.Error as e: c.rollback(); return e.sqlstate
+    for db, kind in ((PUB, "reproduction"), (COR, "correction")):
+        fresh("rev_t", db); u, h, e = duo("rev_t", "EUR")
+        st = {k: via_json("rev_t", u, h, v) for k, v in (("100.0", '"100.0"'), ("1.5", '"1.5"'), ("chaîne 2^53+1", f'"{BIG}"'), ("nombre 2^53+1", str(BIG)), ("1e3", '"1e3"'))}
+        cash = json.loads(snapshot_raw("rev_t", u, h))["position"]["cash_minor"]
+        canon = isinstance(cash, str) and bool(__import__("re").fullmatch(r"-?(0|[1-9][0-9]*)", cash))
+        if kind == "reproduction":
+            record("NUM01-R", kind, "NUM-01 : « 100.0 » accepté (entier à échelle non nulle) → montant relu non canonique, instantané refusé par le contrat",
+                   "100.0 accepté ; trésorerie relue non canonique", f"{st} trésorerie={cash!r} canonique={canon}", st["100.0"] == "OK" and not canon)
+        else:
+            exp = str(2 * BIG + 1000)
+            record("NUM01-C", kind, "NUM-01 : échelle non nulle refusée ; chaînes et nombres JSON au-delà de 2^53 exacts ; 1e3 normalisé ; relecture canonique",
+                   f"100.0 refusé (23514) ; 1.5 refusé ; trésorerie '{exp}'", f"{st} trésorerie={cash!r} canonique={canon}",
+                   st["100.0"] == "23514" and st["1.5"] != "OK" and st["chaîne 2^53+1"] == "OK" and st["nombre 2^53+1"] == "OK" and cash == exp and canon)
     # ------------------------------------------------------------------------------------------ G13
     fresh("rev_t", COR)
     ua = str(uuid.uuid4()); hA = "11111111-1111-4111-8111-111111111111"
