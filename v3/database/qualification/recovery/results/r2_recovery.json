@@ -1,0 +1,48 @@
+{
+ "label": "r2_recovery",
+ "gabarits": [
+  "s1",
+  "s2",
+  "s3"
+ ],
+ "bilan": {
+  "Réussi": 5
+ },
+ "resultats": [
+  {
+   "id": "R1-a",
+   "regle": "Panne injectée avant le COMMIT de la migration fonds réels : rien n'est appliqué",
+   "attendu": "échec 22012 ; catalogue et données identiques",
+   "observe": "rc=3 division_by_zero=True catalogue 95c977729dc86c77→95c977729dc86c77 données_identiques=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "R1-b",
+   "regle": "Reprise : la migration saine s'applique ensuite sur la même base (aucun état intermédiaire résiduel)",
+   "attendu": "rc 0 ; catalogue = gabarit s3",
+   "observe": "rc=0 catalogue 5518dbd0500bc996 (s3 5518dbd0500bc996)",
+   "statut": "Réussi"
+  },
+  {
+   "id": "R1-c",
+   "regle": "Panne injectée avant le COMMIT du lot 3 : rien n'est appliqué",
+   "attendu": "échec ; catalogue identique",
+   "observe": "rc=3 catalogue 4412d3d70bb9fcf9→4412d3d70bb9fcf9",
+   "statut": "Réussi"
+  },
+  {
+   "id": "R2",
+   "regle": "Restauration depuis la copie : retour exact à l'état sauvegardé ; écritures possibles ensuite ; invariants tenus",
+   "attendu": "empreinte identique (tables, grand livre, lectures) ; nouvelle écriture acceptée ; invariant vrai",
+   "observe": "divergence_avant=True identique=True grand_livre=328da46f39d14ad5 non_équilibrées=0 nouvelle=True invariant=True",
+   "statut": "Réussi"
+  },
+  {
+   "id": "R3",
+   "regle": "Export / import logique (COPY) : même empreinte ; clés étrangères revalidées ; rejeu idempotent = même transaction ; nouvelle écriture acceptée",
+   "attendu": "0 différence ; 0 clé étrangère invalide ; rejeu = transaction d'origine ; écriture acceptée",
+   "observe": "tables=18 différences=[] fk_revalidées=30 fk_invalides=[] rejeu_identique=True nouvelle=True",
+   "statut": "Réussi"
+  }
+ ]
+}
