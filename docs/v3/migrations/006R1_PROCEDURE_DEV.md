@@ -14,22 +14,34 @@
 
 ## Étapes
 
-1. **Essai à blanc réellement annulable (REV-08).** Ne **jamais** exécuter le fichier tel quel dans `begin; … rollback;` : son propre `commit;` validerait la migration. C'est le défaut reproduit par REV08-01.
-   - Utiliser `v3/database/tools/dry_run_migration.sh "<conninfo>" supabase/migrations/20261126120000_duo_v3_financial_model_r1.sql`. Le script exige exactement un `begin;` et un `commit;` de premier niveau, extrait le corps, l'exécute dans une transaction terminée par `ROLLBACK`, puis compare le catalogue et l'historique des versions avant et après.
-   - **Préférer une réplique jetable**, ou une copie de DEV restaurée. Sur DEV même, uniquement si l'autorisation l'inclut explicitement.
-   - Relever la durée, les erreurs et les verrous.
-2. **Comparaison** : rejouer `deep006r1.py` et `qualify_rollback.py` sur une copie de DEV, ou sur la réplique avec le catalogue DEV comme gabarit.
+1. **Essai à blanc — sur base JETABLE uniquement (REV-08, R2-03).** L'essai à blanc est **interdit sur DEV et sur
+   production** : un `ROLLBACK` n'annule ni les séquences, ni les appels externes, ni les écritures de fichiers serveur
+   (cas D29 de la suite adverse). L'outil `v3/database/tools/dry_run_migration.py` refuse, **avant toute connexion**, tout hôte
+   autre qu'un socket Unix ou la boucle locale, et toute base sans le marqueur `duo-v3-disposable`.
+   - Reconstruire une réplique jetable 001→005 depuis les fichiers du dépôt et vérifier qu'elle est **identique à DEV** :
+     `dev_state_check.sql` donne sur la réplique l'empreinte `f421a30206151d95999d5c6eb54196cd` (100 objets), celle relevée sur
+     DEV le 21/11. Relever DEV en **lecture seule** le jour J et comparer.
+   - `comment on database <réplique> is 'duo-v3-disposable';` puis
+     `python3 v3/database/tools/dry_run_migration.py "host=/chemin/socket dbname=<réplique>" supabase/migrations/20261126120000_duo_v3_financial_model_r1.sql`.
+   - Ce que l'outil **garantit** : refus avant exécution de tout contrôle transactionnel, méta-commande ou interpolation psql,
+     commande non transactionnelle ou appel non annulable visible ; exécution entre `BEGIN` et `ROLLBACK` générés, avec un garde
+     qui vérifie que l'on est toujours dans la même transaction. Ce qu'il **détecte seulement** (sans le garantir) : catalogue,
+     versions et séquences comparés après coup.
+   - Relever la durée, les erreurs et les verrous. Suite adverse : `v3/database/qualification/dryrun/test_dry_run_adversarial.py`.
+2. **Comparaison** : rejouer `deep006r1.py` et `qualify_rollback.py` sur la réplique jetable équivalente à DEV.
 3. **Application** en une transaction, par la CLI (`supabase db push`, après `supabase migration list`) ou par l'outil d'application de migration. Un seul fichier : `20261126120000_duo_v3_financial_model_r1.sql`.
-4. **Vérifications après application** :
-   - relevé de catalogue identique à `results/catalogs/catalog_s1.txt` (hors objets de plateforme) ;
+4. **Vérifications après application — en LECTURE SEULE sur DEV** (aucune suite de test, même annulée, n'est exécutée sur DEV) :
+   - `dev_state_check.sql` : empreinte `74db7168d8099981c5255203d601521f`, 307 objets (valeur de la réplique s1 au fichier `7c7e54b7…`) ;
+   - versions : les 5 précédentes + `20261126120000` ;
    - `get_advisors` sans nouvelle alerte de sécurité ;
-   - suite lot 2 en mode « dev » (transaction annulée) à 72/72.
+   - les suites fonctionnelles (lot 2 : 72/72, `qualify006`, `deep006r1`) sont rejouées sur la réplique jetable, jamais sur DEV.
+   Dossier complet : `006R1_GO_NOGO.md`.
 5. Journal signé : qui, quand, sha256, résultats.
 
 ## Critères d'arrêt
 
 Arrêt immédiat, puis procédure de récupération, si l'un de ces cas se produit :
-- une erreur à l'essai à blanc ;
+- une erreur à l'essai à blanc, ou un code de sortie de l'outil différent de 0 ;
 - une version DEV inattendue ;
 - un écart de catalogue ;
 - une alerte de sécurité nouvelle ;
